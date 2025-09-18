@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import List, Optional
+from pydantic import BaseModel
 from datetime import datetime
 import os
 import shutil
@@ -12,6 +13,9 @@ from ..models.user import User, UserRole
 from ..models.receipt import Receipt
 from ..models.property import Property
 from ..routes.auth import get_current_user
+
+class BulkApproveRequest(BaseModel):
+    payment_ids: List[str]
 
 router = APIRouter()
 
@@ -436,11 +440,14 @@ async def bulk_import_payments(
                     year = int(year)
                     month = int(month)
                     amount = float(amount)
+                    print(payment_date_cell)
 
                     if isinstance(payment_date_cell, datetime):
                         payment_date = payment_date_cell
                     else:
                         payment_date = datetime.strptime(str(payment_date_cell), '%Y-%m-%d')
+
+                    print(f"Parsed payment_date: {payment_date}")
 
                 except (ValueError, TypeError) as e:
                     results["errors"].append({
@@ -553,3 +560,136 @@ async def bulk_import_payments(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing file: {str(e)}"
         )
+
+@router.post("/bulk-approve")
+async def bulk_approve_payments(
+    request: BulkApproveRequest,
+    current_user: User = Depends(get_current_user)
+):
+    payment_ids = request.payment_ids
+    """Bulk approve multiple payments"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    if not payment_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No payment IDs provided"
+        )
+
+    approved_count = 0
+    errors = []
+
+    for payment_id in payment_ids:
+        try:
+            payment = await Payment.get(payment_id)
+            if not payment:
+                errors.append(f"Payment {payment_id} not found")
+                continue
+
+            # Check if payment is already approved
+            if payment.status == PaymentStatus.APPROVED:
+                errors.append(f"Payment {payment_id} is already approved")
+                continue
+
+            # Fetch linked documents
+            await payment.fetch_link(Payment.fee)
+            await payment.fetch_link(Payment.user)
+
+            # Update payment status
+            payment.status = PaymentStatus.APPROVED
+            await payment.save()
+
+            # Update fee status to completed
+            if payment.fee:
+                payment.fee.status = FeeStatus.COMPLETED
+                await payment.fee.save()
+
+            # Generate receipt (similar to individual approval)
+            try:
+                print(f"Creating receipt for payment {payment_id}")
+
+                # Fetch property and fee_schedule from fee if not already fetched
+                if payment.fee:
+                    await payment.fee.fetch_link('property')
+                    await payment.fee.fetch_link('fee_schedule')
+
+                # Generate correlative number
+                current_year = datetime.utcnow().year
+                last_receipt = await Receipt.find(
+                    {"correlative_number": {"$regex": f"^REC-{current_year}"}}
+                ).sort([("correlative_number", -1)]).first_or_none()
+
+                if last_receipt:
+                    parts = last_receipt.correlative_number.split("-")
+                    if len(parts) == 3:
+                        last_number = int(parts[2])
+                        new_number = last_number + 1
+                    else:
+                        new_number = 1
+                else:
+                    new_number = 1
+
+                correlative_number = f"REC-{current_year}-{new_number:05d}"
+
+                # Create property and owner details snapshot
+                if not payment.fee or not payment.fee.property:
+                    # If no property linked, create default details
+                    property_details = {
+                        "villa": "N/A",
+                        "row_letter": "N/A",
+                        "number": 0,
+                        "owner_name": "Propietario no registrado",
+                        "owner_phone": "N/A"
+                    }
+                    owner_details = {
+                        "name": "Propietario no registrado",
+                        "phone": "N/A"
+                    }
+                else:
+                    property_details = {
+                        "villa": getattr(payment.fee.property, 'villa', 'N/A'),
+                        "row_letter": getattr(payment.fee.property, 'row_letter', 'N/A'),
+                        "number": getattr(payment.fee.property, 'number', 0),
+                        "owner_name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
+                        "owner_phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
+                    }
+                    owner_details = {
+                        "name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
+                        "phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
+                    }
+
+                # Create receipt record
+                receipt = Receipt(
+                    correlative_number=correlative_number,
+                    payment=payment,
+                    issue_date=datetime.utcnow(),
+                    total_amount=payment.amount,
+                    property_details=property_details,
+                    owner_details=owner_details,
+                    fee_period=f"Cuota {payment.fee.reference or 'N/A'}" if payment.fee else "N/A",
+                    notes=f"Recibo generado automáticamente al aprobar el pago (aprobación masiva)"
+                )
+
+                await receipt.insert()
+
+                print(f"Receipt created in database with ID: {receipt.id}")
+            except Exception as e:
+                # Log the error but don't fail the bulk operation
+                print(f"Error creating receipt for payment {payment_id}: {e}")
+                import traceback
+                traceback.print_exc()
+
+            approved_count += 1
+
+        except Exception as e:
+            errors.append(f"Error processing payment {payment_id}: {str(e)}")
+
+    return {
+        "message": f"Successfully approved {approved_count} payments",
+        "approved_count": approved_count,
+        "errors": errors
+    }

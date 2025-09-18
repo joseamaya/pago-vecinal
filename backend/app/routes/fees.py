@@ -222,6 +222,13 @@ async def update_fee(
             detail="Not enough permissions"
         )
 
+    # Prevent editing fees that are under agreement
+    if fee.status == FeeStatus.AGREEMENT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot edit fees that are under agreement"
+        )
+
     # Update fields (amount should not be updated as it's derived)
     update_data = fee_update.dict(exclude_unset=True)
     if 'amount' in update_data:
@@ -270,6 +277,14 @@ async def delete_fee(fee_id: str, current_user: User = Depends(get_current_user)
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fee not found"
         )
+
+    # Prevent deleting fees that are under agreement
+    if fee.status == FeeStatus.AGREEMENT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete fees that are under agreement"
+        )
+
     await fee.delete()
     return {"message": "Fee deleted successfully"}
 

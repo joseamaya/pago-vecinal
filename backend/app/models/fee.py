@@ -46,6 +46,7 @@ class FeeStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    AGREEMENT = "agreement"
 
 class Fee(Document):
     property: Link[Property]

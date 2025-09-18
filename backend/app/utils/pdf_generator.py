@@ -265,6 +265,209 @@ def generate_property_payment_history_pdf(property_data, payments_data, fees_dat
     return buffer
 
 
+def generate_agreement_pdf(agreement, property_data, fees_data, installments_data):
+    """
+    Generate a PDF agreement document
+    """
+    buffer = io.BytesIO()
+
+    # Create the PDF document
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+
+    # Custom styles
+    title_style = ParagraphStyle(
+        'Title',
+        parent=styles['Heading1'],
+        fontSize=24,
+        alignment=TA_CENTER,
+        spaceAfter=30
+    )
+
+    subtitle_style = ParagraphStyle(
+        'Subtitle',
+        parent=styles['Heading2'],
+        fontSize=16,
+        alignment=TA_CENTER,
+        spaceAfter=20
+    )
+
+    section_style = ParagraphStyle(
+        'Section',
+        parent=styles['Heading3'],
+        fontSize=14,
+        spaceAfter=15
+    )
+
+    normal_style = styles['Normal']
+    normal_style.fontSize = 10
+
+    # Build the PDF content
+    content = []
+
+    # Header
+    content.append(Paragraph("CONVENIO DE PAGO", title_style))
+    content.append(Paragraph("Sistema de Gestión de Cuotas de Condominio", subtitle_style))
+    content.append(Spacer(1, 20))
+
+    # Agreement info
+    content.append(Paragraph("Información del Convenio", section_style))
+    agreement_info = [
+        ["Número de Convenio:", agreement.agreement_number],
+        ["Fecha de Creación:", agreement.created_at.strftime("%d/%m/%Y %H:%M")],
+        ["Estado:", agreement.status.value.upper()],
+        ["Fecha de Inicio:", agreement.start_date.strftime("%d/%m/%Y")],
+        ["Fecha de Fin:", agreement.end_date.strftime("%d/%m/%Y")]
+    ]
+
+    agreement_table = Table(agreement_info, colWidths=[3*inch, 3*inch])
+    agreement_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    content.append(agreement_table)
+    content.append(Spacer(1, 20))
+
+    # Property information
+    content.append(Paragraph("Información de la Propiedad", section_style))
+    property_info = [
+        ["Villa:", property_data.villa],
+        ["Fila:", property_data.row_letter],
+        ["Número:", str(property_data.number)],
+        ["Propietario:", property_data.owner_name],
+        ["Teléfono:", property_data.owner_phone or "N/A"]
+    ]
+
+    property_table = Table(property_info, colWidths=[2*inch, 4*inch])
+    property_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.whitesmoke),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    content.append(property_table)
+    content.append(Spacer(1, 20))
+
+    # Debt summary
+    content.append(Paragraph("Resumen de la Deuda", section_style))
+    debt_info = [
+        ["Deuda Total:", f"S/ {agreement.total_debt:.2f}"],
+        ["Monto Mensual:", f"S/ {agreement.monthly_amount:.2f}"],
+        ["Número de Cuotas:", str(agreement.installments_count)],
+        ["Período del Convenio:", f"{agreement.start_date.strftime('%d/%m/%Y')} - {agreement.end_date.strftime('%d/%m/%Y')}"]
+    ]
+
+    debt_table = Table(debt_info, colWidths=[3*inch, 3*inch])
+    debt_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightblue),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    content.append(debt_table)
+    content.append(Spacer(1, 20))
+
+    # Fees covered by agreement
+    if fees_data:
+        content.append(Paragraph("Cuotas Incluidas en el Convenio", section_style))
+        fee_headers = ["Período", "Monto", "Fecha Vencimiento"]
+        fee_rows = [fee_headers]
+
+        for fee in fees_data:
+            fee_rows.append([
+                f"{fee.month}/{fee.year}",
+                f"S/ {fee.amount:.2f}",
+                fee.due_date.strftime("%d/%m/%Y")
+            ])
+
+        fees_table = Table(fee_rows, colWidths=[1.5*inch, 1.5*inch, 2*inch])
+        fees_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        content.append(fees_table)
+        content.append(Spacer(1, 10))
+
+    # Installment schedule
+    if installments_data:
+        content.append(Paragraph("Cronograma de Pagos", section_style))
+        installment_headers = ["Cuota", "Monto", "Fecha Vencimiento", "Estado"]
+        installment_rows = [installment_headers]
+
+        for installment in installments_data:
+            installment_rows.append([
+                str(installment.installment_number),
+                f"S/ {installment.amount:.2f}",
+                installment.due_date.strftime("%d/%m/%Y"),
+                installment.status.value.upper()
+            ])
+
+        installments_table = Table(installment_rows, colWidths=[1*inch, 1.5*inch, 2*inch, 1.5*inch])
+        installments_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.lightgreen),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        content.append(installments_table)
+        content.append(Spacer(1, 20))
+
+    # Terms and conditions
+    content.append(Paragraph("Términos y Condiciones", section_style))
+    terms = [
+        "1. El propietario se compromete a pagar las cuotas mensuales según el cronograma establecido.",
+        "2. Los pagos deben realizarse antes de la fecha de vencimiento de cada cuota.",
+        "3. En caso de retraso en el pago, se aplicarán intereses moratorios.",
+        "4. El convenio queda sin efecto si se incumple con 2 cuotas consecutivas.",
+        "5. Una vez completado el pago de todas las cuotas, las deudas originales quedan canceladas.",
+        "6. Este documento es válido como comprobante del acuerdo establecido."
+    ]
+
+    for term in terms:
+        content.append(Paragraph(term, normal_style))
+        content.append(Spacer(1, 5))
+
+    content.append(Spacer(1, 30))
+
+    # Notes
+    if agreement.notes:
+        content.append(Paragraph("Notas Adicionales:", styles['Heading4']))
+        content.append(Paragraph(agreement.notes, normal_style))
+        content.append(Spacer(1, 20))
+
+    # Footer
+    content.append(Spacer(1, 30))
+    content.append(Paragraph("Este convenio ha sido generado automáticamente por el sistema.", normal_style))
+    content.append(Paragraph(f"Fecha de generación: {datetime.now().strftime('%d/%m/%Y %H:%M')}", normal_style))
+
+    # Build the PDF
+    doc.build(content)
+
+    buffer.seek(0)
+    return buffer
+
+
 def generate_outstanding_fees_pdf(fees_data):
     """
     Generate a PDF report of all outstanding fees
