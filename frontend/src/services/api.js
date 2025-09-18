@@ -151,6 +151,13 @@ export const agreementsAPI = {
   downloadAgreementPDF: (id) => api.get(`/agreements/${id}/download-pdf`, { responseType: 'blob' }),
   createInstallmentPayment: (agreementId, installmentData) => api.post(`/agreements/${agreementId}/installments/`, installmentData),
   updateInstallmentPayment: (agreementId, installmentId, installmentData) => api.put(`/agreements/${agreementId}/installments/${installmentId}`, installmentData),
+  getNextPendingInstallment: () => api.get('/agreements/installments/next-pending'),
+  payNextInstallment: (paymentData) => {
+    const config = paymentData instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : {};
+    return api.post('/agreements/installments/pay-next', paymentData, config);
+  },
 };
 
 // Reports API

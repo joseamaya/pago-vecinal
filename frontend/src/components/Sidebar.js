@@ -26,6 +26,7 @@ import {
   Schedule as ScheduleIcon,
   Assessment as ReportsIcon,
   Assignment as AgreementIcon,
+  AccountBalance as InstallmentIcon,
   Logout as LogoutIcon,
   Menu as MenuIcon,
   ChevronLeft as ChevronLeftIcon,
@@ -86,6 +87,12 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle, handleDrawerClose }) => {
       text: 'Pagos',
       icon: <PaymentIcon />,
       path: '/payments',
+      roles: ['admin', 'owner'],
+    },
+    {
+      text: 'Pagos Convenios',
+      icon: <InstallmentIcon />,
+      path: '/agreement-payments',
       roles: ['admin', 'owner'],
     },
     {

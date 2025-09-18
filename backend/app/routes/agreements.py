@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -49,12 +49,17 @@ async def get_agreements(
     for agreement in agreements:
         await agreement.fetch_link(Agreement.property)
         await agreement.fetch_link(Agreement.user)
+        await agreement.fetch_link(Agreement.fees)
 
         # Fetch installments
         installments = await AgreementInstallment.find(
             AgreementInstallment.agreement.id == agreement.id
         ).to_list()
-
+    
+        # Fetch agreement links for installments
+        for inst in installments:
+            await inst.fetch_link(AgreementInstallment.agreement)
+    
         installment_responses = [
             AgreementInstallmentResponse(
                 id=str(inst.id),
@@ -107,6 +112,7 @@ async def get_agreement(agreement_id: str, current_user: User = Depends(get_curr
     # Fetch links
     await agreement.fetch_link(Agreement.property)
     await agreement.fetch_link(Agreement.user)
+    await agreement.fetch_link(Agreement.fees)
 
     # Check permissions
     if (current_user.role != UserRole.ADMIN and
@@ -120,6 +126,10 @@ async def get_agreement(agreement_id: str, current_user: User = Depends(get_curr
     installments = await AgreementInstallment.find(
         AgreementInstallment.agreement.id == agreement.id
     ).to_list()
+
+    # Fetch agreement links for installments
+    for inst in installments:
+        await inst.fetch_link(AgreementInstallment.agreement)
 
     installment_responses = [
         AgreementInstallmentResponse(
@@ -294,6 +304,12 @@ async def create_agreement(
     # Fetch links for response
     await agreement.fetch_link(Agreement.property)
     await agreement.fetch_link(Agreement.user)
+    await agreement.fetch_link(Agreement.fees)
+    await agreement.fetch_link(Agreement.fees)
+
+    # Fetch agreement links for installments
+    for inst in installments:
+        await inst.fetch_link(AgreementInstallment.agreement)
 
     installment_responses = [
         AgreementInstallmentResponse(
@@ -373,6 +389,10 @@ async def update_agreement(
         AgreementInstallment.agreement.id == agreement.id
     ).to_list()
 
+    # Fetch agreement links for installments
+    for inst in installments:
+        await inst.fetch_link(AgreementInstallment.agreement)
+
     installment_responses = [
         AgreementInstallmentResponse(
             id=str(inst.id),
@@ -426,6 +446,9 @@ async def delete_agreement(agreement_id: str, current_user: User = Depends(get_c
             detail="Agreement not found"
         )
 
+    # Fetch fees links
+    await agreement.fetch_link(Agreement.fees)
+
     # Revert fee statuses back to PENDING
     for fee in agreement.fees:
         fee.status = FeeStatus.PENDING
@@ -449,6 +472,9 @@ async def download_agreement_pdf(agreement_id: str, current_user: User = Depends
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agreement not found"
         )
+
+    # Fetch user link for permissions check
+    await agreement.fetch_link(Agreement.user)
 
     # Check permissions
     if (current_user.role != UserRole.ADMIN and
@@ -495,6 +521,9 @@ async def create_installment_payment(
             detail="Agreement not found"
         )
 
+    # Fetch user link for permissions check
+    await agreement.fetch_link(Agreement.user)
+
     # Check permissions
     if (current_user.role != UserRole.ADMIN and
         str(agreement.user.id) != str(current_user.id)):
@@ -513,6 +542,9 @@ async def create_installment_payment(
     )
     await installment.insert()
 
+    # Fetch agreement link for response
+    await installment.fetch_link(AgreementInstallment.agreement)
+
     return AgreementInstallmentResponse(
         id=str(installment.id),
         agreement_id=str(installment.agreement.id),
@@ -524,6 +556,150 @@ async def create_installment_payment(
         payment_reference=installment.payment_reference,
         notes=installment.notes
     )
+
+@router.get("/installments/next-pending", response_model=Optional[dict])
+async def get_next_pending_installment(current_user: User = Depends(get_current_user)):
+    """
+    Get the oldest pending installment for the current user across all their agreements.
+    Returns the installment with agreement details for payment processing.
+    """
+    # Get all agreements for the current user
+    if current_user.role == UserRole.ADMIN:
+        agreements = await Agreement.find_all().to_list()
+    else:
+        agreements = await Agreement.find(Agreement.user.id == current_user.id).to_list()
+
+    if not agreements:
+        return None
+
+    # Fetch installments for each agreement and find the oldest pending one
+    oldest_pending = None
+    oldest_due_date = None
+
+    for agreement in agreements:
+        # Fetch installments for this agreement
+        installments = await AgreementInstallment.find(
+            AgreementInstallment.agreement.id == agreement.id,
+            AgreementInstallment.status == "pending"
+        ).sort([("due_date", 1)]).to_list()  # Sort by due_date ascending (oldest first)
+
+        if installments:
+            # Get the oldest pending installment for this agreement
+            for inst in installments:
+                await inst.fetch_link(AgreementInstallment.agreement)
+
+                if oldest_pending is None or inst.due_date < oldest_due_date:
+                    oldest_pending = inst
+                    oldest_due_date = inst.due_date
+
+    if not oldest_pending:
+        return None
+
+    # Fetch agreement and property details
+    await oldest_pending.agreement.fetch_link(Agreement.property)
+    await oldest_pending.agreement.fetch_link(Agreement.user)
+
+    return {
+        "installment": AgreementInstallmentResponse(
+            id=str(oldest_pending.id),
+            agreement_id=str(oldest_pending.agreement.id),
+            installment_number=oldest_pending.installment_number,
+            amount=oldest_pending.amount,
+            due_date=oldest_pending.due_date,
+            paid_date=oldest_pending.paid_date,
+            status=oldest_pending.status,
+            payment_reference=oldest_pending.payment_reference,
+            notes=oldest_pending.notes
+        ),
+        "agreement": {
+            "id": str(oldest_pending.agreement.id),
+            "agreement_number": oldest_pending.agreement.agreement_number,
+            "property_villa": oldest_pending.agreement.property.villa,
+            "property_row_letter": oldest_pending.agreement.property.row_letter,
+            "property_number": oldest_pending.agreement.property.number,
+            "property_owner_name": oldest_pending.agreement.property.owner_name,
+            "monthly_amount": oldest_pending.agreement.monthly_amount,
+            "total_debt": oldest_pending.agreement.total_debt
+        }
+    }
+
+@router.post("/installments/pay-next", response_model=dict)
+async def pay_next_installment(
+    amount: float = Form(...),
+    payment_reference: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    receipt_file: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Pay the next pending installment for the current user.
+    Automatically finds and pays the oldest pending installment.
+    """
+    # Get the next pending installment
+    next_installment_data = await get_next_pending_installment(current_user)
+
+    if not next_installment_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No pending installments found"
+        )
+
+    installment = next_installment_data["installment"]
+    agreement_data = next_installment_data["agreement"]
+
+    # Validate amount matches installment amount
+    if abs(amount - installment.amount) > 0.01:  # Allow small floating point differences
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment amount must match installment amount of S/ {installment.amount}"
+        )
+
+    # Get the actual installment object
+    installment_obj = await AgreementInstallment.get(installment.id)
+    if not installment_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Installment not found"
+        )
+
+    # Handle file upload
+    receipt_file_path = None
+    if receipt_file:
+        # Create unique filename
+        file_extension = os.path.splitext(receipt_file.filename)[1]
+        unique_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user.id}{file_extension}"
+        file_path = os.path.join("static", "uploads", unique_filename)
+
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(receipt_file.file, buffer)
+
+        receipt_file_path = file_path
+
+    # Update installment
+    installment_obj.status = AgreementInstallmentStatus.PAID
+    installment_obj.paid_date = datetime.utcnow()
+    installment_obj.payment_reference = payment_reference
+    installment_obj.notes = notes
+    await installment_obj.save()
+
+    # Check if all installments are paid to update agreement status
+    agreement = await Agreement.get(agreement_data["id"])
+    if agreement:
+        all_installments = await AgreementInstallment.find(
+            AgreementInstallment.agreement.id == agreement.id
+        ).to_list()
+
+        if all(inst.status == AgreementInstallmentStatus.PAID for inst in all_installments):
+            agreement.status = AgreementStatus.COMPLETED
+            await agreement.save()
+
+    return {
+        "message": "Installment payment processed successfully",
+        "installment": installment,
+        "agreement": agreement_data,
+        "receipt_file": receipt_file_path
+    }
 
 @router.put("/{agreement_id}/installments/{installment_id}", response_model=AgreementInstallmentResponse)
 async def update_installment_payment(
@@ -538,6 +714,9 @@ async def update_installment_payment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agreement not found"
         )
+
+    # Fetch user link for permissions check
+    await agreement.fetch_link(Agreement.user)
 
     installment = await AgreementInstallment.get(installment_id)
     if not installment or str(installment.agreement.id) != agreement_id:
@@ -560,6 +739,9 @@ async def update_installment_payment(
         setattr(installment, field, value)
 
     await installment.save()
+
+    # Fetch agreement link for response
+    await installment.fetch_link(AgreementInstallment.agreement)
 
     return AgreementInstallmentResponse(
         id=str(installment.id),

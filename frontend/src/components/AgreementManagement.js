@@ -33,6 +33,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  OutlinedInput,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -632,7 +633,7 @@ const AgreementManagement = () => {
                     multiple
                     value={formData.fee_ids}
                     onChange={(e) => setFormData({ ...formData, fee_ids: e.target.value })}
-                    input={<TextField label="Cuotas a Incluir" />}
+                    input={<OutlinedInput label="Cuotas a Incluir" />}
                     renderValue={(selected) => `${selected.length} cuotas seleccionadas`}
                   >
                     {formData.property_id && getPropertyFees(formData.property_id).map((fee) => (
