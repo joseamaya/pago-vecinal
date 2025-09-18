@@ -94,6 +94,27 @@ export const paymentsAPI = {
   bulkApprovePayments: (paymentIds) => api.post('/payments/bulk-approve', { payment_ids: paymentIds }),
 };
 
+// Miscellaneous Payments API
+export const miscellaneousPaymentsAPI = {
+  getMiscellaneousPayments: () => api.get('/miscellaneous-payments/'),
+  getMiscellaneousPayment: (id) => api.get(`/miscellaneous-payments/${id}`),
+  createMiscellaneousPayment: (paymentData) => {
+    const config = paymentData instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : {};
+    return api.post('/miscellaneous-payments/', paymentData, config);
+  },
+  updateMiscellaneousPayment: (id, paymentData) => {
+    const config = paymentData instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : {};
+    return api.put(`/miscellaneous-payments/${id}`, paymentData, config);
+  },
+  deleteMiscellaneousPayment: (id) => api.delete(`/miscellaneous-payments/${id}`),
+  bulkApproveMiscellaneousPayments: (paymentIds) => api.post('/miscellaneous-payments/bulk-approve', { payment_ids: paymentIds }),
+  downloadMiscellaneousReceipt: (id) => api.get(`/miscellaneous-payments/${id}/download-receipt`, { responseType: 'blob' }),
+};
+
 // Receipts API
 export const receiptsAPI = {
   getReceipts: () => api.get('/receipts/'),

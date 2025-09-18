@@ -10,6 +10,7 @@ import Dashboard from './components/Dashboard';
 import UserManagement from './components/UserManagement';
 import PropertyManagement from './components/PropertyManagement';
 import PaymentManagement from './components/PaymentManagement';
+import MiscellaneousPaymentManagement from './components/MiscellaneousPaymentManagement';
 import AgreementPayments from './components/AgreementPayments';
 import ReceiptManagement from './components/ReceiptManagement';
 import FeeManagement from './components/FeeManagement';
@@ -49,6 +50,7 @@ const AppRouter = () => {
                   <Route path="/users" element={<UserManagement />} />
                   <Route path="/properties" element={<PropertyManagement />} />
                   <Route path="/payments" element={<PaymentManagement />} />
+                  <Route path="/miscellaneous-payments" element={<MiscellaneousPaymentManagement />} />
                   <Route path="/agreement-payments" element={<AgreementPayments />} />
                   <Route path="/receipts" element={<ReceiptManagement />} />
                   <Route path="/fees" element={<FeeManagement />} />

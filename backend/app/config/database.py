@@ -2,6 +2,8 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from dotenv import load_dotenv
+
+from ..models.miscellaneous_payment import MiscellaneousPayment
 from ..models.user import User
 from ..models.property import Property
 from ..models.fee import FeeSchedule, Fee
@@ -21,5 +23,5 @@ async def init_db():
 
     await init_beanie(
         database=database,
-        document_models=[User, Property, FeeSchedule, Fee, Payment, Receipt, Agreement, AgreementInstallment]  # Add all your models here
+        document_models=[User, Property, FeeSchedule, Fee, Payment, Receipt, Agreement, AgreementInstallment, MiscellaneousPayment]  # Add all your models here
     )

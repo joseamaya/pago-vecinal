@@ -1,17 +1,19 @@
 from beanie import Document, Link
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 from .payment import Payment
+from .miscellaneous_payment import MiscellaneousPayment
 
 class Receipt(Document):
     correlative_number: str  # Format: REC-YYYY-XXXXX
-    payment: Link[Payment]
+    payment: Optional[Link[Payment]] = None
+    miscellaneous_payment: Optional[Link[MiscellaneousPayment]] = None
     issue_date: datetime
     total_amount: float
     property_details: dict  # Store property info at time of receipt generation
     owner_details: dict     # Store owner info at time of receipt generation
-    fee_period: Optional[str] = None  # e.g., "Enero 2024"
+    fee_period: Optional[str] = None  # e.g., "Enero 2024" or "Pago varios: description"
     notes: Optional[str] = None
 
     class Settings:
@@ -25,7 +27,8 @@ class ReceiptCreate(BaseModel):
 class ReceiptResponse(BaseModel):
     id: str
     correlative_number: str
-    payment_id: str
+    payment_id: Optional[str] = None
+    miscellaneous_payment_id: Optional[str] = None
     issue_date: datetime
     total_amount: float
     property_details: dict

@@ -90,6 +90,12 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle, handleDrawerClose }) => {
       roles: ['admin', 'owner'],
     },
     {
+      text: 'Pagos Varios',
+      icon: <PaymentIcon />,
+      path: '/miscellaneous-payments',
+      roles: ['admin', 'owner'],
+    },
+    {
       text: 'Pagos Convenios',
       icon: <InstallmentIcon />,
       path: '/agreement-payments',
