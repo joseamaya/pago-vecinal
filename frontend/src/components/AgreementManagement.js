@@ -34,6 +34,7 @@ import {
   AccordionSummary,
   AccordionDetails,
   OutlinedInput,
+  Checkbox,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -65,6 +66,8 @@ const AgreementManagement = () => {
     start_date: '',
     notes: '',
   });
+  const [totalDebt, setTotalDebt] = useState(0);
+  const [calculatedInstallments, setCalculatedInstallments] = useState('');
   const [filters, setFilters] = useState({
     property_id: '',
     status: '',
@@ -121,11 +124,13 @@ const AgreementManagement = () => {
       setFormData({
         property_id: agreement.property_id,
         fee_ids: agreement.fee_ids,
-        monthly_amount: agreement.monthly_amount,
-        installments_count: agreement.installments_count,
+        monthly_amount: agreement.monthly_amount.toString(),
+        installments_count: agreement.installments_count.toString(),
         start_date: new Date(agreement.start_date).toISOString().split('T')[0],
         notes: agreement.notes || '',
       });
+      setTotalDebt(agreement.total_debt);
+      setCalculatedInstallments(agreement.installments_count.toString());
     } else {
       setEditingAgreement(null);
       setFormData({
@@ -136,6 +141,8 @@ const AgreementManagement = () => {
         start_date: '',
         notes: '',
       });
+      setTotalDebt(0);
+      setCalculatedInstallments('');
     }
     setOpen(true);
   };
@@ -151,15 +158,34 @@ const AgreementManagement = () => {
       start_date: '',
       notes: '',
     });
+    setTotalDebt(0);
+    setCalculatedInstallments('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validation
+    if (totalDebt === 0) {
+      setError('Debe seleccionar al menos una cuota');
+      return;
+    }
+
+    if (parseFloat(formData.monthly_amount) <= 0) {
+      setError('El monto mensual debe ser mayor a 0');
+      return;
+    }
+
+    if (parseFloat(formData.monthly_amount) > totalDebt) {
+      setError('El monto mensual no puede ser mayor a la deuda total');
+      return;
+    }
+
     try {
       const submitData = {
         ...formData,
         monthly_amount: parseFloat(formData.monthly_amount),
-        installments_count: parseInt(formData.installments_count),
+        installments_count: parseInt(calculatedInstallments),
         start_date: new Date(formData.start_date).toISOString(),
       };
 
@@ -301,6 +327,38 @@ const AgreementManagement = () => {
   const calculatePendingAmount = (agreement) => {
     const totalPaid = calculateTotalPaid(agreement.installments);
     return agreement.total_debt - totalPaid;
+  };
+
+  const calculateTotalDebt = (selectedFeeIds) => {
+    return fees
+      .filter(fee => selectedFeeIds.includes(fee.id))
+      .reduce((total, fee) => total + fee.amount, 0);
+  };
+
+  const calculateInstallmentsCount = (totalDebt, monthlyAmount) => {
+    if (monthlyAmount <= 0) return '';
+    return Math.ceil(totalDebt / monthlyAmount);
+  };
+
+  const handleFeeSelection = (feeId) => {
+    const newSelectedFees = formData.fee_ids.includes(feeId)
+      ? formData.fee_ids.filter(id => id !== feeId)
+      : [...formData.fee_ids, feeId];
+
+    const newTotalDebt = calculateTotalDebt(newSelectedFees);
+    const newCalculatedInstallments = calculateInstallmentsCount(newTotalDebt, parseFloat(formData.monthly_amount) || 0);
+
+    setFormData({ ...formData, fee_ids: newSelectedFees });
+    setTotalDebt(newTotalDebt);
+    setCalculatedInstallments(newCalculatedInstallments);
+  };
+
+  const handleMonthlyAmountChange = (value) => {
+    const monthlyAmount = parseFloat(value) || 0;
+    const newCalculatedInstallments = calculateInstallmentsCount(totalDebt, monthlyAmount);
+
+    setFormData({ ...formData, monthly_amount: value });
+    setCalculatedInstallments(newCalculatedInstallments);
   };
 
   return (
@@ -571,12 +629,17 @@ const AgreementManagement = () => {
         <form onSubmit={handleSubmit}>
           <DialogContent>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+              {/* Property Selection */}
+              <Grid item xs={12}>
                 <FormControl fullWidth margin="dense">
                   <InputLabel>Propiedad</InputLabel>
                   <Select
                     value={formData.property_id}
-                    onChange={(e) => setFormData({ ...formData, property_id: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, property_id: e.target.value, fee_ids: [] });
+                      setTotalDebt(0);
+                      setCalculatedInstallments('');
+                    }}
                     label="Propiedad"
                     required
                   >
@@ -588,6 +651,48 @@ const AgreementManagement = () => {
                   </Select>
                 </FormControl>
               </Grid>
+
+              {/* Fee Selection with Checkboxes */}
+              {formData.property_id && (
+                <Grid item xs={12}>
+                  <Typography variant="h6" gutterBottom>
+                    Seleccionar Cuotas
+                  </Typography>
+                  <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflow: 'auto' }}>
+                    {getPropertyFees(formData.property_id).length === 0 ? (
+                      <Typography color="text.secondary">
+                        No hay cuotas pendientes para esta propiedad
+                      </Typography>
+                    ) : (
+                      getPropertyFees(formData.property_id).map((fee) => (
+                        <Box key={fee.id} display="flex" alignItems="center" sx={{ mb: 1 }}>
+                          <Checkbox
+                            checked={formData.fee_ids.includes(fee.id)}
+                            onChange={() => handleFeeSelection(fee.id)}
+                          />
+                          <Box sx={{ ml: 1, flex: 1 }}>
+                            <Typography variant="body2">
+                              <strong>{fee.month}/{fee.year}</strong> - S/ {fee.amount.toFixed(2)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Vencimiento: {new Date(fee.due_date).toLocaleDateString('es-ES')}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      ))
+                    )}
+                  </Paper>
+
+                  {/* Total Debt Display */}
+                  {totalDebt > 0 && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      <strong>Deuda Total Seleccionada: S/ {totalDebt.toFixed(2)}</strong>
+                    </Alert>
+                  )}
+                </Grid>
+              )}
+
+              {/* Monthly Amount */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   margin="dense"
@@ -596,22 +701,28 @@ const AgreementManagement = () => {
                   fullWidth
                   required
                   value={formData.monthly_amount}
-                  onChange={(e) => setFormData({ ...formData, monthly_amount: e.target.value })}
-                  inputProps={{ min: 0, step: 0.01 }}
+                  onChange={(e) => handleMonthlyAmountChange(e.target.value)}
+                  inputProps={{ min: 0.01, step: 0.01 }}
+                  helperText={totalDebt > 0 ? `Máximo recomendado: S/ ${totalDebt.toFixed(2)}` : ''}
                 />
               </Grid>
+
+              {/* Auto-calculated Installments */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   margin="dense"
-                  label="Número de Cuotas"
+                  label="Número de Cuotas (Calculado)"
                   type="number"
                   fullWidth
-                  required
-                  value={formData.installments_count}
-                  onChange={(e) => setFormData({ ...formData, installments_count: e.target.value })}
-                  inputProps={{ min: 1, max: 60 }}
+                  value={calculatedInstallments}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  helperText="Calculado automáticamente basado en deuda total / monto mensual"
                 />
               </Grid>
+
+              {/* Start Date */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   margin="dense"
@@ -626,24 +737,8 @@ const AgreementManagement = () => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth margin="dense">
-                  <InputLabel>Cuotas a Incluir</InputLabel>
-                  <Select
-                    multiple
-                    value={formData.fee_ids}
-                    onChange={(e) => setFormData({ ...formData, fee_ids: e.target.value })}
-                    input={<OutlinedInput label="Cuotas a Incluir" />}
-                    renderValue={(selected) => `${selected.length} cuotas seleccionadas`}
-                  >
-                    {formData.property_id && getPropertyFees(formData.property_id).map((fee) => (
-                      <MenuItem key={fee.id} value={fee.id}>
-                        {fee.month}/{fee.year} - S/ {fee.amount.toFixed(2)}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
+
+              {/* Notes */}
               <Grid item xs={12}>
                 <TextField
                   margin="dense"

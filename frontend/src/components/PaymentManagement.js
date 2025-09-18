@@ -32,13 +32,14 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { paymentsAPI, feesAPI } from '../services/api';
+import { paymentsAPI, feesAPI, propertiesAPI, reportsAPI } from '../services/api';
 
 const PaymentManagement = () => {
   const { isAdmin } = useAuth();
@@ -60,10 +61,22 @@ const PaymentManagement = () => {
   const [bulkUploading, setBulkUploading] = useState(false);
   const [selectedPayments, setSelectedPayments] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
+  const [properties, setProperties] = useState([]);
+  const [selectedVilla, setSelectedVilla] = useState('');
+  const [selectedRow, setSelectedRow] = useState('');
+  const [selectedHouse, setSelectedHouse] = useState('');
+  const [availableRows, setAvailableRows] = useState([]);
+  const [availableHouses, setAvailableHouses] = useState([]);
+  const [selectedFeeInfo, setSelectedFeeInfo] = useState(null);
+  const [filterYear, setFilterYear] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filteredPayments, setFilteredPayments] = useState([]);
 
   useEffect(() => {
     fetchPayments();
     fetchFees();
+    fetchProperties();
   }, []);
 
   const fetchPayments = async () => {
@@ -71,7 +84,10 @@ const PaymentManagement = () => {
       setLoading(true);
       const response = await paymentsAPI.getPayments();
       console.log('Fetched payments:', response.data);
-      setPayments(response.data);
+      // Sort payments by payment_date descending (newest first)
+      const sortedPayments = response.data.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
+      setPayments(sortedPayments);
+      setFilteredPayments(sortedPayments);
       setError('');
     } catch (err) {
       setError('Error al cargar pagos');
@@ -89,6 +105,15 @@ const PaymentManagement = () => {
       setFees(availableFees);
     } catch (err) {
       console.error('Error fetching fees:', err);
+    }
+  };
+
+  const fetchProperties = async () => {
+    try {
+      const response = await propertiesAPI.getProperties();
+      setProperties(response.data);
+    } catch (err) {
+      console.error('Error fetching properties:', err);
     }
   };
 
@@ -122,6 +147,12 @@ const PaymentManagement = () => {
       notes: '',
     });
     setReceiptFile(null);
+    setSelectedVilla('');
+    setSelectedRow('');
+    setSelectedHouse('');
+    setAvailableRows([]);
+    setAvailableHouses([]);
+    setSelectedFeeInfo(null);
   };
 
   const handleSubmit = async (e) => {
@@ -242,9 +273,144 @@ const PaymentManagement = () => {
       setSelectedPayments([]);
       setSelectAll(false);
     } else {
-      const pendingPayments = payments.filter(p => p.status === 'pending').map(p => p.id);
+      const pendingPayments = filteredPayments.filter(p => p.status === 'pending').map(p => p.id);
       setSelectedPayments(pendingPayments);
       setSelectAll(true);
+    }
+  };
+
+  const applyFilters = () => {
+    let filtered = payments;
+
+    if (filterYear) {
+      filtered = filtered.filter(payment => {
+        const paymentDate = new Date(payment.payment_date);
+        return paymentDate.getFullYear().toString() === filterYear;
+      });
+    }
+
+    if (filterMonth) {
+      filtered = filtered.filter(payment => {
+        const paymentDate = new Date(payment.payment_date);
+        return (paymentDate.getMonth() + 1).toString() === filterMonth;
+      });
+    }
+
+    if (filterStatus) {
+      filtered = filtered.filter(payment => payment.status === filterStatus);
+    }
+
+    setFilteredPayments(filtered);
+    setSelectedPayments([]);
+    setSelectAll(false);
+  };
+
+  const clearFilters = () => {
+    setFilterYear('');
+    setFilterMonth('');
+    setFilterStatus('');
+    setFilteredPayments(payments);
+    setSelectedPayments([]);
+    setSelectAll(false);
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      const response = await reportsAPI.getAllPaymentsReport();
+      // Create a blob from the response data
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+
+      // Create a download link and trigger the download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Get filename from response headers or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'reporte_pagos_completo.xlsx';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('Error al exportar el reporte de pagos');
+      console.error('Error exporting payments:', err);
+    }
+  };
+
+  const handleVillaChange = (villa) => {
+    setSelectedVilla(villa);
+    setSelectedRow('');
+    setSelectedHouse('');
+    setAvailableHouses([]);
+    if (villa) {
+      const rows = [...new Set(properties.filter(p => p.villa === villa).map(p => p.row_letter))].sort();
+      setAvailableRows(rows);
+    } else {
+      setAvailableRows([]);
+    }
+  };
+
+  const handleRowChange = (row) => {
+    setSelectedRow(row);
+    setSelectedHouse('');
+    if (row && selectedVilla) {
+      const houses = properties
+        .filter(p => p.villa === selectedVilla && p.row_letter === row)
+        .map(p => ({ number: p.number, id: p.id }))
+        .sort((a, b) => a.number - b.number);
+      setAvailableHouses(houses);
+    } else {
+      setAvailableHouses([]);
+    }
+  };
+
+  const handleHouseChange = (houseId) => {
+    setSelectedHouse(houseId);
+    if (houseId) {
+      // Find the oldest pending fee for this property
+      const propertyFees = fees.filter(fee => fee.property_id === houseId && fee.status === 'pending');
+      if (propertyFees.length > 0) {
+        // Sort by due_date ascending (oldest first)
+        propertyFees.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+        const oldestFee = propertyFees[0];
+        setFormData({
+          ...formData,
+          fee_id: oldestFee.id,
+          amount: oldestFee.amount.toString(),
+        });
+        setSelectedFeeInfo({
+          ownerName: oldestFee.property_owner_name,
+          month: oldestFee.month,
+          year: oldestFee.year,
+          dueDate: oldestFee.due_date,
+        });
+      } else {
+        // No pending fees
+        setFormData({
+          ...formData,
+          fee_id: '',
+          amount: '',
+        });
+        setSelectedFeeInfo(null);
+      }
+    } else {
+      setFormData({
+        ...formData,
+        fee_id: '',
+        amount: '',
+      });
+      setSelectedFeeInfo(null);
     }
   };
 
@@ -325,7 +491,7 @@ const PaymentManagement = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
-          Gestión de Pagos
+          Gestión de Pagos de Cuotas Condominales
         </Typography>
         <Box>
           {isAdmin && selectedPayments.length > 0 && (
@@ -349,6 +515,14 @@ const PaymentManagement = () => {
             </Button>
           )}
           <Button
+            variant="outlined"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportExcel}
+            sx={{ mr: 2 }}
+          >
+            Exportar Excel
+          </Button>
+          <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => handleOpenDialog()}
@@ -357,6 +531,91 @@ const PaymentManagement = () => {
           </Button>
         </Box>
       </Box>
+
+      {/* Filters */}
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Filtros
+        </Typography>
+        <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel>Año</InputLabel>
+            <Select
+              value={filterYear}
+              onChange={(e) => setFilterYear(e.target.value)}
+              label="Año"
+            >
+              <MenuItem value="">
+                <em>Todos</em>
+              </MenuItem>
+              {[...new Set(payments.map(p => new Date(p.payment_date).getFullYear()))]
+                .sort((a, b) => b - a)
+                .map(year => (
+                  <MenuItem key={year} value={year.toString()}>
+                    {year}
+                  </MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel>Mes</InputLabel>
+            <Select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              label="Mes"
+            >
+              <MenuItem value="">
+                <em>Todos</em>
+              </MenuItem>
+              {[
+                { value: '1', label: 'Enero' },
+                { value: '2', label: 'Febrero' },
+                { value: '3', label: 'Marzo' },
+                { value: '4', label: 'Abril' },
+                { value: '5', label: 'Mayo' },
+                { value: '6', label: 'Junio' },
+                { value: '7', label: 'Julio' },
+                { value: '8', label: 'Agosto' },
+                { value: '9', label: 'Septiembre' },
+                { value: '10', label: 'Octubre' },
+                { value: '11', label: 'Noviembre' },
+                { value: '12', label: 'Diciembre' }
+              ].map(month => (
+                <MenuItem key={month.value} value={month.value}>
+                  {month.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel>Estado</InputLabel>
+            <Select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              label="Estado"
+            >
+              <MenuItem value="">
+                <em>Todos</em>
+              </MenuItem>
+              <MenuItem value="pending">Pendiente</MenuItem>
+              <MenuItem value="approved">Aprobado</MenuItem>
+              <MenuItem value="completed">Completado</MenuItem>
+              <MenuItem value="rejected">Rechazado</MenuItem>
+              <MenuItem value="failed">Fallido</MenuItem>
+              <MenuItem value="cancelled">Cancelado</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Button variant="contained" onClick={applyFilters}>
+            Aplicar Filtros
+          </Button>
+          <Button variant="outlined" onClick={clearFilters}>
+            Limpiar
+          </Button>
+        </Box>
+      </Paper>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -370,11 +629,11 @@ const PaymentManagement = () => {
             <TableHead>
               <TableRow>
                 <TableCell padding="checkbox">
-                  {isAdmin && payments.some(p => p.status === 'pending') && (
+                  {isAdmin && filteredPayments.some(p => p.status === 'pending') && (
                     <Checkbox
                       checked={selectAll}
                       onChange={handleSelectAll}
-                      indeterminate={selectedPayments.length > 0 && selectedPayments.length < payments.filter(p => p.status === 'pending').length}
+                      indeterminate={selectedPayments.length > 0 && selectedPayments.length < filteredPayments.filter(p => p.status === 'pending').length}
                     />
                   )}
                 </TableCell>
@@ -394,14 +653,14 @@ const PaymentManagement = () => {
                     Cargando...
                   </TableCell>
                 </TableRow>
-              ) : payments.length === 0 ? (
+              ) : filteredPayments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} align="center">
                     No hay pagos registrados
                   </TableCell>
                 </TableRow>
               ) : (
-                payments.map((payment) => (
+                filteredPayments.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell padding="checkbox">
                       {isAdmin && payment.status === 'pending' && (
@@ -493,31 +752,106 @@ const PaymentManagement = () => {
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Cuota</InputLabel>
-              <Select
-                value={formData.fee_id}
-                onChange={(e) => setFormData({ ...formData, fee_id: e.target.value })}
-                label="Cuota"
-                required
-              >
-                {fees.map((fee) => (
-                  <MenuItem key={fee.id} value={fee.id}>
-                    {fee.property_row_letter}{fee.property_number} - S/ {fee.amount.toFixed(2)} - {fee.month}/{fee.year}
+            <Box display="flex" gap={2} sx={{ mb: 2 }}>
+              <FormControl sx={{ flex: 1 }}>
+                <InputLabel>Villa</InputLabel>
+                <Select
+                  value={selectedVilla}
+                  onChange={(e) => handleVillaChange(e.target.value)}
+                  label="Villa"
+                  required
+                >
+                  <MenuItem value="">
+                    <em>Seleccionar Villa</em>
                   </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              margin="dense"
-              label="Monto (S/)"
-              type="number"
-              fullWidth
-              required
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              inputProps={{ step: "0.01" }}
-            />
+                  {[...new Set(properties.map(p => p.villa))].sort().map((villa) => (
+                    <MenuItem key={villa} value={villa}>
+                      {villa}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl sx={{ flex: 1 }} disabled={!selectedVilla}>
+                <InputLabel>Fila</InputLabel>
+                <Select
+                  value={selectedRow}
+                  onChange={(e) => handleRowChange(e.target.value)}
+                  label="Fila"
+                  required
+                >
+                  <MenuItem value="">
+                    <em>Seleccionar Fila</em>
+                  </MenuItem>
+                  {availableRows.map((row) => (
+                    <MenuItem key={row} value={row}>
+                      {row}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl sx={{ flex: 1 }} disabled={!selectedRow}>
+                <InputLabel>Casa</InputLabel>
+                <Select
+                  value={selectedHouse}
+                  onChange={(e) => handleHouseChange(e.target.value)}
+                  label="Casa"
+                  required
+                >
+                  <MenuItem value="">
+                    <em>Seleccionar Casa</em>
+                  </MenuItem>
+                  {availableHouses.map((house) => (
+                    <MenuItem key={house.id} value={house.id}>
+                      {house.number}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+
+            {selectedFeeInfo && (
+              <>
+                <TextField
+                  margin="dense"
+                  label="Propietario"
+                  fullWidth
+                  value={selectedFeeInfo.ownerName}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                />
+                <Box display="flex" gap={2} sx={{ mb: 2 }}>
+                  <TextField
+                    sx={{ flex: 1 }}
+                    label="Período"
+                    value={`${selectedFeeInfo.month}/${selectedFeeInfo.year}`}
+                    InputProps={{
+                      readOnly: true,
+                    }}
+                  />
+                  <TextField
+                    sx={{ flex: 1 }}
+                    label="Fecha de Vencimiento"
+                    value={new Date(selectedFeeInfo.dueDate).toLocaleDateString('es-ES')}
+                    InputProps={{
+                      readOnly: true,
+                    }}
+                  />
+                  <TextField
+                    sx={{ flex: 1 }}
+                    label="Monto (S/)"
+                    type="number"
+                    value={formData.amount}
+                    InputProps={{
+                      readOnly: true,
+                    }}
+                    helperText="💰 Monto auto-completado"
+                  />
+                </Box>
+              </>
+            )}
             <input
               type="file"
               accept="image/*"

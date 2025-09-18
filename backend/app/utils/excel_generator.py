@@ -233,6 +233,91 @@ def generate_monthly_payment_summary_excel(year, month, payments_data):
     return buffer
 
 
+def generate_all_payments_excel(payments_data):
+    """
+    Generate an Excel report of all payments
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Todos los Pagos"
+
+    # Title
+    ws['A1'] = "PAGO VECINAL - Reporte General de Pagos"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:H1')
+
+    if payments_data:
+        headers = ["Fecha Pago", "Propiedad", "Propietario", "Monto", "Estado", "Referencia", "Notas"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+        for row, payment in enumerate(payments_data, 4):
+            property_str = f"{payment['property_villa']} - {payment['property_row_letter']}{payment['property_number']}"
+            ws.cell(row=row, column=1).value = payment['payment_date'].strftime("%d/%m/%Y %H:%M")
+            ws.cell(row=row, column=2).value = property_str
+            ws.cell(row=row, column=3).value = payment['property_owner_name']
+            ws.cell(row=row, column=4).value = float(payment['amount'])
+            ws.cell(row=row, column=4).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=5).value = payment['status']
+            ws.cell(row=row, column=6).value = payment.get('fee_reference', 'N/A')
+            ws.cell(row=row, column=7).value = payment.get('notes', '')
+
+        # Summary
+        summary_row = len(payments_data) + 6
+        total_payments = len(payments_data)
+        total_amount = sum(p['amount'] for p in payments_data)
+
+        # Status breakdown
+        status_counts = {}
+        for payment in payments_data:
+            status = payment['status']
+            if status not in status_counts:
+                status_counts[status] = 0
+            status_counts[status] += 1
+
+        ws[f'A{summary_row}'] = "Resumen General"
+        ws[f'A{summary_row}'].font = Font(size=12, bold=True)
+        ws.merge_cells(f'A{summary_row}:H{summary_row}')
+
+        current_row = summary_row + 2
+        ws[f'A{current_row}'] = "Total Pagos:"
+        ws[f'A{current_row}'].font = Font(bold=True)
+        ws[f'B{current_row}'] = total_payments
+        ws[f'B{current_row}'].font = Font(bold=True)
+
+        ws[f'A{current_row+1}'] = "Monto Total:"
+        ws[f'A{current_row+1}'].font = Font(bold=True)
+        ws[f'B{current_row+1}'] = float(total_amount)
+        ws[f'B{current_row+1}'].number_format = '"S/ "#,##0.00'
+        ws[f'B{current_row+1}'].font = Font(bold=True)
+
+        # Status breakdown
+        current_row += 3
+        for status, count in status_counts.items():
+            ws[f'A{current_row}'] = f"Pagos {status.title()}:"
+            ws[f'A{current_row}'].font = Font(bold=True)
+            ws[f'B{current_row}'] = count
+            current_row += 1
+    else:
+        ws['A3'] = "No hay pagos registrados."
+
+    # Footer
+    footer_row = len(payments_data) + 15 if payments_data else 5
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    for col in range(1, 9):
+        ws.column_dimensions[get_column_letter(col)].width = 18
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
 def generate_monthly_fees_excel(fees_data, start_year, start_month, end_year, end_month):
     """
     Generate an Excel report of monthly fees for a specific period range

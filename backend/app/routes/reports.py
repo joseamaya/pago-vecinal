@@ -18,7 +18,8 @@ from ..utils.excel_generator import (
     generate_outstanding_fees_excel,
     generate_monthly_payment_summary_excel,
     generate_monthly_fees_excel,
-    generate_annual_property_statement_excel
+    generate_annual_property_statement_excel,
+    generate_all_payments_excel
 )
 
 router = APIRouter()
@@ -402,6 +403,57 @@ async def download_annual_property_statement(
         extension = "pdf"
 
     filename = f"estado_anual_{property_obj.villa}_{property_obj.row_letter}{property_obj.number}_{year}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.get("/all-payments")
+async def download_all_payments_report(
+    format: str = "excel",
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel report of all payments"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Get all payments
+    payments = await Payment.find_all().to_list()
+
+    # Fetch property and fee details for each payment
+    for payment in payments:
+        await payment.fetch_link(Payment.fee)
+        if payment.fee:
+            await payment.fee.fetch_link(Fee.property)
+
+    payments_data = [
+        {
+            "payment_date": payment.payment_date,
+            "property_villa": payment.fee.property.villa if payment.fee and payment.fee.property else "N/A",
+            "property_row_letter": payment.fee.property.row_letter if payment.fee and payment.fee.property else "N/A",
+            "property_number": payment.fee.property.number if payment.fee and payment.fee.property else 0,
+            "property_owner_name": payment.fee.property.owner_name if payment.fee and payment.fee.property else "Propietario no registrado",
+            "amount": payment.amount,
+            "status": payment.status,
+            "fee_reference": payment.fee.reference if payment.fee else "N/A",
+            "notes": payment.notes
+        }
+        for payment in payments if payment.fee
+    ]
+
+    # Sort by payment date descending (newest first)
+    payments_data.sort(key=lambda x: x['payment_date'], reverse=True)
+
+    # Generate Excel report
+    buffer = generate_all_payments_excel(payments_data)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"reporte_pagos_completo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,
