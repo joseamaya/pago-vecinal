@@ -17,6 +17,7 @@ from ..utils.excel_generator import (
     generate_property_payment_history_excel,
     generate_outstanding_fees_excel,
     generate_monthly_payment_summary_excel,
+    generate_monthly_fees_excel,
     generate_annual_property_statement_excel
 )
 
@@ -44,10 +45,19 @@ async def download_property_payment_history(
             detail="Property not found"
         )
 
-    # Get payments for this property
-    payments = await Payment.find(Payment.property.id == property_obj.id).to_list()
+    # Get payments for this property through fee relationship
+    payments = await Payment.find().to_list()
+
+    # Filter payments by property through fee
+    filtered_payments = []
     for payment in payments:
         await payment.fetch_link(Payment.fee)
+        if payment.fee:
+            await payment.fee.fetch_link(Fee.property)
+            if payment.fee.property and str(payment.fee.property.id) == property_id:
+                filtered_payments.append(payment)
+
+    payments = filtered_payments
 
     # Get outstanding fees for this property
     fees = await Fee.find(
@@ -74,7 +84,7 @@ async def download_property_payment_history(
             "payment_date": payment.payment_date,
             "amount": payment.amount,
             "status": payment.status,
-            "reference": payment.reference
+            "reference": payment.fee_id  # Use fee_id as reference
         }
         for payment in payments
     ]
@@ -190,21 +200,23 @@ async def download_monthly_payment_summary(
         Payment.payment_date < end_date
     ).to_list()
 
-    # Fetch property details
+    # Fetch property details through fee
     for payment in payments:
-        await payment.fetch_link(Payment.property)
+        await payment.fetch_link(Payment.fee)
+        if payment.fee:
+            await payment.fee.fetch_link(Fee.property)
 
     payments_data = [
         {
-            "property_villa": payment.property.villa,
-            "property_row_letter": payment.property.row_letter,
-            "property_number": payment.property.number,
-            "property_owner_name": payment.property.owner_name,
+            "property_villa": payment.fee.property.villa,
+            "property_row_letter": payment.fee.property.row_letter,
+            "property_number": payment.fee.property.number,
+            "property_owner_name": payment.fee.property.owner_name,
             "payment_date": payment.payment_date,
             "amount": payment.amount,
             "status": payment.status
         }
-        for payment in payments if payment.property
+        for payment in payments if payment.fee and payment.fee.property
     ]
 
     # Generate report based on format
@@ -218,6 +230,88 @@ async def download_monthly_payment_summary(
         extension = "pdf"
 
     filename = f"resumen_mensual_{year}_{month:02d}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.get("/monthly-fees/{start_year}/{start_month}/{end_year}/{end_month}")
+async def download_monthly_fees_report(
+    start_year: int,
+    start_month: int,
+    end_year: int,
+    end_month: int,
+    format: str = "excel",
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel report of monthly fees for a specific period range"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Validate months
+    if start_month < 1 or start_month > 12 or end_month < 1 or end_month > 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Months must be between 1 and 12"
+        )
+
+    # Validate period range
+    start_period = start_year * 12 + start_month
+    end_period = end_year * 12 + end_month
+    if start_period > end_period:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start period must be before or equal to end period"
+        )
+
+    # Get fees for the specified period range
+    # Using a simpler approach to avoid complex query syntax issues
+    fees = await Fee.find().to_list()
+
+    # Filter fees by period range in Python
+    filtered_fees = []
+    for fee in fees:
+        fee_period = fee.year * 12 + fee.month
+        start_period_num = start_year * 12 + start_month
+        end_period_num = end_year * 12 + end_month
+
+        if start_period_num <= fee_period <= end_period_num:
+            filtered_fees.append(fee)
+
+    fees = filtered_fees
+
+    # Fetch property details for each fee
+    for fee in fees:
+        await fee.fetch_link(Fee.property)
+
+    fees_data = [
+        {
+            "property_villa": fee.property.villa,
+            "property_row_letter": fee.property.row_letter,
+            "property_number": fee.property.number,
+            "property_owner_name": fee.property.owner_name,
+            "month": fee.month,
+            "year": fee.year,
+            "amount": fee.amount,
+            "due_date": fee.due_date,
+            "status": fee.status
+        }
+        for fee in fees if fee.property
+    ]
+
+    # Sort by property and then by period
+    fees_data.sort(key=lambda x: (x['property_villa'], x['property_row_letter'], x['property_number'], x['year'], x['month']))
+
+    # Generate Excel report
+    buffer = generate_monthly_fees_excel(fees_data, start_year, start_month, end_year, end_month)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"cuotas_mensuales_{start_year}_{start_month:02d}_a_{end_year}_{end_month:02d}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,
@@ -254,12 +348,22 @@ async def download_annual_property_statement(
         Fee.year == year
     ).to_list()
 
-    # Get payments for this property and year
+    # Get payments for this property and year through fee relationship
     payments = await Payment.find(
-        Payment.property.id == property_obj.id,
         Payment.payment_date >= datetime(year, 1, 1),
         Payment.payment_date < datetime(year + 1, 1, 1)
     ).to_list()
+
+    # Filter payments by property through fee
+    filtered_payments = []
+    for payment in payments:
+        await payment.fetch_link(Payment.fee)
+        if payment.fee:
+            await payment.fee.fetch_link(Fee.property)
+            if payment.fee.property and str(payment.fee.property.id) == property_id:
+                filtered_payments.append(payment)
+
+    payments = filtered_payments
 
     # Prepare data
     property_data = {

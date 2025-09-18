@@ -109,7 +109,9 @@ async def create_receipt(
         )
 
     # Fetch linked documents
-    await payment.fetch_link(Payment.property)
+    await payment.fetch_link(Payment.fee)
+    if payment.fee:
+        await payment.fee.fetch_link(Fee.property)
     if payment.user:
         await payment.fetch_link(Payment.user)
 
@@ -141,16 +143,16 @@ async def create_receipt(
 
     # Create property and owner details snapshot
     property_details = {
-        "villa": payment.property.villa,
-        "row_letter": payment.property.row_letter,
-        "number": payment.property.number,
-        "owner_name": payment.property.owner_name,
-        "owner_phone": payment.property.owner_phone
+        "villa": payment.fee.property.villa,
+        "row_letter": payment.fee.property.row_letter,
+        "number": payment.fee.property.number,
+        "owner_name": payment.fee.property.owner_name,
+        "owner_phone": payment.fee.property.owner_phone
     }
 
     owner_details = {
-        "name": payment.property.owner_name,
-        "phone": payment.property.owner_phone
+        "name": payment.fee.property.owner_name,
+        "phone": payment.fee.property.owner_phone
     }
 
     # Create receipt
@@ -209,7 +211,7 @@ async def download_receipt_pdf(receipt_id: str, current_user: User = Depends(get
         "payment_date": receipt.payment.payment_date,
         "total_amount": receipt.total_amount,
         "property_details": receipt.property_details,
-        "reference": receipt.payment.reference,
+        "reference": receipt.payment.fee_id,
         "fee_period": receipt.fee_period,
         "notes": receipt.notes
     }

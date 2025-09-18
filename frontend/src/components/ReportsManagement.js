@@ -34,6 +34,10 @@ const ReportsManagement = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedFormat, setSelectedFormat] = useState('pdf');
+  const [startYear, setStartYear] = useState(new Date().getFullYear());
+  const [startMonth, setStartMonth] = useState(1);
+  const [endYear, setEndYear] = useState(new Date().getFullYear());
+  const [endMonth, setEndMonth] = useState(new Date().getMonth() + 1);
 
   useEffect(() => {
     if (isAdmin) {
@@ -71,6 +75,10 @@ const ReportsManagement = () => {
         case 'monthly-summary':
           response = await reportsAPI.getMonthlyPaymentSummary(selectedYear, selectedMonth, selectedFormat);
           filename = `resumen_mensual_${selectedYear}_${selectedMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          break;
+        case 'monthly-fees':
+          response = await reportsAPI.getMonthlyFeesReport(startYear, startMonth, endYear, endMonth, selectedFormat);
+          filename = `cuotas_mensuales_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
         case 'annual-statement':
           response = await reportsAPI.getAnnualPropertyStatement(propertyId, selectedYear, selectedFormat);
@@ -119,6 +127,13 @@ const ReportsManagement = () => {
       title: 'Resumen de Pagos Mensual',
       description: 'Resumen de todos los pagos realizados en un mes específico.',
       type: 'monthly-summary',
+      requiresProperty: false,
+      adminOnly: true,
+    },
+    {
+      title: 'Reporte de Cuotas Mensuales',
+      description: 'Lista todas las cuotas generadas en un rango de períodos específico.',
+      type: 'monthly-fees',
       requiresProperty: false,
       adminOnly: true,
     },
@@ -222,6 +237,79 @@ const ReportsManagement = () => {
               </FormControl>
             </Grid>
           )}
+        </Grid>
+
+        {/* Period Range Filters for Monthly Fees Report */}
+        <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+          Rango de Períodos (para Reporte de Cuotas Mensuales)
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Año Inicial"
+              type="number"
+              value={startYear}
+              onChange={(e) => setStartYear(parseInt(e.target.value))}
+              inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>Mes Inicial</InputLabel>
+              <Select
+                value={startMonth}
+                onChange={(e) => setStartMonth(e.target.value)}
+                label="Mes Inicial"
+              >
+                <MenuItem value={1}>Enero</MenuItem>
+                <MenuItem value={2}>Febrero</MenuItem>
+                <MenuItem value={3}>Marzo</MenuItem>
+                <MenuItem value={4}>Abril</MenuItem>
+                <MenuItem value={5}>Mayo</MenuItem>
+                <MenuItem value={6}>Junio</MenuItem>
+                <MenuItem value={7}>Julio</MenuItem>
+                <MenuItem value={8}>Agosto</MenuItem>
+                <MenuItem value={9}>Septiembre</MenuItem>
+                <MenuItem value={10}>Octubre</MenuItem>
+                <MenuItem value={11}>Noviembre</MenuItem>
+                <MenuItem value={12}>Diciembre</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Año Final"
+              type="number"
+              value={endYear}
+              onChange={(e) => setEndYear(parseInt(e.target.value))}
+              inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>Mes Final</InputLabel>
+              <Select
+                value={endMonth}
+                onChange={(e) => setEndMonth(e.target.value)}
+                label="Mes Final"
+              >
+                <MenuItem value={1}>Enero</MenuItem>
+                <MenuItem value={2}>Febrero</MenuItem>
+                <MenuItem value={3}>Marzo</MenuItem>
+                <MenuItem value={4}>Abril</MenuItem>
+                <MenuItem value={5}>Mayo</MenuItem>
+                <MenuItem value={6}>Junio</MenuItem>
+                <MenuItem value={7}>Julio</MenuItem>
+                <MenuItem value={8}>Agosto</MenuItem>
+                <MenuItem value={9}>Septiembre</MenuItem>
+                <MenuItem value={10}>Octubre</MenuItem>
+                <MenuItem value={11}>Noviembre</MenuItem>
+                <MenuItem value={12}>Diciembre</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
         </Grid>
       </Paper>
 

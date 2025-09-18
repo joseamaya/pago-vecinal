@@ -178,7 +178,7 @@ def generate_monthly_payment_summary_excel(year, month, payments_data):
     """
     wb = Workbook()
     ws = wb.active
-    ws.title = f"Resumen {month:02d}/{year}"
+    ws.title = f"Resumen {month:02d}-{year}"
 
     # Title
     ws['A1'] = f"PAGO VECINAL - Resumen de Pagos - {month:02d}/{year}"
@@ -221,6 +221,100 @@ def generate_monthly_payment_summary_excel(year, month, payments_data):
 
     # Footer
     footer_row = len(payments_data) + 9 if payments_data else 5
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    for col in range(1, 7):
+        ws.column_dimensions[get_column_letter(col)].width = 18
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_monthly_fees_excel(fees_data, start_year, start_month, end_year, end_month):
+    """
+    Generate an Excel report of monthly fees for a specific period range
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Cuotas Mensuales"
+
+    # Title
+    ws['A1'] = "PAGO VECINAL - Reporte de Cuotas Mensuales"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:F1')
+
+    # Period information
+    period_text = f"Período: {start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
+    ws['A3'] = period_text
+    ws['A3'].font = Font(size=12, bold=True)
+    ws.merge_cells('A3:F3')
+
+    if fees_data:
+        # Headers
+        headers = ["Propiedad", "Propietario", "Período", "Monto", "Estado", "Fecha Vencimiento"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=5, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+        # Data rows
+        for row, fee in enumerate(fees_data, 6):
+            property_str = f"{fee['property_villa']} - {fee['property_row_letter']}{fee['property_number']}"
+            ws.cell(row=row, column=1).value = property_str
+            ws.cell(row=row, column=2).value = fee['property_owner_name']
+            ws.cell(row=row, column=3).value = f"{fee['month']:02d}/{fee['year']}"
+            ws.cell(row=row, column=4).value = float(fee['amount'])
+            ws.cell(row=row, column=4).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=5).value = fee['status']
+            ws.cell(row=row, column=6).value = fee['due_date'].strftime("%d/%m/%Y")
+
+        # Summary section
+        summary_row = len(fees_data) + 8
+        ws[f'A{summary_row}'] = "Resumen del Reporte"
+        ws[f'A{summary_row}'].font = Font(size=12, bold=True)
+        ws.merge_cells(f'A{summary_row}:F{summary_row}')
+
+        # Calculate totals by status
+        status_counts = {}
+        total_amount = 0
+        for fee in fees_data:
+            status = fee['status']
+            if status not in status_counts:
+                status_counts[status] = {'count': 0, 'amount': 0}
+            status_counts[status]['count'] += 1
+            status_counts[status]['amount'] += fee['amount']
+            total_amount += fee['amount']
+
+        # Display status summary
+        current_row = summary_row + 2
+        for status, data in status_counts.items():
+            ws[f'A{current_row}'] = f"Cuotas {status.title()}:"
+            ws[f'A{current_row}'].font = Font(bold=True)
+            ws[f'B{current_row}'] = data['count']
+            ws[f'C{current_row}'] = float(data['amount'])
+            ws[f'C{current_row}'].number_format = '"S/ "#,##0.00'
+            current_row += 1
+
+        # Total summary
+        ws[f'A{current_row}'] = "Total Cuotas:"
+        ws[f'A{current_row}'].font = Font(bold=True)
+        ws[f'B{current_row}'] = len(fees_data)
+        ws[f'B{current_row}'].font = Font(bold=True)
+
+        ws[f'A{current_row+1}'] = "Monto Total:"
+        ws[f'A{current_row+1}'].font = Font(bold=True)
+        ws[f'B{current_row+1}'] = float(total_amount)
+        ws[f'B{current_row+1}'].number_format = '"S/ "#,##0.00'
+        ws[f'B{current_row+1}'].font = Font(bold=True)
+    else:
+        ws['A5'] = "No hay cuotas registradas para el período especificado."
+
+    # Footer
+    footer_row = len(fees_data) + 12 if fees_data else 7
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
