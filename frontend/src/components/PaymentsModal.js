@@ -19,7 +19,7 @@ import {
   Alert,
 } from '@mui/material';
 import {
-  GetApp as DownloadIcon,
+  Print as PrintIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { paymentsAPI } from '../services/api';
@@ -50,20 +50,156 @@ const PaymentsModal = ({ open, onClose, fee }) => {
     }
   };
 
-  const handleDownloadReceipt = async (paymentId) => {
-    try {
-      const response = await paymentsAPI.downloadGeneratedReceipt(paymentId);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `recibo_pago_${paymentId}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err) {
-      setError('Error al descargar el recibo');
-      console.error('Error downloading receipt:', err);
-    }
+  const handlePrintReceipt = (payment) => {
+    // Create receipt data for printing
+    const receiptData = {
+      correlative_number: `REC-${new Date().getFullYear()}-${payment.id.slice(-5).toUpperCase()}`,
+      issue_date: new Date(),
+      payment_date: new Date(payment.payment_date),
+      total_amount: payment.amount,
+      property_details: {
+        villa: fee.property_villa,
+        row_letter: fee.property_row_letter,
+        number: fee.property_number,
+        owner_name: fee.property_owner_name
+      },
+      fee_period: `${fee.month}/${fee.year}`,
+      notes: payment.notes || ''
+    };
+
+    // Open print window with HTML content
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Recibo de Pago - ${receiptData.correlative_number}</title>
+          <style>
+            body {
+              font-family: 'Courier New', monospace;
+              margin: 20px;
+              line-height: 1.6;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 20px;
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 24px;
+            }
+            .header h2 {
+              margin: 5px 0;
+              font-size: 16px;
+              color: #666;
+            }
+            .details {
+              margin-bottom: 20px;
+            }
+            .detail-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 8px;
+              padding: 5px 0;
+            }
+            .detail-label {
+              font-weight: bold;
+              min-width: 150px;
+            }
+            .amount {
+              font-size: 18px;
+              font-weight: bold;
+              text-align: center;
+              margin: 20px 0;
+              padding: 10px;
+              border: 2px solid #000;
+              background-color: #f9f9f9;
+            }
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+            }
+            .property-info {
+              margin: 20px 0;
+              padding: 15px;
+              background-color: #f5f5f5;
+              border-radius: 5px;
+            }
+            @media print {
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>PAGO VECINAL</h1>
+            <h2>Sistema de Gestión de Cuotas de Condominio</h2>
+          </div>
+
+          <div class="details">
+            <div class="detail-row">
+              <span class="detail-label">Número de Recibo:</span>
+              <span>${receiptData.correlative_number}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Fecha de Emisión:</span>
+              <span>${receiptData.issue_date.toLocaleDateString('es-ES')} ${receiptData.issue_date.toLocaleTimeString('es-ES')}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Período:</span>
+              <span>${receiptData.fee_period}</span>
+            </div>
+          </div>
+
+          <div class="property-info">
+            <h3>Información de la Propiedad</h3>
+            <div class="detail-row">
+              <span class="detail-label">Villa:</span>
+              <span>${receiptData.property_details.villa}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Fila - Número:</span>
+              <span>${receiptData.property_details.row_letter}${receiptData.property_details.number}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Propietario:</span>
+              <span>${receiptData.property_details.owner_name}</span>
+            </div>
+          </div>
+
+          <div class="details">
+            <div class="detail-row">
+              <span class="detail-label">Fecha del Pago:</span>
+              <span>${receiptData.payment_date.toLocaleDateString('es-ES')}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Estado:</span>
+              <span>COMPLETADO</span>
+            </div>
+            ${receiptData.notes ? `
+            <div class="detail-row">
+              <span class="detail-label">Notas:</span>
+              <span>${receiptData.notes}</span>
+            </div>
+            ` : ''}
+          </div>
+
+          <div class="amount">
+            MONTO PAGADO: S/ ${receiptData.total_amount.toFixed(2)}
+          </div>
+
+          <div class="footer">
+            <p>Este recibo es válido como comprobante de pago.</p>
+            <p>¡Gracias por su pago!</p>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
   };
 
   const getStatusColor = (status) => {
@@ -143,7 +279,7 @@ const PaymentsModal = ({ open, onClose, fee }) => {
                 <TableCell>Monto</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell>Notas</TableCell>
-                <TableCell>Recibo PDF</TableCell>
+                <TableCell>Imprimir Recibo</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -171,19 +307,13 @@ const PaymentsModal = ({ open, onClose, fee }) => {
                     </TableCell>
                     <TableCell>{payment.notes || '-'}</TableCell>
                     <TableCell>
-                      {payment.generated_receipt_file ? (
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleDownloadReceipt(payment.id)}
-                          title="Descargar Recibo PDF"
-                        >
-                          <DownloadIcon />
-                        </IconButton>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          No disponible
-                        </Typography>
-                      )}
+                      <IconButton
+                        color="primary"
+                        onClick={() => handlePrintReceipt(payment)}
+                        title="Imprimir Recibo"
+                      >
+                        <PrintIcon />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))
