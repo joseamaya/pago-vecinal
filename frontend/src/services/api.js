@@ -147,11 +147,6 @@ export const receiptsAPI = {
 
 // Fees API
 export const feesAPI = {
-  getFees: () => api.get('/fees/'),
-  getFee: (id) => api.get(`/fees/${id}`),
-  createFee: (feeData) => api.post('/fees/', feeData),
-  updateFee: (id, feeData) => api.put(`/fees/${id}`, feeData),
-  deleteFee: (id) => api.delete(`/fees/${id}`),
   getFees: (filters = {}) => {
     const params = {};
     if (filters.year !== undefined) params.year = filters.year;
@@ -160,6 +155,10 @@ export const feesAPI = {
     if (filters.sort_by_period !== undefined) params.sort_by_period = filters.sort_by_period;
     return api.get('/fees/', { params });
   },
+  getFee: (id) => api.get(`/fees/${id}`),
+  createFee: (feeData) => api.post('/fees/', feeData),
+  updateFee: (id, feeData) => api.put(`/fees/${id}`, feeData),
+  deleteFee: (id) => api.delete(`/fees/${id}`),
   generateFees: (manual = false, year = null, months = null, feeScheduleIds = null) => {
     const data = { manual };
     if (year !== null) data.year = year;

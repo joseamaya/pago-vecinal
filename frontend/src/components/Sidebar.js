@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Drawer,
@@ -28,7 +28,6 @@ import {
   Assignment as AgreementIcon,
   AccountBalance as InstallmentIcon,
   Logout as LogoutIcon,
-  Menu as MenuIcon,
   ChevronLeft as ChevronLeftIcon,
   Brightness4 as DarkIcon,
   Brightness7 as LightIcon,

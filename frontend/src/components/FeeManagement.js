@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -65,16 +65,7 @@ const FeeManagement = () => {
     status: '',
   });
 
-  useEffect(() => {
-    fetchFees();
-  }, [filters]);
-
-  useEffect(() => {
-    fetchProperties();
-    fetchFeeSchedules();
-  }, []);
-
-  const fetchFees = async () => {
+  const fetchFees = useCallback(async () => {
     try {
       setLoading(true);
       const filterParams = {};
@@ -92,7 +83,16 @@ const FeeManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    fetchFees();
+  }, [fetchFees]);
+
+  useEffect(() => {
+    fetchProperties();
+    fetchFeeSchedules();
+  }, []);
 
   const fetchProperties = async () => {
     try {

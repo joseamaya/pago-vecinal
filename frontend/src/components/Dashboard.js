@@ -9,8 +9,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardActions,
-  Chip,
 } from '@mui/material';
 import {
   People as PeopleIcon,
@@ -21,23 +19,8 @@ import {
   Schedule as ScheduleIcon,
   Assessment as ReportsIcon,
 } from '@mui/icons-material';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  ResponsiveContainer,
-} from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
-import { propertiesAPI, feesAPI, paymentsAPI, receiptsAPI, reportsAPI, dashboardAPI } from '../services/api';
+import { dashboardAPI } from '../services/api';
 
 const Dashboard = () => {
   const { user, isAdmin, isOwner } = useAuth();
@@ -57,12 +40,6 @@ const Dashboard = () => {
     expensesReport: null,
   });
   const [ownerDataLoading, setOwnerDataLoading] = useState(false);
-  const [chartData, setChartData] = useState({
-    paymentsOverTime: [],
-    feesByStatus: [],
-    propertiesByVilla: [],
-  });
-  const [chartsLoading, setChartsLoading] = useState(true);
 
   useEffect(() => {
     fetchStats();

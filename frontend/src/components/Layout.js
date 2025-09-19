@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Box, AppBar, Toolbar, IconButton, Typography, useTheme, useMediaQuery } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
-import { useThemeContext } from '../contexts/ThemeContext';
 import Sidebar from './Sidebar';
 
 const drawerWidth = 280;

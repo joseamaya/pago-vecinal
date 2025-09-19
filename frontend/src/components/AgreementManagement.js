@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -26,14 +26,9 @@ import {
   Grid,
   Card,
   CardContent,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  OutlinedInput,
   Checkbox,
 } from '@mui/material';
 import {
@@ -42,9 +37,6 @@ import {
   Delete as DeleteIcon,
   Download as DownloadIcon,
   ExpandMore as ExpandMoreIcon,
-  CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
-  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { agreementsAPI, propertiesAPI, feesAPI } from '../services/api';
@@ -73,16 +65,7 @@ const AgreementManagement = () => {
     status: '',
   });
 
-  useEffect(() => {
-    fetchAgreements();
-  }, [filters]);
-
-  useEffect(() => {
-    fetchProperties();
-    fetchFees();
-  }, []);
-
-  const fetchAgreements = async () => {
+  const fetchAgreements = useCallback(async () => {
     try {
       setLoading(true);
       const filterParams = {};
@@ -98,7 +81,16 @@ const AgreementManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    fetchAgreements();
+  }, [fetchAgreements]);
+
+  useEffect(() => {
+    fetchProperties();
+    fetchFees();
+  }, []);
 
   const fetchProperties = async () => {
     try {

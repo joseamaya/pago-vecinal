@@ -26,12 +26,11 @@ import {
   CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { propertiesAPI, usersAPI } from '../services/api';
+import { propertiesAPI } from '../services/api';
 
 const PropertyManagement = () => {
   const { isAdmin } = useAuth();
   const [properties, setProperties] = useState([]);
-  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -48,10 +47,7 @@ const PropertyManagement = () => {
 
   useEffect(() => {
     fetchProperties();
-    if (isAdmin) {
-      fetchUsers();
-    }
-  }, [isAdmin]);
+  }, []);
 
   const fetchProperties = async () => {
     try {
@@ -67,14 +63,6 @@ const PropertyManagement = () => {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const response = await usersAPI.getUsers();
-      setUsers(response.data);
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    }
-  };
 
   const handleOpenDialog = (property = null) => {
     if (property) {

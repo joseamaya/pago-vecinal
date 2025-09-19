@@ -32,7 +32,16 @@ cd ..
 # Deploy frontend
 echo "🚀 Deploying frontend..."
 cd frontend
-railway init --name "pago-vecinal-frontend"
+
+# Check if REACT_APP_API_URL is configured
+if ! grep -q "REACT_APP_API_URL=https://" .env; then
+    echo "❌ Please update REACT_APP_API_URL in frontend/.env with your backend URL first"
+    echo "   Example: REACT_APP_API_URL=https://your-backend-url.railway.app"
+    exit 1
+fi
+
+# Use Railway's official React deployment method
+railway add --name "pago-vecinal-frontend"
 railway up
 cd ..
 

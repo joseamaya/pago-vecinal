@@ -166,10 +166,6 @@ const ReceiptManagement = () => {
     printWindow.print();
   };
 
-  const getPaymentInfo = (paymentId) => {
-    const payment = payments.find(p => p.id === paymentId);
-    return payment ? `S/ ${payment.amount.toFixed(2)}` : 'N/A';
-  };
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
