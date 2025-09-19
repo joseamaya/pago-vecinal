@@ -30,6 +30,8 @@ class Expense(Document):
     expense_type: ExpenseType
     amount: float
     expense_date: datetime
+    year: int  # Year of the expense
+    month: int  # Month of the expense
     receipt_file: Optional[str] = None  # Path to uploaded receipt image
     generated_receipt_file: Optional[str] = None  # Path to auto-generated PDF receipt
     status: ExpenseStatus = ExpenseStatus.PENDING
@@ -45,6 +47,8 @@ class ExpenseCreate(BaseModel):
     expense_type: ExpenseType
     amount: float
     expense_date: datetime
+    year: int
+    month: int
     description: str
     notes: Optional[str] = None
     beneficiary: str
@@ -54,6 +58,8 @@ class ExpenseCreate(BaseModel):
 class ExpenseUpdate(BaseModel):
     amount: Optional[float] = None
     expense_type: Optional[ExpenseType] = None
+    year: Optional[int] = None
+    month: Optional[int] = None
     description: Optional[str] = None
     receipt_file: Optional[str] = None
     generated_receipt_file: Optional[str] = None
@@ -68,6 +74,8 @@ class ExpenseResponse(BaseModel):
     expense_type: ExpenseType
     amount: float
     expense_date: datetime
+    year: int
+    month: int
     receipt_file: Optional[str] = None
     generated_receipt_file: Optional[str] = None
     status: ExpenseStatus

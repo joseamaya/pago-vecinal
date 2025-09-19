@@ -40,6 +40,8 @@ async def get_expenses(current_user: User = Depends(get_current_user)):
             expense_type=expense.expense_type,
             amount=expense.amount,
             expense_date=expense.expense_date,
+            year=expense.year,
+            month=expense.month,
             receipt_file=expense.receipt_file,
             generated_receipt_file=expense.generated_receipt_file,
             status=expense.status,
@@ -77,6 +79,8 @@ async def get_expense(expense_id: str, current_user: User = Depends(get_current_
         expense_type=expense.expense_type,
         amount=expense.amount,
         expense_date=expense.expense_date,
+        year=expense.year,
+        month=expense.month,
         receipt_file=expense.receipt_file,
         generated_receipt_file=expense.generated_receipt_file,
         status=expense.status,
@@ -92,6 +96,8 @@ async def create_expense(
     expense_type: ExpenseType = Form(...),
     amount: float = Form(...),
     expense_date: datetime = Form(...),
+    year: int = Form(...),
+    month: int = Form(...),
     description: str = Form(...),
     notes: Optional[str] = Form(None),
     beneficiary: str = Form(...),
@@ -125,6 +131,8 @@ async def create_expense(
         expense_type=expense_type,
         amount=amount,
         expense_date=expense_date,
+        year=year,
+        month=month,
         receipt_file=receipt_file_path,
         description=description,
         notes=notes,
@@ -142,6 +150,8 @@ async def create_expense(
         expense_type=expense.expense_type,
         amount=expense.amount,
         expense_date=expense.expense_date,
+        year=expense.year,
+        month=expense.month,
         receipt_file=expense.receipt_file,
         generated_receipt_file=expense.generated_receipt_file,
         status=expense.status,
@@ -157,6 +167,8 @@ async def update_expense(
     expense_id: str,
     amount: Optional[float] = Form(None),
     expense_type: Optional[str] = Form(None),
+    year: Optional[int] = Form(None),
+    month: Optional[int] = Form(None),
     description: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
@@ -200,6 +212,10 @@ async def update_expense(
         expense.amount = amount
     if expense_type is not None:
         expense.expense_type = ExpenseType(expense_type)
+    if year is not None:
+        expense.year = year
+    if month is not None:
+        expense.month = month
     if description is not None:
         expense.description = description
     if status is not None:
@@ -266,6 +282,8 @@ async def update_expense(
         expense_type=expense.expense_type,
         amount=expense.amount,
         expense_date=expense.expense_date,
+        year=expense.year,
+        month=expense.month,
         receipt_file=expense.receipt_file,
         generated_receipt_file=expense.generated_receipt_file,
         status=expense.status,

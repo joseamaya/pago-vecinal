@@ -27,6 +27,7 @@ import {
   ListItemText,
   OutlinedInput,
   Grid,
+  Pagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -36,6 +37,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { feesAPI, propertiesAPI, feeSchedulesAPI } from '../services/api';
+import LoadingSkeleton from './common/LoadingSkeleton';
 
 const FeeManagement = () => {
   const { isAdmin } = useAuth();
@@ -64,8 +66,12 @@ const FeeManagement = () => {
     month: '',
     status: '',
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pageSize] = useState(20);
 
-  const fetchFees = useCallback(async () => {
+  const fetchFees = useCallback(async (page = 1) => {
     try {
       setLoading(true);
       const filterParams = {};
@@ -74,8 +80,11 @@ const FeeManagement = () => {
       if (filters.status) filterParams.status = filters.status;
       filterParams.sort_by_period = true; // Always sort by period
 
-      const response = await feesAPI.getFees(filterParams);
-      setFees(response.data);
+      const response = await feesAPI.getFees(filterParams, page, pageSize);
+      setFees(response.data.data);
+      setTotalPages(response.data.pagination.total_pages);
+      setTotalCount(response.data.pagination.total_count);
+      setCurrentPage(page);
       setError('');
     } catch (err) {
       setError('Error al cargar cuotas');
@@ -83,7 +92,7 @@ const FeeManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, pageSize]);
 
   useEffect(() => {
     fetchFees();
@@ -160,7 +169,7 @@ const FeeManagement = () => {
       } else {
         await feesAPI.createFee(submitData);
       }
-      fetchFees();
+      fetchFees(currentPage);
       handleCloseDialog();
     } catch (err) {
       setError(editingFee ? 'Error al actualizar cuota' : 'Error al crear cuota');
@@ -172,7 +181,7 @@ const FeeManagement = () => {
     if (window.confirm('¿Estás seguro de que quieres eliminar esta cuota?')) {
       try {
         await feesAPI.deleteFee(feeId);
-        fetchFees();
+        fetchFees(currentPage);
       } catch (err) {
         setError('Error al eliminar cuota');
         console.error('Error deleting fee:', err);
@@ -194,7 +203,7 @@ const FeeManagement = () => {
         generateFormData.feeScheduleIds.length > 0 ? generateFormData.feeScheduleIds : null
       );
       alert(response.data.message);
-      fetchFees();
+      fetchFees(currentPage);
       setGenerateOpen(false);
     } catch (err) {
       setError('Error al generar cuotas');
@@ -289,7 +298,8 @@ const FeeManagement = () => {
   };
 
   const handleApplyFilters = () => {
-    fetchFees();
+    setCurrentPage(1); // Reset to first page when filters change
+    fetchFees(1);
   };
 
   const handleClearFilters = () => {
@@ -298,7 +308,14 @@ const FeeManagement = () => {
       month: '',
       status: '',
     });
-    fetchFees();
+    setCurrentPage(1); // Reset to first page
+    fetchFees(1);
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      fetchFees(newPage);
+    }
   };
 
   return (
@@ -410,6 +427,12 @@ const FeeManagement = () => {
       </Paper>
 
       <Paper>
+        {/* Pagination Info */}
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="body2" color="text.secondary">
+            Mostrando {fees.length > 0 ? ((currentPage - 1) * pageSize) + 1 : 0} - {Math.min(currentPage * pageSize, totalCount)} de {totalCount} cuotas
+          </Typography>
+        </Box>
         <TableContainer>
           <Table>
             <TableHead>
@@ -426,11 +449,7 @@ const FeeManagement = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+                <LoadingSkeleton type="table" rows={5} columns={8} />
               ) : fees.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} align="center">
@@ -478,6 +497,19 @@ const FeeManagement = () => {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Box display="flex" justifyContent="center" mt={2}>
+          <Pagination
+            count={totalPages}
+            page={currentPage}
+            onChange={(event, page) => handlePageChange(page)}
+            color="primary"
+            size="large"
+          />
+        </Box>
+      )}
 
       {/* Dialog for Add/Edit Fee */}
       <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

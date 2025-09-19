@@ -17,22 +17,44 @@ from ..routes.auth import get_current_user
 class BulkApproveRequest(BaseModel):
     payment_ids: List[str]
 
+class PaginatedPaymentResponse(BaseModel):
+    data: List[PaymentResponse]
+    pagination: dict
+
 router = APIRouter()
 
-@router.get("/", response_model=List[PaymentResponse])
-async def get_payments(current_user: User = Depends(get_current_user)):
-    if current_user.role == UserRole.ADMIN:
-        payments = await Payment.find_all().to_list()
-    else:
+@router.get("/", response_model=PaginatedPaymentResponse)
+async def get_payments(page: int = 1, limit: int = 20, current_user: User = Depends(get_current_user)):
+    # Build query filters
+    query_filters = {}
+    if current_user.role != UserRole.ADMIN:
         # Owners can only see their own payments
-        payments = await Payment.find(Payment.user.id == current_user.id).to_list()
+        query_filters["user.id"] = current_user.id
+
+    # Get total count
+    if query_filters:
+        total_count = await Payment.find(query_filters).count()
+    else:
+        total_count = await Payment.count()
+
+    # Calculate skip
+    skip = (page - 1) * limit
+
+    # Get paginated payments, sorted by payment_date descending
+    if query_filters:
+        payments = await Payment.find(query_filters).sort([("payment_date", -1)]).skip(skip).limit(limit).to_list()
+    else:
+        payments = await Payment.find_all().sort([("payment_date", -1)]).skip(skip).limit(limit).to_list()
 
     # Fetch links for each payment
     for payment in payments:
         await payment.fetch_link(Payment.fee)
         await payment.fetch_link(Payment.user)
 
-    return [
+    # Calculate total pages
+    total_pages = (total_count + limit - 1) // limit
+
+    payment_responses = [
         PaymentResponse(
             id=str(payment.id),
             fee_id=payment.fee_id,
@@ -46,6 +68,16 @@ async def get_payments(current_user: User = Depends(get_current_user)):
         )
         for payment in payments
     ]
+
+    return PaginatedPaymentResponse(
+        data=payment_responses,
+        pagination={
+            "page": page,
+            "limit": limit,
+            "total_count": total_count,
+            "total_pages": total_pages
+        }
+    )
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
 async def get_payment(payment_id: str, current_user: User = Depends(get_current_user)):

@@ -33,6 +33,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { expensesAPI } from '../services/api';
+import LoadingSkeleton from './common/LoadingSkeleton';
+import LoadingSpinner from './common/LoadingSpinner';
 
 const EXPENSE_TYPES = {
   maintenance: 'Mantenimiento',
@@ -67,6 +69,8 @@ const ExpenseManagement = () => {
     expense_type: '',
     amount: '',
     expense_date: '',
+    year: '',
+    month: '',
     description: '',
     notes: '',
     beneficiary: '',
@@ -76,6 +80,8 @@ const ExpenseManagement = () => {
   const [filters, setFilters] = useState({
     expense_type: '',
     status: '',
+    year: '',
+    month: '',
   });
 
   useEffect(() => {
@@ -105,6 +111,8 @@ const ExpenseManagement = () => {
         expense_type: expense.expense_type,
         amount: expense.amount.toString(),
         expense_date: new Date(expense.expense_date).toISOString().split('T')[0],
+        year: expense.year.toString(),
+        month: expense.month.toString(),
         description: expense.description,
         notes: expense.notes || '',
         beneficiary: expense.beneficiary,
@@ -117,6 +125,8 @@ const ExpenseManagement = () => {
         expense_type: '',
         amount: '',
         expense_date: '',
+        year: '',
+        month: '',
         description: '',
         notes: '',
         beneficiary: '',
@@ -134,6 +144,8 @@ const ExpenseManagement = () => {
       expense_type: '',
       amount: '',
       expense_date: '',
+      year: '',
+      month: '',
       description: '',
       notes: '',
       beneficiary: '',
@@ -149,6 +161,8 @@ const ExpenseManagement = () => {
       formDataToSend.append('expense_type', formData.expense_type);
       formDataToSend.append('amount', parseFloat(formData.amount));
       formDataToSend.append('expense_date', new Date(formData.expense_date).toISOString());
+      formDataToSend.append('year', parseInt(formData.year));
+      formDataToSend.append('month', parseInt(formData.month));
       formDataToSend.append('description', formData.description);
       formDataToSend.append('notes', formData.notes || '');
       formDataToSend.append('beneficiary', formData.beneficiary);
@@ -238,6 +252,8 @@ const ExpenseManagement = () => {
     setFilters({
       expense_type: '',
       status: '',
+      year: '',
+      month: '',
     });
     fetchExpenses();
   };
@@ -264,6 +280,8 @@ const ExpenseManagement = () => {
   const filteredExpenses = expenses.filter(expense => {
     if (filters.expense_type && expense.expense_type !== filters.expense_type) return false;
     if (filters.status && expense.status !== filters.status) return false;
+    if (filters.year && expense.year.toString() !== filters.year) return false;
+    if (filters.month && expense.month.toString() !== filters.month) return false;
     return true;
   });
 
@@ -296,63 +314,99 @@ const ExpenseManagement = () => {
           Filtros
         </Typography>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
-              <InputLabel>Tipo de Gasto</InputLabel>
-              <Select
-                value={filters.expense_type}
-                onChange={(e) => handleFilterChange('expense_type', e.target.value)}
-                label="Tipo de Gasto"
-              >
-                <MenuItem value="">
-                  <em>Todos</em>
-                </MenuItem>
-                {Object.entries(EXPENSE_TYPES).map(([key, label]) => (
-                  <MenuItem key={key} value={key}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
-              <InputLabel>Estado</InputLabel>
-              <Select
-                value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-                label="Estado"
-              >
-                <MenuItem value="">
-                  <em>Todos</em>
-                </MenuItem>
-                {Object.entries(EXPENSE_STATUSES).map(([key, label]) => (
-                  <MenuItem key={key} value={key}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Button
-              variant="contained"
-              onClick={handleApplyFilters}
-              fullWidth
-            >
-              Aplicar Filtros
-            </Button>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Button
-              variant="outlined"
-              onClick={handleClearFilters}
-              fullWidth
-            >
-              Limpiar
-            </Button>
-          </Grid>
-        </Grid>
+           <Grid item xs={12} sm={6}>
+             <FormControl fullWidth>
+               <InputLabel>Tipo de Gasto</InputLabel>
+               <Select
+                 value={filters.expense_type}
+                 onChange={(e) => handleFilterChange('expense_type', e.target.value)}
+                 label="Tipo de Gasto"
+               >
+                 <MenuItem value="">
+                   <em>Todos</em>
+                 </MenuItem>
+                 {Object.entries(EXPENSE_TYPES).map(([key, label]) => (
+                   <MenuItem key={key} value={key}>
+                     {label}
+                   </MenuItem>
+                 ))}
+               </Select>
+             </FormControl>
+           </Grid>
+           <Grid item xs={12} sm={6}>
+             <FormControl fullWidth>
+               <InputLabel>Estado</InputLabel>
+               <Select
+                 value={filters.status}
+                 onChange={(e) => handleFilterChange('status', e.target.value)}
+                 label="Estado"
+               >
+                 <MenuItem value="">
+                   <em>Todos</em>
+                 </MenuItem>
+                 {Object.entries(EXPENSE_STATUSES).map(([key, label]) => (
+                   <MenuItem key={key} value={key}>
+                     {label}
+                   </MenuItem>
+                 ))}
+               </Select>
+             </FormControl>
+           </Grid>
+           <Grid item xs={12} sm={6}>
+             <TextField
+               fullWidth
+               label="Año"
+               type="number"
+               value={filters.year}
+               onChange={(e) => handleFilterChange('year', e.target.value)}
+               inputProps={{ min: 2000, max: 2100 }}
+             />
+           </Grid>
+           <Grid item xs={12} sm={6}>
+             <FormControl fullWidth>
+               <InputLabel>Mes</InputLabel>
+               <Select
+                 value={filters.month}
+                 onChange={(e) => handleFilterChange('month', e.target.value)}
+                 label="Mes"
+               >
+                 <MenuItem value="">
+                   <em>Todos</em>
+                 </MenuItem>
+                 <MenuItem value="1">Enero</MenuItem>
+                 <MenuItem value="2">Febrero</MenuItem>
+                 <MenuItem value="3">Marzo</MenuItem>
+                 <MenuItem value="4">Abril</MenuItem>
+                 <MenuItem value="5">Mayo</MenuItem>
+                 <MenuItem value="6">Junio</MenuItem>
+                 <MenuItem value="7">Julio</MenuItem>
+                 <MenuItem value="8">Agosto</MenuItem>
+                 <MenuItem value="9">Septiembre</MenuItem>
+                 <MenuItem value="10">Octubre</MenuItem>
+                 <MenuItem value="11">Noviembre</MenuItem>
+                 <MenuItem value="12">Diciembre</MenuItem>
+               </Select>
+             </FormControl>
+           </Grid>
+           <Grid item xs={12} sm={6}>
+             <Button
+               variant="contained"
+               onClick={handleApplyFilters}
+               fullWidth
+             >
+               Aplicar Filtros
+             </Button>
+           </Grid>
+           <Grid item xs={12} sm={6}>
+             <Button
+               variant="outlined"
+               onClick={handleClearFilters}
+               fullWidth
+             >
+               Limpiar
+             </Button>
+           </Grid>
+         </Grid>
       </Paper>
 
       <Paper>
@@ -365,6 +419,8 @@ const ExpenseManagement = () => {
                 <TableCell>Descripción</TableCell>
                 <TableCell>Monto</TableCell>
                 <TableCell>Fecha de Gasto</TableCell>
+                <TableCell>Año</TableCell>
+                <TableCell>Mes</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell>Recibo</TableCell>
                 <TableCell>Acciones</TableCell>
@@ -372,14 +428,10 @@ const ExpenseManagement = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+                <LoadingSkeleton type="table" rows={5} columns={10} />
               ) : filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     No hay gastos administrativos registrados
                   </TableCell>
                 </TableRow>
@@ -392,6 +444,10 @@ const ExpenseManagement = () => {
                     <TableCell>S/ {expense.amount.toFixed(2)}</TableCell>
                     <TableCell>
                       {new Date(expense.expense_date).toLocaleDateString('es-ES')}
+                    </TableCell>
+                    <TableCell>{expense.year}</TableCell>
+                    <TableCell>
+                      {['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][expense.month] || expense.month}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -513,6 +569,45 @@ const ExpenseManagement = () => {
                     shrink: true,
                   }}
                 />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  margin="dense"
+                  label="Año"
+                  type="number"
+                  fullWidth
+                  required
+                  value={formData.year}
+                  onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                  inputProps={{ min: 2000, max: 2100 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="dense">
+                  <InputLabel>Mes</InputLabel>
+                  <Select
+                    value={formData.month}
+                    onChange={(e) => setFormData({ ...formData, month: e.target.value })}
+                    label="Mes"
+                    required
+                  >
+                    <MenuItem value="">
+                      <em>Seleccionar Mes</em>
+                    </MenuItem>
+                    <MenuItem value="1">Enero</MenuItem>
+                    <MenuItem value="2">Febrero</MenuItem>
+                    <MenuItem value="3">Marzo</MenuItem>
+                    <MenuItem value="4">Abril</MenuItem>
+                    <MenuItem value="5">Mayo</MenuItem>
+                    <MenuItem value="6">Junio</MenuItem>
+                    <MenuItem value="7">Julio</MenuItem>
+                    <MenuItem value="8">Agosto</MenuItem>
+                    <MenuItem value="9">Septiembre</MenuItem>
+                    <MenuItem value="10">Octubre</MenuItem>
+                    <MenuItem value="11">Noviembre</MenuItem>
+                    <MenuItem value="12">Diciembre</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField

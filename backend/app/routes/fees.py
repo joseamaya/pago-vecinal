@@ -13,10 +13,16 @@ class GenerateFeesRequest(BaseModel):
     months: Optional[List[int]] = None  # List of months (1-12)
     fee_schedule_ids: Optional[List[str]] = None  # List of fee schedule IDs
 
+class PaginatedFeeResponse(BaseModel):
+    data: List[FeeResponse]
+    pagination: dict
+
 router = APIRouter()
 
-@router.get("/", response_model=List[FeeResponse])
+@router.get("/", response_model=PaginatedFeeResponse)
 async def get_fees(
+    page: int = 1,
+    limit: int = 20,
     current_user: User = Depends(get_current_user),
     year: Optional[int] = None,
     month: Optional[int] = None,
@@ -39,18 +45,26 @@ async def get_fees(
     if status is not None:
         query_filters["status"] = status
 
-    # Get fees with filters
+    # Get total count
     if query_filters:
-        fees = await Fee.find(query_filters).to_list()
+        total_count = await Fee.find(query_filters).count()
     else:
-        fees = await Fee.find_all().to_list()
+        total_count = await Fee.count()
 
-    # Sort by period (year + month) descending if requested
+    # Calculate skip
+    skip = (page - 1) * limit
+
+    # Determine sort order
     if sort_by_period:
-        fees.sort(key=lambda fee: (fee.year, fee.month), reverse=True)
+        sort_criteria = [("year", -1), ("month", -1)]
     else:
-        # Default sort by generated_date descending
-        fees.sort(key=lambda fee: fee.generated_date, reverse=True)
+        sort_criteria = [("generated_date", -1)]
+
+    # Get paginated fees with sorting
+    if query_filters:
+        fees = await Fee.find(query_filters).sort(sort_criteria).skip(skip).limit(limit).to_list()
+    else:
+        fees = await Fee.find_all().sort(sort_criteria).skip(skip).limit(limit).to_list()
 
     # Fetch links for each fee
     for fee in fees:
@@ -59,7 +73,10 @@ async def get_fees(
         if fee.user:
             await fee.fetch_link(Fee.user)
 
-    return [
+    # Calculate total pages
+    total_pages = (total_count + limit - 1) // limit
+
+    fee_responses = [
         FeeResponse(
             id=str(fee.id),
             property_id=str(fee.property.id),
@@ -80,6 +97,16 @@ async def get_fees(
         )
         for fee in fees
     ]
+
+    return PaginatedFeeResponse(
+        data=fee_responses,
+        pagination={
+            "page": page,
+            "limit": limit,
+            "total_count": total_count,
+            "total_pages": total_pages
+        }
+    )
 
 @router.get("/{fee_id}", response_model=FeeResponse)
 async def get_fee(fee_id: str, current_user: User = Depends(get_current_user)):

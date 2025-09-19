@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { miscellaneousPaymentsAPI, propertiesAPI } from '../services/api';
+import LoadingSkeleton from './common/LoadingSkeleton';
 
 const PAYMENT_TYPES = {
   maintenance: 'Mantenimiento',
@@ -402,11 +403,7 @@ const MiscellaneousPaymentManagement = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+                <LoadingSkeleton type="table" rows={5} columns={8} />
               ) : filteredPayments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} align="center">

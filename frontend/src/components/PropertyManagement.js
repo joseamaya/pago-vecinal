@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { propertiesAPI } from '../services/api';
+import LoadingSkeleton from './common/LoadingSkeleton';
 
 const PropertyManagement = () => {
   const { isAdmin } = useAuth();
@@ -200,11 +201,7 @@ const PropertyManagement = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+                <LoadingSkeleton type="table" rows={5} columns={6} />
               ) : properties.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center">

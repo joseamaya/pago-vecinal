@@ -40,6 +40,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { agreementsAPI, propertiesAPI, feesAPI } from '../services/api';
+import LoadingSpinner from './common/LoadingSpinner';
+import LoadingSkeleton from './common/LoadingSkeleton';
 
 const AgreementManagement = () => {
   const { isAdmin } = useAuth();
@@ -442,7 +444,7 @@ const AgreementManagement = () => {
         {loading ? (
           <Grid item xs={12}>
             <Paper sx={{ p: 2, textAlign: 'center' }}>
-              <Typography>Cargando convenios...</Typography>
+              <LoadingSpinner message="Cargando convenios..." />
             </Paper>
           </Grid>
         ) : agreements.length === 0 ? (

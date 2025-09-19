@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { reportsAPI, propertiesAPI } from '../services/api';
+import LoadingSpinner from './common/LoadingSpinner';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 
 const ReportsManagement = () => {
@@ -340,11 +341,17 @@ const ReportsManagement = () => {
                   <Button
                     fullWidth
                     variant="contained"
-                    startIcon={<PictureAsPdfIcon />}
                     onClick={() => downloadReport(report.type, selectedProperty)}
                     disabled={loading || !canAccess || !canGenerate}
                   >
-                    {loading ? 'Generando...' : 'Descargar PDF'}
+                    {loading ? (
+                      <LoadingSpinner buttonVariant size={20} message="Generando..." showMessage />
+                    ) : (
+                      <>
+                        <PictureAsPdfIcon sx={{ mr: 1 }} />
+                        Descargar PDF
+                      </>
+                    )}
                   </Button>
                 </CardActions>
               </Card>

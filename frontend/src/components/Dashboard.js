@@ -21,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI } from '../services/api';
+import LoadingSpinner from './common/LoadingSpinner';
 
 const Dashboard = () => {
   const { user, isAdmin, isOwner } = useAuth();
@@ -101,9 +102,15 @@ const Dashboard = () => {
             {title}
           </Typography>
         </Box>
-        <Typography variant="h4" component="div" color={color}>
-          {loading ? '...' : value}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 36 }}>
+          {loading ? (
+            <LoadingSpinner size={24} showMessage={false} />
+          ) : (
+            <Typography variant="h4" component="div" color={color}>
+              {value}
+            </Typography>
+          )}
+        </Box>
       </CardContent>
     </Card>
   );
@@ -330,7 +337,7 @@ const Dashboard = () => {
               Resumen de Deuda
             </Typography>
             {ownerDataLoading ? (
-              <Typography>Cargando...</Typography>
+              <LoadingSpinner message="Cargando resumen de deuda..." />
             ) : ownerData.debtSummary ? (
               <Box>
                 <Typography variant="h5" color="error" gutterBottom>
@@ -368,7 +375,7 @@ const Dashboard = () => {
               Reporte de Propiedades
             </Typography>
             {ownerDataLoading ? (
-              <Typography>Cargando...</Typography>
+              <LoadingSpinner message="Cargando reporte de propiedades..." />
             ) : ownerData.propertyReport ? (
               <Box>
                 {ownerData.propertyReport.properties?.map((prop, index) => (
@@ -396,7 +403,7 @@ const Dashboard = () => {
               Reporte de Gastos Comunitarios
             </Typography>
             {ownerDataLoading ? (
-              <Typography>Cargando...</Typography>
+              <LoadingSpinner message="Cargando reporte de gastos..." />
             ) : ownerData.expensesReport ? (
               <Box>
                 <Typography variant="h5" gutterBottom>

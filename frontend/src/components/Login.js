@@ -11,6 +11,7 @@ import {
   Tabs,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import LoadingSpinner from './common/LoadingSpinner';
 
 const Login = () => {
   const [tabValue, setTabValue] = useState(0);
@@ -151,7 +152,11 @@ const Login = () => {
               sx={{ mt: 3, mb: 2 }}
               disabled={loading}
             >
-              {loading ? 'Cargando...' : (tabValue === 0 ? 'Iniciar Sesión' : 'Registrarse')}
+              {loading ? (
+                <LoadingSpinner buttonVariant size={20} message="Cargando..." showMessage />
+              ) : (
+                tabValue === 0 ? 'Iniciar Sesión' : 'Registrarse'
+              )}
             </Button>
           </Box>
         </Paper>

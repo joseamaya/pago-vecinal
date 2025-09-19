@@ -27,6 +27,7 @@ import {
   ListItem,
   ListItemText,
   Checkbox,
+  Pagination,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -37,6 +38,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentsAPI, feesAPI, propertiesAPI, reportsAPI } from '../services/api';
+import LoadingSkeleton from './common/LoadingSkeleton';
+import LoadingSpinner from './common/LoadingSpinner';
 
 const PaymentManagement = () => {
   const { isAdmin } = useAuth();
@@ -69,6 +72,10 @@ const PaymentManagement = () => {
   const [filterMonth, setFilterMonth] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filteredPayments, setFilteredPayments] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pageSize] = useState(20);
 
   useEffect(() => {
     fetchPayments();
@@ -76,15 +83,16 @@ const PaymentManagement = () => {
     fetchProperties();
   }, []);
 
-  const fetchPayments = async () => {
+  const fetchPayments = async (page = 1) => {
     try {
       setLoading(true);
-      const response = await paymentsAPI.getPayments();
+      const response = await paymentsAPI.getPayments(page, pageSize);
       console.log('Fetched payments:', response.data);
-      // Sort payments by payment_date descending (newest first)
-      const sortedPayments = response.data.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
-      setPayments(sortedPayments);
-      setFilteredPayments(sortedPayments);
+      setPayments(response.data.data);
+      setFilteredPayments(response.data.data);
+      setTotalPages(response.data.pagination.total_pages);
+      setTotalCount(response.data.pagination.total_count);
+      setCurrentPage(page);
       setError('');
     } catch (err) {
       setError('Error al cargar pagos');
@@ -169,7 +177,7 @@ const PaymentManagement = () => {
       } else {
         await paymentsAPI.createPayment(formDataToSend);
       }
-      fetchPayments();
+      fetchPayments(currentPage);
       handleCloseDialog();
     } catch (err) {
       setError(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
@@ -181,7 +189,7 @@ const PaymentManagement = () => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este pago?')) {
       try {
         await paymentsAPI.deletePayment(paymentId);
-        fetchPayments();
+        fetchPayments(currentPage);
       } catch (err) {
         setError('Error al eliminar pago');
         console.error('Error deleting payment:', err);
@@ -199,7 +207,7 @@ const PaymentManagement = () => {
 
       // Wait a bit for receipt generation to complete
       setTimeout(async () => {
-        await fetchPayments();
+        await fetchPayments(currentPage);
         console.log('Payments refreshed after approval');
       }, 2000); // 2 second delay
     } catch (err) {
@@ -213,7 +221,7 @@ const PaymentManagement = () => {
       const formDataToSend = new FormData();
       formDataToSend.append('status', 'rejected');
       await paymentsAPI.updatePayment(paymentId, formDataToSend);
-      fetchPayments();
+      fetchPayments(currentPage);
     } catch (err) {
       setError('Error al rechazar pago');
       console.error('Error rejecting payment:', err);
@@ -247,7 +255,7 @@ const PaymentManagement = () => {
       setError('');
       const response = await paymentsAPI.bulkImportPayments(bulkFile);
       setBulkResults(response.data);
-      fetchPayments(); // Refresh the payments list
+      fetchPayments(currentPage); // Refresh the payments list
     } catch (err) {
       setError('Error al subir archivo masivo');
       console.error('Error bulk uploading payments:', err);
@@ -277,6 +285,8 @@ const PaymentManagement = () => {
   };
 
   const applyFilters = () => {
+    // Since filtering is now done on the backend, we need to refetch with filters
+    // But the current backend doesn't support filtering in payments, so we'll keep client-side filtering for now
     let filtered = payments;
 
     if (filterYear) {
@@ -300,6 +310,7 @@ const PaymentManagement = () => {
     setFilteredPayments(filtered);
     setSelectedPayments([]);
     setSelectAll(false);
+    setCurrentPage(1); // Reset to first page when filters change
   };
 
   const clearFilters = () => {
@@ -309,6 +320,7 @@ const PaymentManagement = () => {
     setFilteredPayments(payments);
     setSelectedPayments([]);
     setSelectAll(false);
+    setCurrentPage(1); // Reset to first page
   };
 
   const handleExportExcel = async () => {
@@ -423,7 +435,7 @@ const PaymentManagement = () => {
       console.log('Bulk approval response:', response.data);
 
       // Refresh payments list
-      await fetchPayments();
+      await fetchPayments(currentPage);
 
       // Reset selection
       setSelectedPayments([]);
@@ -435,6 +447,12 @@ const PaymentManagement = () => {
     } catch (err) {
       setError('Error al aprobar pagos masivamente');
       console.error('Error bulk approving payments:', err);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      fetchPayments(newPage);
     }
   };
 
@@ -621,6 +639,12 @@ const PaymentManagement = () => {
       )}
 
       <Paper>
+        {/* Pagination Info */}
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="body2" color="text.secondary">
+            Mostrando {filteredPayments.length > 0 ? ((currentPage - 1) * pageSize) + 1 : 0} - {Math.min(currentPage * pageSize, totalCount)} de {totalCount} pagos
+          </Typography>
+        </Box>
         <TableContainer>
           <Table>
             <TableHead>
@@ -645,11 +669,7 @@ const PaymentManagement = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+                <LoadingSkeleton type="table" rows={5} columns={8} />
               ) : filteredPayments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} align="center">
@@ -741,6 +761,19 @@ const PaymentManagement = () => {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Box display="flex" justifyContent="center" mt={2}>
+          <Pagination
+            count={totalPages}
+            page={currentPage}
+            onChange={(event, page) => handlePageChange(page)}
+            color="primary"
+            size="large"
+          />
+        </Box>
+      )}
 
       {/* Dialog for Add/Edit Payment */}
       <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
@@ -929,7 +962,11 @@ const PaymentManagement = () => {
             variant="contained"
             disabled={!bulkFile || bulkUploading}
           >
-            {bulkUploading ? 'Subiendo...' : 'Subir Archivo'}
+            {bulkUploading ? (
+              <LoadingSpinner buttonVariant size={20} message="Subiendo..." showMessage />
+            ) : (
+              'Subir Archivo'
+            )}
           </Button>
         </DialogActions>
       </Dialog>
