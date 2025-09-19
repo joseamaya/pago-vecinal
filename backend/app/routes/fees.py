@@ -7,6 +7,7 @@ from ..models.fee import Fee, FeeCreate, FeeUpdate, FeeResponse, FeeStatus, FeeS
 from ..models.property import Property
 from ..models.user import User, UserRole
 from ..routes.auth import get_current_user
+from ..config.database import database
 
 class GenerateFeesRequest(BaseModel):
     manual: bool = False
@@ -28,8 +29,7 @@ async def get_fees(
     year: Optional[int] = None,
     month: Optional[int] = None,
     status: Optional[str] = None,
-    property_id: Optional[str] = None,
-    sort_by_period: bool = True
+    property_id: Optional[str] = None
 ):
     # Build query filters
     query_filters = {}
@@ -50,58 +50,78 @@ async def get_fees(
     if property_id is not None:
         query_filters["property.$id"] = PydanticObjectId(property_id)
 
-    # Get total count
-    if query_filters:
-        total_count = await Fee.find(query_filters).count()
-    else:
-        total_count = await Fee.count()
+    # Get motor collection for aggregation
+    fee_collection = database.fees
+
+    # Get total count using aggregation
+    count_pipeline = [{"$match": query_filters}, {"$count": "total"}]
+    count_result = await fee_collection.aggregate(count_pipeline).to_list(length=1)
+    total_count = count_result[0]["total"] if count_result else 0
 
     # Calculate skip
     skip = (page - 1) * limit
 
-    # Determine sort order
-    if sort_by_period:
-        sort_criteria = [("year", -1), ("month", -1)]
-    else:
-        sort_criteria = [("generated_date", -1)]
+    # Aggregation pipeline for paginated results
+    pipeline = [
+        {"$match": query_filters},
+        {"$lookup": {
+            "from": "properties",
+            "localField": "property.$id",
+            "foreignField": "_id",
+            "as": "property_data"
+        }},
+        {"$unwind": "$property_data"},
+        {"$lookup": {
+            "from": "fee_schedules",
+            "localField": "fee_schedule.$id",
+            "foreignField": "_id",
+            "as": "fee_schedule_data"
+        }},
+        {"$unwind": "$fee_schedule_data"},
+        {"$lookup": {
+            "from": "users",
+            "localField": "user.$id",
+            "foreignField": "_id",
+            "as": "user_data"
+        }},
+        {"$unwind": {"path": "$user_data", "preserveNullAndEmptyArrays": True}},
+        {"$sort": {
+            "year": -1,
+            "month": -1,
+            "property_data.row_letter": 1,
+            "property_data.number": 1
+        }},
+        {"$skip": skip},
+        {"$limit": limit}
+    ]
 
-    # Get paginated fees with sorting
-    if query_filters:
-        fees = await Fee.find(query_filters).sort(sort_criteria).skip(skip).limit(limit).to_list()
-    else:
-        fees = await Fee.find_all().sort(sort_criteria).skip(skip).limit(limit).to_list()
-
-    # Fetch links for each fee
-    for fee in fees:
-        await fee.fetch_link(Fee.property)
-        await fee.fetch_link(Fee.fee_schedule)
-        if fee.user:
-            await fee.fetch_link(Fee.user)
+    # Execute aggregation
+    results = await fee_collection.aggregate(pipeline).to_list(length=None)
 
     # Calculate total pages
     total_pages = (total_count + limit - 1) // limit
 
-    fee_responses = [
-        FeeResponse(
-            id=str(fee.id),
-            property_id=str(fee.property.id),
-            property_villa=fee.property.villa,
-            property_row_letter=fee.property.row_letter,
-            property_number=fee.property.number,
-            property_owner_name=fee.property.owner_name,
-            fee_schedule_id=str(fee.fee_schedule.id),
-            user_id=str(fee.user.id) if fee.user else None,
-            amount=fee.amount,
-            generated_date=fee.generated_date,
-            year=fee.year,
-            month=fee.month,
-            due_date=fee.due_date,
-            status=fee.status,
-            reference=fee.reference,
-            notes=fee.notes
-        )
-        for fee in fees
-    ]
+    # Build fee responses from aggregated data
+    fee_responses = []
+    for result in results:
+        fee_responses.append(FeeResponse(
+            id=str(result["_id"]),
+            property_id=str(result["property_data"]["_id"]),
+            property_villa=result["property_data"]["villa"],
+            property_row_letter=result["property_data"]["row_letter"],
+            property_number=result["property_data"]["number"],
+            property_owner_name=result["property_data"]["owner_name"],
+            fee_schedule_id=str(result["fee_schedule_data"]["_id"]),
+            user_id=str(result["user_data"]["_id"]) if result.get("user_data") else None,
+            amount=result["amount"],
+            generated_date=result["generated_date"],
+            year=result["year"],
+            month=result["month"],
+            due_date=result["due_date"],
+            status=result["status"],
+            reference=result.get("reference"),
+            notes=result.get("notes")
+        ))
 
     return PaginatedFeeResponse(
         data=fee_responses,
