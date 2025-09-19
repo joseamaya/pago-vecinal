@@ -24,12 +24,40 @@ class PaginatedPaymentResponse(BaseModel):
 router = APIRouter()
 
 @router.get("/", response_model=PaginatedPaymentResponse)
-async def get_payments(page: int = 1, limit: int = 20, current_user: User = Depends(get_current_user)):
+async def get_payments(
+    page: int = 1,
+    limit: int = 20,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    status: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
     # Build query filters
     query_filters = {}
     if current_user.role != UserRole.ADMIN:
         # Owners can only see their own payments
         query_filters["user.id"] = current_user.id
+
+    # Add filter parameters
+    if year is not None and month is not None:
+        # Filter by specific year and month
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+        query_filters["payment_date"] = {"$gte": start_date, "$lt": end_date}
+    elif year is not None:
+        # Filter by year only
+        start_date = datetime(year, 1, 1)
+        end_date = datetime(year + 1, 1, 1)
+        query_filters["payment_date"] = {"$gte": start_date, "$lt": end_date}
+    elif month is not None:
+        # Filter by month across all years (this is more complex, but we'll do it by month number)
+        query_filters["$expr"] = {"$eq": [{"$month": "$payment_date"}, month]}
+
+    if status is not None:
+        query_filters["status"] = status
 
     # Get total count
     if query_filters:

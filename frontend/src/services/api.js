@@ -69,7 +69,13 @@ export const propertiesAPI = {
 
 // Payments API
 export const paymentsAPI = {
-  getPayments: (page = 1, limit = 20) => api.get('/payments/', { params: { page, limit } }),
+  getPayments: (page = 1, limit = 20, filters = {}) => {
+    const params = { page, limit };
+    if (filters.year !== undefined) params.year = filters.year;
+    if (filters.month !== undefined) params.month = filters.month;
+    if (filters.status !== undefined) params.status = filters.status;
+    return api.get('/payments/', { params });
+  },
   getPayment: (id) => api.get(`/payments/${id}`),
   createPayment: (paymentData) => {
     const config = paymentData instanceof FormData ? {

@@ -83,10 +83,10 @@ const PaymentManagement = () => {
     fetchProperties();
   }, []);
 
-  const fetchPayments = async (page = 1) => {
+  const fetchPayments = async (page = 1, filters = {}) => {
     try {
       setLoading(true);
-      const response = await paymentsAPI.getPayments(page, pageSize);
+      const response = await paymentsAPI.getPayments(page, pageSize, filters);
       console.log('Fetched payments:', response.data);
       setPayments(response.data.data);
       setFilteredPayments(response.data.data);
@@ -177,7 +177,11 @@ const PaymentManagement = () => {
       } else {
         await paymentsAPI.createPayment(formDataToSend);
       }
-      fetchPayments(currentPage);
+      const currentFilters = {};
+      if (filterYear) currentFilters.year = parseInt(filterYear);
+      if (filterMonth) currentFilters.month = parseInt(filterMonth);
+      if (filterStatus) currentFilters.status = filterStatus;
+      fetchPayments(currentPage, currentFilters);
       handleCloseDialog();
     } catch (err) {
       setError(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
@@ -189,7 +193,11 @@ const PaymentManagement = () => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este pago?')) {
       try {
         await paymentsAPI.deletePayment(paymentId);
-        fetchPayments(currentPage);
+        const currentFilters = {};
+        if (filterYear) currentFilters.year = parseInt(filterYear);
+        if (filterMonth) currentFilters.month = parseInt(filterMonth);
+        if (filterStatus) currentFilters.status = filterStatus;
+        fetchPayments(currentPage, currentFilters);
       } catch (err) {
         setError('Error al eliminar pago');
         console.error('Error deleting payment:', err);
@@ -207,7 +215,11 @@ const PaymentManagement = () => {
 
       // Wait a bit for receipt generation to complete
       setTimeout(async () => {
-        await fetchPayments(currentPage);
+        const currentFilters = {};
+        if (filterYear) currentFilters.year = parseInt(filterYear);
+        if (filterMonth) currentFilters.month = parseInt(filterMonth);
+        if (filterStatus) currentFilters.status = filterStatus;
+        await fetchPayments(currentPage, currentFilters);
         console.log('Payments refreshed after approval');
       }, 2000); // 2 second delay
     } catch (err) {
@@ -221,7 +233,11 @@ const PaymentManagement = () => {
       const formDataToSend = new FormData();
       formDataToSend.append('status', 'rejected');
       await paymentsAPI.updatePayment(paymentId, formDataToSend);
-      fetchPayments(currentPage);
+      const currentFilters = {};
+      if (filterYear) currentFilters.year = parseInt(filterYear);
+      if (filterMonth) currentFilters.month = parseInt(filterMonth);
+      if (filterStatus) currentFilters.status = filterStatus;
+      fetchPayments(currentPage, currentFilters);
     } catch (err) {
       setError('Error al rechazar pago');
       console.error('Error rejecting payment:', err);
@@ -255,7 +271,11 @@ const PaymentManagement = () => {
       setError('');
       const response = await paymentsAPI.bulkImportPayments(bulkFile);
       setBulkResults(response.data);
-      fetchPayments(currentPage); // Refresh the payments list
+      const currentFilters = {};
+      if (filterYear) currentFilters.year = parseInt(filterYear);
+      if (filterMonth) currentFilters.month = parseInt(filterMonth);
+      if (filterStatus) currentFilters.status = filterStatus;
+      fetchPayments(currentPage, currentFilters); // Refresh the payments list
     } catch (err) {
       setError('Error al subir archivo masivo');
       console.error('Error bulk uploading payments:', err);
@@ -285,42 +305,23 @@ const PaymentManagement = () => {
   };
 
   const applyFilters = () => {
-    // Since filtering is now done on the backend, we need to refetch with filters
-    // But the current backend doesn't support filtering in payments, so we'll keep client-side filtering for now
-    let filtered = payments;
+    const filters = {};
+    if (filterYear) filters.year = parseInt(filterYear);
+    if (filterMonth) filters.month = parseInt(filterMonth);
+    if (filterStatus) filters.status = filterStatus;
 
-    if (filterYear) {
-      filtered = filtered.filter(payment => {
-        const paymentDate = new Date(payment.payment_date);
-        return paymentDate.getFullYear().toString() === filterYear;
-      });
-    }
-
-    if (filterMonth) {
-      filtered = filtered.filter(payment => {
-        const paymentDate = new Date(payment.payment_date);
-        return (paymentDate.getMonth() + 1).toString() === filterMonth;
-      });
-    }
-
-    if (filterStatus) {
-      filtered = filtered.filter(payment => payment.status === filterStatus);
-    }
-
-    setFilteredPayments(filtered);
+    fetchPayments(1, filters); // Reset to first page when filters change
     setSelectedPayments([]);
     setSelectAll(false);
-    setCurrentPage(1); // Reset to first page when filters change
   };
 
   const clearFilters = () => {
     setFilterYear('');
     setFilterMonth('');
     setFilterStatus('');
-    setFilteredPayments(payments);
+    fetchPayments(1, {}); // Fetch without filters and reset to first page
     setSelectedPayments([]);
     setSelectAll(false);
-    setCurrentPage(1); // Reset to first page
   };
 
   const handleExportExcel = async () => {
@@ -435,7 +436,11 @@ const PaymentManagement = () => {
       console.log('Bulk approval response:', response.data);
 
       // Refresh payments list
-      await fetchPayments(currentPage);
+      const currentFilters = {};
+      if (filterYear) currentFilters.year = parseInt(filterYear);
+      if (filterMonth) currentFilters.month = parseInt(filterMonth);
+      if (filterStatus) currentFilters.status = filterStatus;
+      await fetchPayments(currentPage, currentFilters);
 
       // Reset selection
       setSelectedPayments([]);
@@ -452,7 +457,11 @@ const PaymentManagement = () => {
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
-      fetchPayments(newPage);
+      const currentFilters = {};
+      if (filterYear) currentFilters.year = parseInt(filterYear);
+      if (filterMonth) currentFilters.month = parseInt(filterMonth);
+      if (filterStatus) currentFilters.status = filterStatus;
+      fetchPayments(newPage, currentFilters);
     }
   };
 
