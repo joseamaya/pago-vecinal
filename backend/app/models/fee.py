@@ -54,6 +54,7 @@ class Fee(Document):
     fee_schedule: Link[FeeSchedule]
     user: Optional[Link[User]] = None  # Who generated the fee
     amount: float  # Derived from fee_schedule
+    paid_amount: float = 0.0  # Total amount already paid
     generated_date: datetime
     year: int  # Year when fee was generated
     month: int  # Month when fee was generated
@@ -74,6 +75,7 @@ class FeeCreate(BaseModel):
 
 class FeeUpdate(BaseModel):
     amount: Optional[float] = None
+    paid_amount: Optional[float] = None
     due_date: Optional[datetime] = None
     status: Optional[FeeStatus] = None
     reference: Optional[str] = None
@@ -91,6 +93,8 @@ class FeeResponse(BaseModel):
     fee_schedule_id: str
     user_id: Optional[str] = None
     amount: float
+    paid_amount: float
+    remaining_amount: float
     generated_date: datetime
     year: int
     month: int

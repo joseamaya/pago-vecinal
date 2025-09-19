@@ -66,8 +66,16 @@ const PaymentManagement = () => {
   const [selectedHouse, setSelectedHouse] = useState('');
   const [availableRows, setAvailableRows] = useState([]);
   const [availableHouses, setAvailableHouses] = useState([]);
-  const [selectedFeeInfo, setSelectedFeeInfo] = useState(null);
-  const [pendingFees, setPendingFees] = useState([]);
+  const [selectedFeeInfo, setSelectedFeeInfo] = useState({
+    ownerName: '',
+    month: 0,
+    year: 0,
+    dueDate: '',
+    paidAmount: 0,
+    totalAmount: 0,
+    status: 'pending',
+  });
+  const [availableFees, setAvailableFees] = useState([]);
   const [selectedFeeId, setSelectedFeeId] = useState('');
   const [selectedFeeAmount, setSelectedFeeAmount] = useState(0);
   const [filterYear, setFilterYear] = useState('');
@@ -150,8 +158,16 @@ const PaymentManagement = () => {
     setSelectedHouse('');
     setAvailableRows([]);
     setAvailableHouses([]);
-    setSelectedFeeInfo(null);
-    setPendingFees([]);
+    setSelectedFeeInfo({
+      ownerName: '',
+      month: 0,
+      year: 0,
+      dueDate: '',
+      paidAmount: 0,
+      totalAmount: 0,
+      status: 'pending',
+    });
+    setAvailableFees([]);
     setSelectedFeeId('');
     setSelectedFeeAmount(0);
   };
@@ -405,74 +421,109 @@ const PaymentManagement = () => {
     setSelectedHouse(houseId);
     if (houseId) {
       try {
-        // Get pending fees for this specific property
+        // Get pending and partially paid fees for this specific property
         const response = await feesAPI.getFees({
           property_id: houseId,
-          status: 'pending'
-        }, 1, 100); // Get up to 100 pending fees, sorted by period
+          status: 'pending,partially_paid'
+        }, 1, 100); // Get up to 100 pending and partially paid fees, sorted by period
 
         const propertyFees = response.data.data;
         if (propertyFees.length > 0) {
           // Sort by due_date ascending (oldest first)
           propertyFees.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-          setPendingFees(propertyFees);
+          setAvailableFees(propertyFees);
           setSelectedFeeId('');
           setFormData({
             ...formData,
             fee_id: '',
             amount: '',
           });
-          setSelectedFeeInfo(null);
+          setSelectedFeeInfo({
+            ownerName: '',
+            month: 0,
+            year: 0,
+            dueDate: '',
+            paidAmount: 0,
+            totalAmount: 0,
+            status: 'pending',
+          });
         } else {
-          // No pending fees
-          setPendingFees([]);
+          // No available fees
+          setAvailableFees([]);
           setSelectedFeeId('');
           setFormData({
             ...formData,
             fee_id: '',
             amount: '',
           });
-          setSelectedFeeInfo(null);
+          setSelectedFeeInfo({
+            ownerName: '',
+            month: 0,
+            year: 0,
+            dueDate: '',
+            paidAmount: 0,
+            totalAmount: 0,
+            status: 'pending',
+          });
         }
       } catch (err) {
-        console.error('Error fetching pending fees for property:', err);
-        setPendingFees([]);
+        console.error('Error fetching available fees for property:', err);
+        setAvailableFees([]);
         setSelectedFeeId('');
         setFormData({
           ...formData,
           fee_id: '',
           amount: '',
         });
-        setSelectedFeeInfo(null);
+        setSelectedFeeInfo({
+          ownerName: '',
+          month: 0,
+          year: 0,
+          dueDate: '',
+          paidAmount: 0,
+          totalAmount: 0,
+          status: 'pending',
+        });
       }
     } else {
-      setPendingFees([]);
+      setAvailableFees([]);
       setSelectedFeeId('');
       setFormData({
         ...formData,
         fee_id: '',
         amount: '',
       });
-      setSelectedFeeInfo(null);
+      setSelectedFeeInfo({
+        ownerName: '',
+        month: 0,
+        year: 0,
+        dueDate: '',
+        paidAmount: 0,
+        totalAmount: 0,
+        status: 'pending',
+      });
     }
   };
 
   const handleFeeChange = (feeId) => {
     setSelectedFeeId(feeId);
     if (feeId) {
-      const selectedFee = pendingFees.find(fee => fee.id === feeId);
+      const selectedFee = availableFees.find(fee => fee.id === feeId);
       if (selectedFee) {
         setFormData({
           ...formData,
           fee_id: selectedFee.id,
-          amount: selectedFee.amount.toString(),
+          amount: selectedFee.remaining_amount.toString(),
         });
-        setSelectedFeeAmount(selectedFee.amount);
+        setSelectedFeeAmount(selectedFee.remaining_amount);
         setSelectedFeeInfo({
           ownerName: selectedFee.property_owner_name,
           month: selectedFee.month,
           year: selectedFee.year,
           dueDate: selectedFee.due_date,
+          paidAmount: selectedFee.paid_amount,
+          totalAmount: selectedFee.amount,
+          status: selectedFee.status,
         });
       }
     } else {
@@ -482,7 +533,15 @@ const PaymentManagement = () => {
         amount: '',
       });
       setSelectedFeeAmount(0);
-      setSelectedFeeInfo(null);
+      setSelectedFeeInfo({
+        ownerName: '',
+        month: 0,
+        year: 0,
+        dueDate: '',
+        paidAmount: 0,
+        totalAmount: 0,
+        status: 'pending',
+      });
     }
   };
 
@@ -914,30 +973,33 @@ const PaymentManagement = () => {
               </FormControl>
             </Box>
 
-            {pendingFees.length > 0 && (
+            {availableFees.length > 0 && (
               <FormControl sx={{ mt: 2 }} fullWidth>
-                <InputLabel>Seleccionar Cuota Pendiente</InputLabel>
+                <InputLabel>Seleccionar Cuota (Pendiente o Parcial)</InputLabel>
                 <Select
                   value={selectedFeeId}
                   onChange={(e) => handleFeeChange(e.target.value)}
-                  label="Seleccionar Cuota Pendiente"
+                  label="Seleccionar Cuota (Pendiente o Parcial)"
                   required
                 >
                   <MenuItem value="">
                     <em>Seleccionar Cuota</em>
                   </MenuItem>
-                  {pendingFees.map((fee) => (
+                  {availableFees.map((fee) => (
                     <MenuItem key={fee.id} value={fee.id}>
-                      {`Cuota ${fee.month}/${fee.year} - S/ ${fee.amount.toFixed(2)} - Vence: ${new Date(fee.due_date).toLocaleDateString('es-ES')}`}
+                      {fee.status === 'partially_paid'
+                        ? `Cuota ${fee.month}/${fee.year} - Pagado: S/ ${fee.paid_amount.toFixed(2)} - Restante: S/ ${fee.remaining_amount.toFixed(2)} - Vence: ${new Date(fee.due_date).toLocaleDateString('es-ES')}`
+                        : `Cuota ${fee.month}/${fee.year} - S/ ${fee.amount.toFixed(2)} - Vence: ${new Date(fee.due_date).toLocaleDateString('es-ES')}`
+                      }
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
             )}
 
-            {pendingFees.length === 0 && selectedHouse && (
+            {availableFees.length === 0 && selectedHouse && (
               <Alert severity="info" sx={{ mt: 2 }}>
-                No hay cuotas pendientes para esta propiedad.
+                No hay cuotas pendientes o parcialmente pagadas para esta propiedad.
               </Alert>
             )}
 
@@ -969,9 +1031,29 @@ const PaymentManagement = () => {
                       readOnly: true,
                     }}
                   />
+                  {selectedFeeInfo.status === 'partially_paid' && (
+                    <>
+                      <TextField
+                        sx={{ flex: 1 }}
+                        label="Monto Total"
+                        value={`S/ ${selectedFeeInfo.totalAmount.toFixed(2)}`}
+                        InputProps={{
+                          readOnly: true,
+                        }}
+                      />
+                      <TextField
+                        sx={{ flex: 1 }}
+                        label="Monto Pagado"
+                        value={`S/ ${selectedFeeInfo.paidAmount.toFixed(2)}`}
+                        InputProps={{
+                          readOnly: true,
+                        }}
+                      />
+                    </>
+                  )}
                   <TextField
-                    sx={{ flex: 1 }}
-                    label="Monto (S/)"
+                    sx={{ flex: selectedFeeInfo.status === 'partially_paid' ? 1 : 2 }}
+                    label={selectedFeeInfo.status === 'partially_paid' ? "Monto Restante (S/)" : "Monto (S/)"}
                     type="number"
                     value={formData.amount}
                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
@@ -979,7 +1061,9 @@ const PaymentManagement = () => {
                     helperText={
                       editingPayment
                         ? "💰 Editar monto del pago"
-                        : `💰 Pagos parciales permitidos (máx. S/ ${selectedFeeAmount.toFixed(2)})`
+                        : selectedFeeInfo.status === 'partially_paid'
+                          ? `💰 Pago restante (máx. S/ ${selectedFeeAmount.toFixed(2)})`
+                          : `💰 Pagos parciales permitidos (máx. S/ ${selectedFeeAmount.toFixed(2)})`
                     }
                     required
                   />

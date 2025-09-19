@@ -45,7 +45,12 @@ async def get_fees(
         query_filters["month"] = month
 
     if status is not None:
-        query_filters["status"] = status
+        # Support multiple statuses separated by comma
+        status_list = [s.strip() for s in status.split(',')]
+        if len(status_list) == 1:
+            query_filters["status"] = status_list[0]
+        else:
+            query_filters["status"] = {"$in": status_list}
 
     if property_id is not None:
         query_filters["property.$id"] = PydanticObjectId(property_id)
@@ -104,6 +109,9 @@ async def get_fees(
     # Build fee responses from aggregated data
     fee_responses = []
     for result in results:
+        paid_amount = result.get("paid_amount", 0.0)
+        remaining_amount = result["amount"] - paid_amount
+
         fee_responses.append(FeeResponse(
             id=str(result["_id"]),
             property_id=str(result["property_data"]["_id"]),
@@ -114,6 +122,8 @@ async def get_fees(
             fee_schedule_id=str(result["fee_schedule_data"]["_id"]),
             user_id=str(result["user_data"]["_id"]) if result.get("user_data") else None,
             amount=result["amount"],
+            paid_amount=paid_amount,
+            remaining_amount=remaining_amount,
             generated_date=result["generated_date"],
             year=result["year"],
             month=result["month"],
@@ -166,6 +176,8 @@ async def get_fee(fee_id: str, current_user: User = Depends(get_current_user)):
         fee_schedule_id=str(fee.fee_schedule.id),
         user_id=str(fee.user.id) if fee.user else None,
         amount=fee.amount,
+        paid_amount=fee.paid_amount,
+        remaining_amount=fee.amount - fee.paid_amount,
         generated_date=fee.generated_date,
         year=fee.year,
         month=fee.month,
@@ -238,6 +250,8 @@ async def create_fee(
         fee_schedule_id=str(fee.fee_schedule.id),
         user_id=str(fee.user.id) if fee.user else None,
         amount=fee.amount,
+        paid_amount=fee.paid_amount,
+        remaining_amount=fee.amount - fee.paid_amount,
         generated_date=fee.generated_date,
         year=fee.year,
         month=fee.month,
@@ -306,6 +320,8 @@ async def update_fee(
         fee_schedule_id=str(fee.fee_schedule.id),
         user_id=str(fee.user.id) if fee.user else None,
         amount=fee.amount,
+        paid_amount=fee.paid_amount,
+        remaining_amount=fee.amount - fee.paid_amount,
         generated_date=fee.generated_date,
         year=fee.year,
         month=fee.month,

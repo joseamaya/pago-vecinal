@@ -15,7 +15,7 @@ from ..models.property import Property
 from ..routes.auth import get_current_user
 
 async def update_fee_status_based_on_payments(fee: Fee):
-    """Update fee status based on total approved payments"""
+    """Update fee status and paid_amount based on total approved payments"""
     # Get all approved payments for this fee
     approved_payments = await Payment.find(
         Payment.fee_id == str(fee.id),
@@ -25,7 +25,8 @@ async def update_fee_status_based_on_payments(fee: Fee):
     # Calculate total approved payment amount
     total_paid = sum(payment.amount for payment in approved_payments)
 
-    # Update fee status based on total paid
+    # Update paid_amount and status
+    fee.paid_amount = total_paid
     if total_paid >= fee.amount:
         fee.status = FeeStatus.COMPLETED
     elif total_paid > 0:
