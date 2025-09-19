@@ -61,9 +61,10 @@ const FeeManagement = () => {
     feeScheduleIds: [], // Array of selected fee schedule IDs
   });
   const [filters, setFilters] = useState({
-    year: '',
+    year: new Date().getFullYear(),
     month: '',
     status: '',
+    property: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -77,6 +78,7 @@ const FeeManagement = () => {
       if (filters.year) filterParams.year = parseInt(filters.year);
       if (filters.month) filterParams.month = parseInt(filters.month);
       if (filters.status) filterParams.status = filters.status;
+      if (filters.property) filterParams.property_id = filters.property;
       filterParams.sort_by_period = true; // Always sort by period
 
       const response = await feesAPI.getFees(filterParams, page, pageSize);
@@ -305,9 +307,10 @@ const FeeManagement = () => {
 
   const handleClearFilters = () => {
     setFilters({
-      year: '',
+      year: new Date().getFullYear(),
       month: '',
       status: '',
+      property: '',
     });
     setCurrentPage(1); // Reset to first page
     fetchFees(1);
@@ -358,7 +361,7 @@ const FeeManagement = () => {
           Filtros
         </Typography>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={3}>
+          <Grid item xs={12} sm={2}>
             <TextField
               fullWidth
               label="Año"
@@ -368,7 +371,7 @@ const FeeManagement = () => {
               inputProps={{ min: 2020, max: 2030 }}
             />
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid item xs={12} sm={2}>
             <FormControl fullWidth>
               <InputLabel>Mes</InputLabel>
               <Select
@@ -387,7 +390,7 @@ const FeeManagement = () => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid item xs={12} sm={2}>
             <FormControl fullWidth>
               <InputLabel>Estado</InputLabel>
               <Select
@@ -407,7 +410,26 @@ const FeeManagement = () => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid item xs={12} sm={2}>
+            <FormControl fullWidth>
+              <InputLabel>Propiedad</InputLabel>
+              <Select
+                value={filters.property}
+                onChange={(e) => handleFilterChange('property', e.target.value)}
+                label="Propiedad"
+              >
+                <MenuItem value="">
+                  <em>Todas</em>
+                </MenuItem>
+                {properties.map((property) => (
+                  <MenuItem key={property.id} value={property.id}>
+                    {property.villa} {property.row_letter}{property.number} - {property.owner_name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={4}>
             <Box display="flex" gap={1}>
               <Button
                 variant="contained"
