@@ -14,7 +14,12 @@ router = APIRouter()
 
 @router.get("/", response_model=List[PropertyResponse])
 async def get_properties(current_user: User = Depends(get_current_user)):
-    properties = await Property.find_all().to_list()
+    if current_user.role != UserRole.ADMIN:
+        # Owners can only see their own properties
+        properties = await Property.find(Property.owner.id == current_user.id).to_list()
+    else:
+        properties = await Property.find_all().to_list()
+
     return [
         PropertyResponse(
             id=str(prop.id),

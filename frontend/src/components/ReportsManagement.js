@@ -84,6 +84,10 @@ const ReportsManagement = () => {
           response = await reportsAPI.getAnnualPropertyStatement(propertyId, selectedYear, selectedFormat);
           filename = `estado_anual_${selectedYear}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
+        case 'expenses':
+          response = await reportsAPI.getExpensesReport(selectedFormat);
+          filename = `reporte_gastos_administrativos.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          break;
         default:
           throw new Error('Tipo de reporte desconocido');
       }
@@ -143,6 +147,13 @@ const ReportsManagement = () => {
       type: 'annual-statement',
       requiresProperty: true,
       adminOnly: false, // Owners can see their own statements
+    },
+    {
+      title: 'Reporte de Gastos Administrativos',
+      description: 'Lista completa de todos los gastos administrativos realizados.',
+      type: 'expenses',
+      requiresProperty: false,
+      adminOnly: true,
     },
   ];
 

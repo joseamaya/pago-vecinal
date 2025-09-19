@@ -96,6 +96,12 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle, handleDrawerClose }) => {
       roles: ['admin', 'owner'],
     },
     {
+      text: 'Gastos Administrativos',
+      icon: <PaymentIcon />,
+      path: '/expenses',
+      roles: ['admin'],
+    },
+    {
       text: 'Pagos Convenios',
       icon: <InstallmentIcon />,
       path: '/agreement-payments',

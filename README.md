@@ -449,6 +449,75 @@ If you encounter issues not covered here:
 3. Ensure you're using compatible Python/Node.js versions
 4. Check the GitHub repository for updates
 
+## 🚀 Deployment to Railway with MongoDB Atlas
+
+### Prerequisites
+- Railway account (free tier available)
+- MongoDB Atlas account (free tier available)
+- Railway CLI installed: `npm install -g @railway/cli`
+
+### Step 1: Set up MongoDB Atlas
+1. Create account at [MongoDB Atlas](https://www.mongodb.com/atlas)
+2. Create a free cluster (M0 Sandbox)
+3. Create database user with read/write permissions
+4. Whitelist IP addresses (0.0.0.0/0 for Railway)
+5. Get connection string from "Connect" → "Connect your application"
+
+### Step 2: Configure Environment Variables
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Update `.env` with your MongoDB Atlas connection string:
+   ```bash
+   MONGODB_URL=mongodb+srv://username:password@cluster.mongodb.net/pago_vecinal?retryWrites=true&w=majority
+   ```
+
+3. Generate a secure SECRET_KEY for production
+
+### Step 3: Deploy to Railway
+1. **Login to Railway:**
+   ```bash
+   railway login
+   ```
+
+2. **Deploy backend:**
+   ```bash
+   cd backend
+   railway init
+   railway up
+   ```
+
+3. **Deploy frontend:**
+   ```bash
+   cd ../frontend
+   railway init
+   railway up
+   ```
+
+4. **Or use the automated script:**
+   ```bash
+   ./deploy.sh
+   ```
+
+### Step 4: Configure Railway Environment Variables
+In Railway dashboard:
+1. Go to your project
+2. Add environment variables from your `.env` file
+3. Update `REACT_APP_API_URL` with your backend Railway URL
+
+### Step 5: Access Your Application
+- Frontend: Your Railway frontend URL
+- Backend API: Your Railway backend URL
+- API Docs: `https://your-backend-url.railway.app/docs`
+
+### Troubleshooting Deployment
+- Ensure Dockerfiles are in correct directories
+- Check Railway build logs for errors
+- Verify MongoDB Atlas connection string format
+- Confirm environment variables are set in Railway dashboard
+
 ## License
 
 MIT License

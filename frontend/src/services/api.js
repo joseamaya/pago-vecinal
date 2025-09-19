@@ -115,6 +115,27 @@ export const miscellaneousPaymentsAPI = {
   downloadMiscellaneousReceipt: (id) => api.get(`/miscellaneous-payments/${id}/download-receipt`, { responseType: 'blob' }),
 };
 
+// Expenses API
+export const expensesAPI = {
+  getExpenses: () => api.get('/expenses/'),
+  getExpense: (id) => api.get(`/expenses/${id}`),
+  createExpense: (expenseData) => {
+    const config = expenseData instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : {};
+    return api.post('/expenses/', expenseData, config);
+  },
+  updateExpense: (id, expenseData) => {
+    const config = expenseData instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : {};
+    return api.put(`/expenses/${id}`, expenseData, config);
+  },
+  deleteExpense: (id) => api.delete(`/expenses/${id}`),
+  bulkApproveExpenses: (expenseIds) => api.post('/expenses/bulk-approve', { expense_ids: expenseIds }),
+  downloadExpenseReceipt: (id) => api.get(`/expenses/${id}/download-receipt`, { responseType: 'blob' }),
+};
+
 // Receipts API
 export const receiptsAPI = {
   getReceipts: () => api.get('/receipts/'),
@@ -193,6 +214,7 @@ export const reportsAPI = {
   getMonthlyFeesReport: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/monthly-fees/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
   getAnnualPropertyStatement: (propertyId, year, format = 'pdf') => api.get(`/reports/property/${propertyId}/annual-statement/${year}`, { params: { format }, responseType: 'blob' }),
   getAllPaymentsReport: () => api.get('/reports/all-payments', { params: { format: 'excel' }, responseType: 'blob' }),
+  getExpensesReport: (format = 'excel') => api.get('/reports/expenses', { params: { format }, responseType: 'blob' }),
   getPaymentsOverTime: () => api.get('/reports/payments-over-time'),
   getFeesByStatus: () => api.get('/reports/fees-by-status'),
   getPropertiesByVilla: () => api.get('/reports/properties-by-villa'),
@@ -201,6 +223,9 @@ export const reportsAPI = {
 // Dashboard Stats API
 export const dashboardAPI = {
   getStats: () => api.get('/dashboard/stats'),
+  getOwnerDebtSummary: () => api.get('/dashboard/owner/debt-summary'),
+  getOwnerPropertyReport: () => api.get('/dashboard/owner/property-report'),
+  getOwnerExpensesReport: () => api.get('/dashboard/owner/expenses-report'),
 };
 
 export default api;

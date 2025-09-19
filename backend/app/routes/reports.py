@@ -6,6 +6,7 @@ from ..models.fee import Fee, FeeStatus
 from ..models.payment import Payment
 from ..models.property import Property
 from ..models.user import User, UserRole
+from ..models.expense import Expense
 from ..routes.auth import get_current_user
 from ..utils.pdf_generator import (
     generate_property_payment_history_pdf,
@@ -454,6 +455,55 @@ async def download_all_payments_report(
     extension = "xlsx"
 
     filename = f"reporte_pagos_completo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.get("/expenses")
+async def download_expenses_report(
+    format: str = "excel",
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel report of all administrative expenses"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Get all expenses
+    expenses = await Expense.find_all().to_list()
+
+    # Fetch user details for each expense
+    for expense in expenses:
+        await expense.fetch_link(Expense.user)
+
+    expenses_data = [
+        {
+            "expense_date": expense.expense_date,
+            "expense_type": expense.expense_type,
+            "beneficiary": expense.beneficiary,
+            "beneficiary_details": expense.beneficiary_details,
+            "amount": expense.amount,
+            "status": expense.status,
+            "description": expense.description,
+            "notes": expense.notes,
+            "created_by": expense.user.full_name if expense.user else "N/A"
+        }
+        for expense in expenses
+    ]
+
+    # Sort by expense date descending (newest first)
+    expenses_data.sort(key=lambda x: x['expense_date'], reverse=True)
+
+    # Generate Excel report
+    buffer = generate_expenses_excel(expenses_data)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"reporte_gastos_administrativos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,
