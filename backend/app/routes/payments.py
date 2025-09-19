@@ -120,7 +120,7 @@ async def get_payments(
         # Find associated receipt
         receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
         receipt_correlative = receipt.correlative_number if receipt else None
-
+        receipt_issue_date = receipt.issue_date if receipt else None
         payment_responses.append(
             PaymentResponse(
                 id=str(payment.id),
@@ -137,7 +137,7 @@ async def get_payments(
                 fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
                 fee_year=getattr(payment.fee, 'year', None) if payment.fee else None,
                 receipt_correlative_number=receipt_correlative,
-                receipt_issue_date=receipt.issue_date
+                receipt_issue_date=receipt_issue_date
             )
         )
 
