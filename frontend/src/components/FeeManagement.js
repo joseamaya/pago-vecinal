@@ -34,9 +34,10 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
+  GetApp as DownloadIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { feesAPI, propertiesAPI, feeSchedulesAPI } from '../services/api';
+import { feesAPI, propertiesAPI, feeSchedulesAPI, reportsAPI } from '../services/api';
 import LoadingSkeleton from './common/LoadingSkeleton';
 
 const FeeManagement = () => {
@@ -322,6 +323,22 @@ const FeeManagement = () => {
     }
   };
 
+  const handleDownloadExcel = async () => {
+    try {
+      const response = await reportsAPI.getFilteredFeesReport(filters);
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `cuotas_filtradas_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      setError('Error al descargar el reporte Excel');
+      console.error('Error downloading Excel report:', err);
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -330,14 +347,24 @@ const FeeManagement = () => {
         </Typography>
         <Box>
           {isAdmin && (
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={handleGenerateFees}
-              sx={{ mr: 2 }}
-            >
-              Generar Cuotas
-            </Button>
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={handleGenerateFees}
+                sx={{ mr: 2 }}
+              >
+                Generar Cuotas
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={handleDownloadExcel}
+                sx={{ mr: 2 }}
+              >
+                Descargar Excel
+              </Button>
+            </>
           )}
           <Button
             variant="contained"

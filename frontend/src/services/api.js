@@ -221,6 +221,14 @@ export const reportsAPI = {
   getAnnualPropertyStatement: (propertyId, year, format = 'pdf') => api.get(`/reports/property/${propertyId}/annual-statement/${year}`, { params: { format }, responseType: 'blob' }),
   getAllPaymentsReport: () => api.get('/reports/all-payments', { params: { format: 'excel' }, responseType: 'blob' }),
   getExpensesReport: (format = 'excel') => api.get('/reports/expenses', { params: { format }, responseType: 'blob' }),
+  getFilteredFeesReport: (filters = {}) => {
+    const params = {};
+    if (filters.year) params.year = filters.year;
+    if (filters.month) params.month = filters.month;
+    if (filters.status) params.status = filters.status;
+    if (filters.property) params.property_id = filters.property;
+    return api.get('/reports/filtered-fees', { params, responseType: 'blob' });
+  },
   getPaymentsOverTime: () => api.get('/reports/payments-over-time'),
   getFeesByStatus: () => api.get('/reports/fees-by-status'),
   getPropertiesByVilla: () => api.get('/reports/properties-by-villa'),

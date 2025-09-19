@@ -20,7 +20,8 @@ from ..utils.excel_generator import (
     generate_monthly_payment_summary_excel,
     generate_monthly_fees_excel,
     generate_annual_property_statement_excel,
-    generate_all_payments_excel
+    generate_all_payments_excel,
+    generate_filtered_fees_excel
 )
 
 router = APIRouter()
@@ -504,6 +505,86 @@ async def download_expenses_report(
     extension = "xlsx"
 
     filename = f"reporte_gastos_administrativos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.get("/filtered-fees")
+async def download_filtered_fees_report(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    status: Optional[str] = None,
+    property_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel report of fees based on applied filters"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Build query filters (same as in fees.py)
+    query_filters = {}
+
+    if current_user.role != UserRole.ADMIN:
+        # Owners can only see their own fees
+        query_filters["user.$id"] = PydanticObjectId(current_user.id)
+
+    if year is not None:
+        query_filters["year"] = year
+
+    if month is not None:
+        query_filters["month"] = month
+
+    if status is not None and status.strip():
+        # Support multiple statuses separated by comma
+        status_list = [s.strip() for s in status.split(',')]
+        if len(status_list) == 1:
+            query_filters["status"] = status_list[0]
+        else:
+            query_filters["status"] = {"$in": status_list}
+
+    if property_id is not None and property_id.strip():
+        query_filters["property.$id"] = PydanticObjectId(property_id)
+
+    # Get fees with filters
+    fees = await Fee.find(query_filters).to_list()
+
+    # Fetch property details for each fee
+    for fee in fees:
+        await fee.fetch_link(Fee.property)
+
+    # Sort by period (same as in fees.py)
+    fees_data = [
+        {
+            "property_villa": fee.property.villa,
+            "property_row_letter": fee.property.row_letter,
+            "property_number": fee.property.number,
+            "property_owner_name": fee.property.owner_name,
+            "amount": fee.amount,
+            "paid_amount": fee.paid_amount,
+            "remaining_amount": fee.amount - fee.paid_amount,
+            "year": fee.year,
+            "month": fee.month,
+            "due_date": fee.due_date,
+            "status": fee.status,
+            "notes": fee.notes
+        }
+        for fee in fees if fee.property
+    ]
+
+    # Sort by year desc, month desc, property
+    fees_data.sort(key=lambda x: (-x['year'], -x['month'], x['property_villa'], x['property_row_letter'], x['property_number']))
+
+    # Generate Excel report
+    buffer = generate_filtered_fees_excel(fees_data)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"cuotas_filtradas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,

@@ -521,6 +521,94 @@ def generate_monthly_fees_excel(fees_data, start_year, start_month, end_year, en
     return buffer
 
 
+def generate_filtered_fees_excel(fees_data):
+    """
+    Generate an Excel report of fees based on applied filters
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Cuotas Filtradas"
+
+    # Title
+    ws['A1'] = "PAGO VECINAL - Reporte de Cuotas Filtradas"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:J1')
+
+    if fees_data:
+        headers = ["Propiedad", "Propietario", "Monto Total", "Monto Pagado", "Monto Pendiente", "Año", "Mes", "Fecha Vencimiento", "Estado", "Notas"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+        for row, fee in enumerate(fees_data, 4):
+            property_str = f"{fee['property_villa']} - {fee['property_row_letter']}{fee['property_number']}"
+            ws.cell(row=row, column=1).value = property_str
+            ws.cell(row=row, column=2).value = fee['property_owner_name']
+            ws.cell(row=row, column=3).value = float(fee['amount'])
+            ws.cell(row=row, column=3).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=4).value = float(fee.get('paid_amount', 0))
+            ws.cell(row=row, column=4).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=5).value = float(fee.get('remaining_amount', fee['amount']))
+            ws.cell(row=row, column=5).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=6).value = fee['year']
+            ws.cell(row=row, column=7).value = fee['month']
+            ws.cell(row=row, column=8).value = fee['due_date'].strftime("%d/%m/%Y")
+            ws.cell(row=row, column=9).value = fee['status']
+            ws.cell(row=row, column=10).value = fee.get('notes', '')
+
+        # Summary section
+        summary_row = len(fees_data) + 6
+        ws[f'A{summary_row}'] = "Resumen del Reporte"
+        ws[f'A{summary_row}'].font = Font(size=12, bold=True)
+        ws.merge_cells(f'A{summary_row}:J{summary_row}')
+
+        # Calculate totals
+        total_amount = sum(f['amount'] for f in fees_data)
+        total_paid = sum(f.get('paid_amount', 0) for f in fees_data)
+        total_remaining = sum(f.get('remaining_amount', f['amount']) for f in fees_data)
+
+        current_row = summary_row + 2
+        ws[f'A{current_row}'] = "Total Cuotas:"
+        ws[f'A{current_row}'].font = Font(bold=True)
+        ws[f'B{current_row}'] = len(fees_data)
+        ws[f'B{current_row}'].font = Font(bold=True)
+
+        ws[f'A{current_row+1}'] = "Monto Total:"
+        ws[f'A{current_row+1}'].font = Font(bold=True)
+        ws[f'B{current_row+1}'] = float(total_amount)
+        ws[f'B{current_row+1}'].number_format = '"S/ "#,##0.00'
+        ws[f'B{current_row+1}'].font = Font(bold=True)
+
+        ws[f'A{current_row+2}'] = "Total Pagado:"
+        ws[f'A{current_row+2}'].font = Font(bold=True)
+        ws[f'B{current_row+2}'] = float(total_paid)
+        ws[f'B{current_row+2}'].number_format = '"S/ "#,##0.00'
+        ws[f'B{current_row+2}'].font = Font(bold=True)
+
+        ws[f'A{current_row+3}'] = "Total Pendiente:"
+        ws[f'A{current_row+3}'].font = Font(bold=True)
+        ws[f'B{current_row+3}'] = float(total_remaining)
+        ws[f'B{current_row+3}'].number_format = '"S/ "#,##0.00'
+        ws[f'B{current_row+3}'].font = Font(bold=True)
+    else:
+        ws['A3'] = "No hay cuotas que coincidan con los filtros aplicados."
+
+    # Footer
+    footer_row = len(fees_data) + 12 if fees_data else 5
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    for col in range(1, 11):
+        ws.column_dimensions[get_column_letter(col)].width = 18
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
 def generate_annual_property_statement_excel(property_data, year, fees_data, payments_data):
     """
     Generate an annual Excel statement for a property
