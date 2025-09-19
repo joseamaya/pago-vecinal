@@ -34,7 +34,6 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { expensesAPI } from '../services/api';
 import LoadingSkeleton from './common/LoadingSkeleton';
-import LoadingSpinner from './common/LoadingSpinner';
 
 const EXPENSE_TYPES = {
   maintenance: 'Mantenimiento',

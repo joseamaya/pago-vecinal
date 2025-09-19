@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -77,13 +77,7 @@ const PaymentManagement = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize] = useState(20);
 
-  useEffect(() => {
-    fetchPayments();
-    fetchFees();
-    fetchProperties();
-  }, []);
-
-  const fetchPayments = async (page = 1, filters = {}) => {
+  const fetchPayments = useCallback(async (page = 1, filters = {}) => {
     try {
       setLoading(true);
       const response = await paymentsAPI.getPayments(page, pageSize, filters);
@@ -100,7 +94,13 @@ const PaymentManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageSize]);
+
+  useEffect(() => {
+    fetchPayments();
+    fetchFees();
+    fetchProperties();
+  }, [fetchPayments]);
 
   const fetchFees = async () => {
     try {

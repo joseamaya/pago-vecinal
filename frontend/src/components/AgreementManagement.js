@@ -41,7 +41,6 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { agreementsAPI, propertiesAPI, feesAPI } from '../services/api';
 import LoadingSpinner from './common/LoadingSpinner';
-import LoadingSkeleton from './common/LoadingSkeleton';
 
 const AgreementManagement = () => {
   const { isAdmin } = useAuth();

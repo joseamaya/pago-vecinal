@@ -68,9 +68,10 @@ const ReceiptManagement = () => {
   const fetchPayments = async () => {
     try {
       const response = await paymentsAPI.getPayments();
-      setPayments(response.data);
+      setPayments(response.data.data || []);
     } catch (err) {
       console.error('Error fetching payments:', err);
+      setPayments([]);
     }
   };
 
