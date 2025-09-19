@@ -55,3 +55,5 @@ class PaymentResponse(BaseModel):
     property_number: Optional[int] = None
     fee_month: Optional[int] = None
     fee_year: Optional[int] = None
+    receipt_correlative_number: Optional[str] = None
+    receipt_issue_date: Optional[datetime] = None

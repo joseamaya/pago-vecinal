@@ -10,7 +10,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 from ..models.payment import Payment, PaymentCreate, PaymentUpdate, PaymentResponse, PaymentStatus
 from ..models.fee import Fee, FeeStatus
 from ..models.user import User, UserRole
-from ..models.receipt import Receipt
+from ..models.receipt import Receipt, ReceiptResponse
 from ..models.property import Property
 from ..routes.auth import get_current_user
 
@@ -108,27 +108,38 @@ async def get_payments(
         if payment.fee:
             await payment.fee.fetch_link('property')
 
+        # Fetch associated receipt if exists
+        receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+        receipt_correlative = receipt.correlative_number if receipt else None
+
     # Calculate total pages
     total_pages = (total_count + limit - 1) // limit
 
-    payment_responses = [
-        PaymentResponse(
-            id=str(payment.id),
-            fee_id=payment.fee_id,
-            user_id=str(payment.user.id),
-            amount=payment.amount,
-            payment_date=payment.payment_date,
-            receipt_file=payment.receipt_file,
-            generated_receipt_file=payment.generated_receipt_file,
-            status=payment.status,
-            notes=payment.notes,
-            property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
-            property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
-            fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
-            fee_year=getattr(payment.fee, 'year', None) if payment.fee else None
+    payment_responses = []
+    for payment in payments:
+        # Find associated receipt
+        receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+        receipt_correlative = receipt.correlative_number if receipt else None
+
+        payment_responses.append(
+            PaymentResponse(
+                id=str(payment.id),
+                fee_id=payment.fee_id,
+                user_id=str(payment.user.id),
+                amount=payment.amount,
+                payment_date=payment.payment_date,
+                receipt_file=payment.receipt_file,
+                generated_receipt_file=payment.generated_receipt_file,
+                status=payment.status,
+                notes=payment.notes,
+                property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
+                property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
+                fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
+                fee_year=getattr(payment.fee, 'year', None) if payment.fee else None,
+                receipt_correlative_number=receipt_correlative,
+                receipt_issue_date=receipt.issue_date
+            )
         )
-        for payment in payments
-    ]
 
     return PaginatedPaymentResponse(
         data=payment_responses,
@@ -156,6 +167,10 @@ async def get_payment(payment_id: str, current_user: User = Depends(get_current_
     if payment.fee:
         await payment.fee.fetch_link('property')
 
+    # Fetch associated receipt if exists
+    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    receipt_correlative = receipt.correlative_number if receipt else None
+
     # Check permissions
     if (current_user.role != UserRole.ADMIN and
         str(payment.user.id) != str(current_user.id)):
@@ -177,7 +192,9 @@ async def get_payment(payment_id: str, current_user: User = Depends(get_current_
         property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
         property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
         fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
-        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None
+        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None,
+        receipt_correlative_number=receipt_correlative,
+        receipt_issue_date=receipt_issue_date
     )
 
 @router.post("/", response_model=PaymentResponse)
@@ -236,6 +253,10 @@ async def create_payment(
     if payment.fee:
         await payment.fee.fetch_link('property')
 
+    # Fetch associated receipt if exists
+    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    receipt_correlative = receipt.correlative_number if receipt else None
+
     return PaymentResponse(
         id=str(payment.id),
         fee_id=payment.fee_id,
@@ -249,7 +270,9 @@ async def create_payment(
         property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
         property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
         fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
-        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None
+        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None,
+        receipt_correlative_number=receipt_correlative,
+        receipt_issue_date=receipt_issue_date
     )
 
 @router.put("/{payment_id}", response_model=PaymentResponse)
@@ -392,6 +415,13 @@ async def update_payment(
     if payment.fee:
         await payment.fee.fetch_link('property')
 
+    # Fetch associated receipt if exists
+    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    receipt_correlative = receipt.correlative_number if receipt else None
+    receipt_issue_date = receipt.issue_date if receipt else None
+    receipt_issue_date = receipt.issue_date if receipt else None
+    receipt_issue_date = receipt.issue_date if receipt else None
+
     response_data = PaymentResponse(
         id=str(payment.id),
         fee_id=payment.fee_id,
@@ -405,7 +435,8 @@ async def update_payment(
         property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
         property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
         fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
-        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None
+        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None,
+        receipt_correlative_number=receipt_correlative
     )
     print(f"Returning response with generated_receipt_file: {response_data.generated_receipt_file}")
     return response_data

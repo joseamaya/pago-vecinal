@@ -53,8 +53,8 @@ const PaymentsModal = ({ open, onClose, fee }) => {
   const handlePrintReceipt = (payment) => {
     // Create receipt data for printing
     const receiptData = {
-      correlative_number: `REC-${new Date().getFullYear()}-${payment.id.slice(-5).toUpperCase()}`,
-      issue_date: new Date(),
+      correlative_number: payment.receipt_correlative_number || `REC-${new Date().getFullYear()}-${payment.id.slice(-5).toUpperCase()}`,
+      issue_date: payment.receipt_issue_date ? new Date(payment.receipt_issue_date) : new Date(),
       payment_date: new Date(payment.payment_date),
       total_amount: payment.amount,
       property_details: {
