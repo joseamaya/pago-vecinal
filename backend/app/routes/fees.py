@@ -1,3 +1,4 @@
+from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -35,7 +36,7 @@ async def get_fees(
 
     if current_user.role != UserRole.ADMIN:
         # Owners can only see their own fees
-        query_filters["user.id"] = current_user.id
+        query_filters["user.$id"] = PydanticObjectId(current_user.id)
 
     if year is not None:
         query_filters["year"] = year
@@ -47,7 +48,7 @@ async def get_fees(
         query_filters["status"] = status
 
     if property_id is not None:
-        query_filters["property.id"] = property_id
+        query_filters["property.$id"] = PydanticObjectId(property_id)
 
     # Get total count
     if query_filters:
