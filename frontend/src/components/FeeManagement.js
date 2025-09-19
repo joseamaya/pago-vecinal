@@ -53,7 +53,6 @@ const FeeManagement = () => {
     property_id: '',
     fee_schedule_id: '',
     due_date: '',
-    reference: '',
     notes: '',
   });
   const [generateFormData, setGenerateFormData] = useState({
@@ -128,7 +127,6 @@ const FeeManagement = () => {
         property_id: fee.property_id,
         fee_schedule_id: fee.fee_schedule_id,
         due_date: new Date(fee.due_date).toISOString().split('T')[0],
-        reference: fee.reference || '',
         notes: fee.notes || '',
       });
     } else {
@@ -151,7 +149,6 @@ const FeeManagement = () => {
       property_id: '',
       fee_schedule_id: '',
       due_date: '',
-      reference: '',
       notes: '',
     });
   };
@@ -226,6 +223,8 @@ const FeeManagement = () => {
         return 'success';
       case 'pending':
         return 'warning';
+      case 'partially_paid':
+        return 'info';
       case 'failed':
         return 'error';
       case 'cancelled':
@@ -243,6 +242,8 @@ const FeeManagement = () => {
         return 'Completado';
       case 'pending':
         return 'Pendiente';
+      case 'partially_paid':
+        return 'Pago Parcial';
       case 'failed':
         return 'Fallido';
       case 'cancelled':
@@ -398,6 +399,7 @@ const FeeManagement = () => {
                   <em>Todos</em>
                 </MenuItem>
                 <MenuItem value="pending">Pendiente</MenuItem>
+                <MenuItem value="partially_paid">Pago Parcial</MenuItem>
                 <MenuItem value="completed">Completado</MenuItem>
                 <MenuItem value="failed">Fallido</MenuItem>
                 <MenuItem value="cancelled">Cancelado</MenuItem>
@@ -438,21 +440,22 @@ const FeeManagement = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Propiedad</TableCell>
-                <TableCell>Monto</TableCell>
+                <TableCell>Monto Total</TableCell>
+                <TableCell>Monto Pagado</TableCell>
+                <TableCell>Monto Pendiente</TableCell>
                 <TableCell>Año</TableCell>
                 <TableCell>Mes</TableCell>
                 <TableCell>Fecha de Vencimiento</TableCell>
                 <TableCell>Estado</TableCell>
-                <TableCell>Referencia</TableCell>
                 <TableCell>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
-                <LoadingSkeleton type="table" rows={5} columns={8} />
+                <LoadingSkeleton type="table" rows={5} columns={9} />
               ) : fees.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     No hay cuotas registradas
                   </TableCell>
                 </TableRow>
@@ -461,6 +464,8 @@ const FeeManagement = () => {
                   <TableRow key={fee.id}>
                     <TableCell>{getPropertyInfo(fee.property_id)}</TableCell>
                     <TableCell>S/ {fee.amount.toFixed(2)}</TableCell>
+                    <TableCell>S/ {(fee.paid_amount || 0).toFixed(2)}</TableCell>
+                    <TableCell>S/ {(fee.remaining_amount || fee.amount).toFixed(2)}</TableCell>
                     <TableCell>{fee.year}</TableCell>
                     <TableCell>{fee.month}</TableCell>
                     <TableCell>
@@ -473,7 +478,6 @@ const FeeManagement = () => {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>{fee.reference || '-'}</TableCell>
                     <TableCell>
                       <IconButton
                         color="primary"
@@ -559,13 +563,6 @@ const FeeManagement = () => {
               InputLabelProps={{
                 shrink: true,
               }}
-            />
-            <TextField
-              margin="dense"
-              label="Referencia"
-              fullWidth
-              value={formData.reference}
-              onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
             />
             <TextField
               margin="dense"
