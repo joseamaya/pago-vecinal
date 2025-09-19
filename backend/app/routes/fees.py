@@ -27,6 +27,7 @@ async def get_fees(
     year: Optional[int] = None,
     month: Optional[int] = None,
     status: Optional[str] = None,
+    property_id: Optional[str] = None,
     sort_by_period: bool = True
 ):
     # Build query filters
@@ -44,6 +45,9 @@ async def get_fees(
 
     if status is not None:
         query_filters["status"] = status
+
+    if property_id is not None:
+        query_filters["property.id"] = property_id
 
     # Get total count
     if query_filters:

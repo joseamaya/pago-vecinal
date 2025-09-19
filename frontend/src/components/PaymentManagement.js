@@ -44,7 +44,6 @@ import LoadingSpinner from './common/LoadingSpinner';
 const PaymentManagement = () => {
   const { isAdmin } = useAuth();
   const [payments, setPayments] = useState([]);
-  const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -98,20 +97,9 @@ const PaymentManagement = () => {
 
   useEffect(() => {
     fetchPayments();
-    fetchFees();
     fetchProperties();
   }, [fetchPayments]);
 
-  const fetchFees = async () => {
-    try {
-      const response = await feesAPI.getFees();
-      // Filter out fees that are under agreement
-      const availableFees = response.data.filter(fee => fee.status !== 'agreement');
-      setFees(availableFees);
-    } catch (err) {
-      console.error('Error fetching fees:', err);
-    }
-  };
 
   const fetchProperties = async () => {
     try {
@@ -385,28 +373,43 @@ const PaymentManagement = () => {
     }
   };
 
-  const handleHouseChange = (houseId) => {
+  const handleHouseChange = async (houseId) => {
     setSelectedHouse(houseId);
     if (houseId) {
-      // Find the oldest pending fee for this property
-      const propertyFees = fees.filter(fee => fee.property_id === houseId && fee.status === 'pending');
-      if (propertyFees.length > 0) {
-        // Sort by due_date ascending (oldest first)
-        propertyFees.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-        const oldestFee = propertyFees[0];
-        setFormData({
-          ...formData,
-          fee_id: oldestFee.id,
-          amount: oldestFee.amount.toString(),
-        });
-        setSelectedFeeInfo({
-          ownerName: oldestFee.property_owner_name,
-          month: oldestFee.month,
-          year: oldestFee.year,
-          dueDate: oldestFee.due_date,
-        });
-      } else {
-        // No pending fees
+      try {
+        // Get pending fees for this specific property
+        const response = await feesAPI.getFees({
+          property_id: houseId,
+          status: 'pending'
+        }, 1, 100); // Get up to 100 pending fees, sorted by period
+
+        const propertyFees = response.data.data;
+        if (propertyFees.length > 0) {
+          // Sort by due_date ascending (oldest first)
+          propertyFees.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+          const oldestFee = propertyFees[0];
+          setFormData({
+            ...formData,
+            fee_id: oldestFee.id,
+            amount: oldestFee.amount.toString(),
+          });
+          setSelectedFeeInfo({
+            ownerName: oldestFee.property_owner_name,
+            month: oldestFee.month,
+            year: oldestFee.year,
+            dueDate: oldestFee.due_date,
+          });
+        } else {
+          // No pending fees
+          setFormData({
+            ...formData,
+            fee_id: '',
+            amount: '',
+          });
+          setSelectedFeeInfo(null);
+        }
+      } catch (err) {
+        console.error('Error fetching pending fees for property:', err);
         setFormData({
           ...formData,
           fee_id: '',
@@ -503,13 +506,6 @@ const PaymentManagement = () => {
     }
   };
 
-  const getFeeInfo = (feeId) => {
-    const fee = fees.find(f => f.id === feeId);
-    if (!fee) return 'N/A';
-    const property = `${fee.property_row_letter}${fee.property_number}`;
-    const period = `${fee.month}/${fee.year}`;
-    return `${property} - S/ ${fee.amount.toFixed(2)} - ${period}`;
-  };
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -696,7 +692,11 @@ const PaymentManagement = () => {
                         />
                       )}
                     </TableCell>
-                    <TableCell>{getFeeInfo(payment.fee_id)}</TableCell>
+                    <TableCell>
+                      {payment.property_row_letter && payment.property_number && payment.fee_month && payment.fee_year
+                        ? `${payment.property_row_letter}${payment.property_number} - ${payment.fee_month}/${payment.fee_year}`
+                        : 'N/A'}
+                    </TableCell>
                     <TableCell>S/ {payment.amount.toFixed(2)}</TableCell>
                     <TableCell>
                       {new Date(payment.payment_date).toLocaleDateString('es-ES')}

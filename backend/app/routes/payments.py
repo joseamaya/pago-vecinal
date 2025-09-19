@@ -78,6 +78,9 @@ async def get_payments(
     for payment in payments:
         await payment.fetch_link(Payment.fee)
         await payment.fetch_link(Payment.user)
+        # Fetch property from fee
+        if payment.fee:
+            await payment.fee.fetch_link('property')
 
     # Calculate total pages
     total_pages = (total_count + limit - 1) // limit
@@ -92,7 +95,11 @@ async def get_payments(
             receipt_file=payment.receipt_file,
             generated_receipt_file=payment.generated_receipt_file,
             status=payment.status,
-            notes=payment.notes
+            notes=payment.notes,
+            property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
+            property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
+            fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
+            fee_year=getattr(payment.fee, 'year', None) if payment.fee else None
         )
         for payment in payments
     ]
@@ -119,6 +126,9 @@ async def get_payment(payment_id: str, current_user: User = Depends(get_current_
     # Fetch linked documents
     await payment.fetch_link(Payment.fee)
     await payment.fetch_link(Payment.user)
+    # Fetch property from fee
+    if payment.fee:
+        await payment.fee.fetch_link('property')
 
     # Check permissions
     if (current_user.role != UserRole.ADMIN and
@@ -137,7 +147,11 @@ async def get_payment(payment_id: str, current_user: User = Depends(get_current_
         receipt_file=payment.receipt_file,
         generated_receipt_file=payment.generated_receipt_file,
         status=payment.status,
-        notes=payment.notes
+        notes=payment.notes,
+        property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
+        property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
+        fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
+        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None
     )
 
 @router.post("/", response_model=PaymentResponse)
@@ -192,6 +206,9 @@ async def create_payment(
     # Fetch linked documents for the response
     await payment.fetch_link(Payment.fee)
     await payment.fetch_link(Payment.user)
+    # Fetch property from fee
+    if payment.fee:
+        await payment.fee.fetch_link('property')
 
     return PaymentResponse(
         id=str(payment.id),
@@ -202,7 +219,11 @@ async def create_payment(
         receipt_file=payment.receipt_file,
         generated_receipt_file=payment.generated_receipt_file,
         status=payment.status,
-        notes=payment.notes
+        notes=payment.notes,
+        property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
+        property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
+        fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
+        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None
     )
 
 @router.put("/{payment_id}", response_model=PaymentResponse)
@@ -342,6 +363,9 @@ async def update_payment(
     # Fetch links again after save
     await payment.fetch_link(Payment.fee)
     await payment.fetch_link(Payment.user)
+    # Fetch property from fee
+    if payment.fee:
+        await payment.fee.fetch_link('property')
 
     response_data = PaymentResponse(
         id=str(payment.id),
@@ -352,7 +376,11 @@ async def update_payment(
         receipt_file=payment.receipt_file,
         generated_receipt_file=payment.generated_receipt_file,
         status=payment.status,
-        notes=payment.notes
+        notes=payment.notes,
+        property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
+        property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
+        fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
+        fee_year=getattr(payment.fee, 'year', None) if payment.fee else None
     )
     print(f"Returning response with generated_receipt_file: {response_data.generated_receipt_file}")
     return response_data

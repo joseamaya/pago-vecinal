@@ -51,3 +51,7 @@ class PaymentResponse(BaseModel):
     generated_receipt_file: Optional[str] = None
     status: PaymentStatus
     notes: Optional[str] = None
+    property_row_letter: Optional[str] = None
+    property_number: Optional[int] = None
+    fee_month: Optional[int] = None
+    fee_year: Optional[int] = None

@@ -158,6 +158,7 @@ export const feesAPI = {
     if (filters.year !== undefined) params.year = filters.year;
     if (filters.month !== undefined) params.month = filters.month;
     if (filters.status !== undefined) params.status = filters.status;
+    if (filters.property_id !== undefined) params.property_id = filters.property_id;
     if (filters.sort_by_period !== undefined) params.sort_by_period = filters.sort_by_period;
     return api.get('/fees/', { params });
   },
