@@ -14,6 +14,27 @@ from ..models.receipt import Receipt
 from ..models.property import Property
 from ..routes.auth import get_current_user
 
+async def update_fee_status_based_on_payments(fee: Fee):
+    """Update fee status based on total approved payments"""
+    # Get all approved payments for this fee
+    approved_payments = await Payment.find(
+        Payment.fee_id == str(fee.id),
+        Payment.status == PaymentStatus.APPROVED
+    ).to_list()
+
+    # Calculate total approved payment amount
+    total_paid = sum(payment.amount for payment in approved_payments)
+
+    # Update fee status based on total paid
+    if total_paid >= fee.amount:
+        fee.status = FeeStatus.COMPLETED
+    elif total_paid > 0:
+        fee.status = FeeStatus.PARTIALLY_PAID
+    else:
+        fee.status = FeeStatus.PENDING
+
+    await fee.save()
+
 class BulkApproveRequest(BaseModel):
     payment_ids: List[str]
 
@@ -353,10 +374,9 @@ async def update_payment(
 
     await payment.save()
 
-    # Update fee status to completed if payment was approved
+    # Update fee status based on total payments if payment was approved
     if status == "approved" and payment.fee:
-        payment.fee.status = FeeStatus.COMPLETED
-        await payment.fee.save()
+        await update_fee_status_based_on_payments(payment.fee)
 
     print(f"Payment saved with generated_receipt_file: {payment.generated_receipt_file}")
 
@@ -622,9 +642,8 @@ async def bulk_import_payments(
                 )
                 await payment.insert()
 
-                # Update fee status to completed
-                fee.status = FeeStatus.COMPLETED
-                await fee.save()
+                # Update fee status based on total payments
+                await update_fee_status_based_on_payments(fee)
 
                 results["successful_imports"] += 1
 
@@ -691,10 +710,9 @@ async def bulk_approve_payments(
             payment.status = PaymentStatus.APPROVED
             await payment.save()
 
-            # Update fee status to completed
+            # Update fee status based on total payments
             if payment.fee:
-                payment.fee.status = FeeStatus.COMPLETED
-                await payment.fee.save()
+                await update_fee_status_based_on_payments(payment.fee)
 
             # Generate receipt (similar to individual approval)
             try:

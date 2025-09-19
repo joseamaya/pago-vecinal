@@ -47,6 +47,7 @@ class FeeStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     AGREEMENT = "agreement"
+    PARTIALLY_PAID = "partially_paid"
 
 class Fee(Document):
     property: Link[Property]

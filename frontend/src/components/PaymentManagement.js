@@ -69,6 +69,7 @@ const PaymentManagement = () => {
   const [selectedFeeInfo, setSelectedFeeInfo] = useState(null);
   const [pendingFees, setPendingFees] = useState([]);
   const [selectedFeeId, setSelectedFeeId] = useState('');
+  const [selectedFeeAmount, setSelectedFeeAmount] = useState(0);
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -120,6 +121,7 @@ const PaymentManagement = () => {
         amount: payment.amount.toString(),
         notes: payment.notes || '',
       });
+      setSelectedFeeAmount(payment.amount); // For editing, allow any amount
       setReceiptFile(null); // Reset file input
     } else {
       setEditingPayment(null);
@@ -128,6 +130,7 @@ const PaymentManagement = () => {
         amount: '',
         notes: '',
       });
+      setSelectedFeeAmount(0);
       setReceiptFile(null);
     }
     setOpen(true);
@@ -150,10 +153,31 @@ const PaymentManagement = () => {
     setSelectedFeeInfo(null);
     setPendingFees([]);
     setSelectedFeeId('');
+    setSelectedFeeAmount(0);
+  };
+
+  const validateAmount = (amount) => {
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return 'El monto debe ser un número positivo mayor a 0';
+    }
+    // Only validate against fee amount when creating new payment (not editing)
+    if (!editingPayment && numAmount > selectedFeeAmount) {
+      return `El monto no puede exceder el valor de la cuota (S/ ${selectedFeeAmount.toFixed(2)})`;
+    }
+    return null;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate amount
+    const amountError = validateAmount(formData.amount);
+    if (amountError) {
+      setError(amountError);
+      return;
+    }
+
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('fee_id', formData.fee_id);
@@ -443,6 +467,7 @@ const PaymentManagement = () => {
           fee_id: selectedFee.id,
           amount: selectedFee.amount.toString(),
         });
+        setSelectedFeeAmount(selectedFee.amount);
         setSelectedFeeInfo({
           ownerName: selectedFee.property_owner_name,
           month: selectedFee.month,
@@ -456,6 +481,7 @@ const PaymentManagement = () => {
         fee_id: '',
         amount: '',
       });
+      setSelectedFeeAmount(0);
       setSelectedFeeInfo(null);
     }
   };
@@ -509,6 +535,8 @@ const PaymentManagement = () => {
         return 'success';
       case 'pending':
         return 'warning';
+      case 'partially_paid':
+        return 'info';
       case 'rejected':
         return 'error';
       case 'failed':
@@ -528,6 +556,8 @@ const PaymentManagement = () => {
         return 'Completado';
       case 'pending':
         return 'Pendiente';
+      case 'partially_paid':
+        return 'Pago Parcial';
       case 'rejected':
         return 'Rechazado';
       case 'failed':
@@ -655,6 +685,7 @@ const PaymentManagement = () => {
               <MenuItem value="pending">Pendiente</MenuItem>
               <MenuItem value="approved">Aprobado</MenuItem>
               <MenuItem value="completed">Completado</MenuItem>
+              <MenuItem value="partially_paid">Pago Parcial</MenuItem>
               <MenuItem value="rejected">Rechazado</MenuItem>
               <MenuItem value="failed">Fallido</MenuItem>
               <MenuItem value="cancelled">Cancelado</MenuItem>
@@ -943,10 +974,14 @@ const PaymentManagement = () => {
                     label="Monto (S/)"
                     type="number"
                     value={formData.amount}
-                    InputProps={{
-                      readOnly: true,
-                    }}
-                    helperText="💰 Monto auto-completado"
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    inputProps={{ min: 0, step: 0.01 }}
+                    helperText={
+                      editingPayment
+                        ? "💰 Editar monto del pago"
+                        : `💰 Pagos parciales permitidos (máx. S/ ${selectedFeeAmount.toFixed(2)})`
+                    }
+                    required
                   />
                 </Box>
               </>
