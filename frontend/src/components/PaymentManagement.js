@@ -67,6 +67,8 @@ const PaymentManagement = () => {
   const [availableRows, setAvailableRows] = useState([]);
   const [availableHouses, setAvailableHouses] = useState([]);
   const [selectedFeeInfo, setSelectedFeeInfo] = useState(null);
+  const [pendingFees, setPendingFees] = useState([]);
+  const [selectedFeeId, setSelectedFeeId] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -146,6 +148,8 @@ const PaymentManagement = () => {
     setAvailableRows([]);
     setAvailableHouses([]);
     setSelectedFeeInfo(null);
+    setPendingFees([]);
+    setSelectedFeeId('');
   };
 
   const handleSubmit = async (e) => {
@@ -387,20 +391,18 @@ const PaymentManagement = () => {
         if (propertyFees.length > 0) {
           // Sort by due_date ascending (oldest first)
           propertyFees.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-          const oldestFee = propertyFees[0];
+          setPendingFees(propertyFees);
+          setSelectedFeeId('');
           setFormData({
             ...formData,
-            fee_id: oldestFee.id,
-            amount: oldestFee.amount.toString(),
+            fee_id: '',
+            amount: '',
           });
-          setSelectedFeeInfo({
-            ownerName: oldestFee.property_owner_name,
-            month: oldestFee.month,
-            year: oldestFee.year,
-            dueDate: oldestFee.due_date,
-          });
+          setSelectedFeeInfo(null);
         } else {
           // No pending fees
+          setPendingFees([]);
+          setSelectedFeeId('');
           setFormData({
             ...formData,
             fee_id: '',
@@ -410,12 +412,43 @@ const PaymentManagement = () => {
         }
       } catch (err) {
         console.error('Error fetching pending fees for property:', err);
+        setPendingFees([]);
+        setSelectedFeeId('');
         setFormData({
           ...formData,
           fee_id: '',
           amount: '',
         });
         setSelectedFeeInfo(null);
+      }
+    } else {
+      setPendingFees([]);
+      setSelectedFeeId('');
+      setFormData({
+        ...formData,
+        fee_id: '',
+        amount: '',
+      });
+      setSelectedFeeInfo(null);
+    }
+  };
+
+  const handleFeeChange = (feeId) => {
+    setSelectedFeeId(feeId);
+    if (feeId) {
+      const selectedFee = pendingFees.find(fee => fee.id === feeId);
+      if (selectedFee) {
+        setFormData({
+          ...formData,
+          fee_id: selectedFee.id,
+          amount: selectedFee.amount.toString(),
+        });
+        setSelectedFeeInfo({
+          ownerName: selectedFee.property_owner_name,
+          month: selectedFee.month,
+          year: selectedFee.year,
+          dueDate: selectedFee.due_date,
+        });
       }
     } else {
       setFormData({
@@ -849,6 +882,33 @@ const PaymentManagement = () => {
                 </Select>
               </FormControl>
             </Box>
+
+            {pendingFees.length > 0 && (
+              <FormControl sx={{ mt: 2 }} fullWidth>
+                <InputLabel>Seleccionar Cuota Pendiente</InputLabel>
+                <Select
+                  value={selectedFeeId}
+                  onChange={(e) => handleFeeChange(e.target.value)}
+                  label="Seleccionar Cuota Pendiente"
+                  required
+                >
+                  <MenuItem value="">
+                    <em>Seleccionar Cuota</em>
+                  </MenuItem>
+                  {pendingFees.map((fee) => (
+                    <MenuItem key={fee.id} value={fee.id}>
+                      {`Cuota ${fee.month}/${fee.year} - S/ ${fee.amount.toFixed(2)} - Vence: ${new Date(fee.due_date).toLocaleDateString('es-ES')}`}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            {pendingFees.length === 0 && selectedHouse && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                No hay cuotas pendientes para esta propiedad.
+              </Alert>
+            )}
 
             {selectedFeeInfo && (
               <>
