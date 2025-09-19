@@ -52,6 +52,7 @@ async def get_payments(
     year: Optional[int] = None,
     month: Optional[int] = None,
     status: Optional[str] = None,
+    fee_id: Optional[str] = None,
     current_user: User = Depends(get_current_user)
 ):
     # Build query filters
@@ -80,6 +81,9 @@ async def get_payments(
 
     if status is not None:
         query_filters["status"] = status
+
+    if fee_id is not None:
+        query_filters["fee_id"] = fee_id
 
     # Get total count
     if query_filters:

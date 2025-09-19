@@ -35,10 +35,12 @@ import {
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
   GetApp as DownloadIcon,
+  Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { feesAPI, propertiesAPI, feeSchedulesAPI, reportsAPI } from '../services/api';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import PaymentsModal from './PaymentsModal';
 
 const FeeManagement = () => {
   const { isAdmin } = useAuth();
@@ -71,6 +73,8 @@ const FeeManagement = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize] = useState(20);
+  const [paymentsModalOpen, setPaymentsModalOpen] = useState(false);
+  const [selectedFeeForPayments, setSelectedFeeForPayments] = useState(null);
 
   const fetchFees = useCallback(async (page = 1) => {
     try {
@@ -339,6 +343,16 @@ const FeeManagement = () => {
     }
   };
 
+  const handleViewPayments = (fee) => {
+    setSelectedFeeForPayments(fee);
+    setPaymentsModalOpen(true);
+  };
+
+  const handleClosePaymentsModal = () => {
+    setPaymentsModalOpen(false);
+    setSelectedFeeForPayments(null);
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -528,6 +542,15 @@ const FeeManagement = () => {
                       />
                     </TableCell>
                     <TableCell>
+                      {(fee.status === 'completed' || fee.status === 'partially_paid') && (
+                        <IconButton
+                          color="info"
+                          onClick={() => handleViewPayments(fee)}
+                          title="Ver Pagos"
+                        >
+                          <ViewIcon />
+                        </IconButton>
+                      )}
                       <IconButton
                         color="primary"
                         onClick={() => handleOpenDialog(fee)}
@@ -701,6 +724,13 @@ const FeeManagement = () => {
           </DialogActions>
         </form>
       </Dialog>
+
+      {/* Payments Modal */}
+      <PaymentsModal
+        open={paymentsModalOpen}
+        onClose={handleClosePaymentsModal}
+        fee={selectedFeeForPayments}
+      />
     </Container>
   );
 };

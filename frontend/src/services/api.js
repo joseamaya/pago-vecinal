@@ -74,6 +74,7 @@ export const paymentsAPI = {
     if (filters.year !== undefined) params.year = filters.year;
     if (filters.month !== undefined) params.month = filters.month;
     if (filters.status !== undefined) params.status = filters.status;
+    if (filters.fee_id !== undefined) params.fee_id = filters.fee_id;
     return api.get('/payments/', { params });
   },
   getPayment: (id) => api.get(`/payments/${id}`),
@@ -98,6 +99,7 @@ export const paymentsAPI = {
     });
   },
   bulkApprovePayments: (paymentIds) => api.post('/payments/bulk-approve', { payment_ids: paymentIds }),
+  downloadGeneratedReceipt: (id) => api.get(`/payments/${id}/download-receipt`, { responseType: 'blob' }),
 };
 
 // Miscellaneous Payments API
