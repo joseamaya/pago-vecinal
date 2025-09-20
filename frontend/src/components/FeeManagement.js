@@ -40,6 +40,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { feesAPI, propertiesAPI, feeSchedulesAPI, reportsAPI } from '../services/api';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import LoadingSpinner from './common/LoadingSpinner';
 import PaymentsModal from './PaymentsModal';
 
 const FeeManagement = () => {
@@ -75,6 +76,7 @@ const FeeManagement = () => {
   const [pageSize] = useState(20);
   const [paymentsModalOpen, setPaymentsModalOpen] = useState(false);
   const [selectedFeeForPayments, setSelectedFeeForPayments] = useState(null);
+  const [generatingFees, setGeneratingFees] = useState(false);
 
   const fetchFees = useCallback(async (page = 1) => {
     try {
@@ -199,6 +201,7 @@ const FeeManagement = () => {
 
   const handleGenerateSubmit = async (e) => {
     e.preventDefault();
+    setGeneratingFees(true);
     try {
       const response = await feesAPI.generateFees(
         true,
@@ -212,6 +215,8 @@ const FeeManagement = () => {
     } catch (err) {
       setError('Error al generar cuotas');
       console.error('Error generating fees:', err);
+    } finally {
+      setGeneratingFees(false);
     }
   };
 
@@ -671,6 +676,7 @@ const FeeManagement = () => {
               type="number"
               fullWidth
               required
+              disabled={generatingFees}
               value={generateFormData.year}
               onChange={(e) => setGenerateFormData({ ...generateFormData, year: parseInt(e.target.value) })}
               inputProps={{ min: 2020, max: 2030 }}
@@ -679,6 +685,7 @@ const FeeManagement = () => {
               <InputLabel>Meses</InputLabel>
               <Select
                 multiple
+                disabled={generatingFees}
                 value={generateFormData.months}
                 onChange={handleMonthsChange}
                 input={<OutlinedInput label="Meses" />}
@@ -696,6 +703,7 @@ const FeeManagement = () => {
               <InputLabel>Planes de Cuotas</InputLabel>
               <Select
                 multiple
+                disabled={generatingFees}
                 value={generateFormData.feeScheduleIds}
                 onChange={handleFeeSchedulesChange}
                 input={<OutlinedInput label="Planes de Cuotas" />}
@@ -717,9 +725,16 @@ const FeeManagement = () => {
             </Typography>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleGenerateClose}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              Generar Cuotas
+            <Button onClick={handleGenerateClose} disabled={generatingFees}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={generatingFees}
+              startIcon={generatingFees ? <LoadingSpinner size={20} /> : null}
+            >
+              {generatingFees ? 'Generando...' : 'Generar Cuotas'}
             </Button>
           </DialogActions>
         </form>
