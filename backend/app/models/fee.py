@@ -12,7 +12,7 @@ class FeeSchedule(Document):
     effective_date: datetime
     end_date: Optional[datetime] = None
     is_active: bool = True
-    generation_day: int = 1  # Day of month to generate fees (1-31)
+    due_day: int = 1  # Day of month when fees are due (1-31)
 
     class Settings:
         name = "fee_schedules"
@@ -22,7 +22,7 @@ class FeeScheduleCreate(BaseModel):
     description: str
     effective_date: datetime
     end_date: Optional[datetime] = None
-    generation_day: int = 1
+    due_day: int = 1
 
 class FeeScheduleUpdate(BaseModel):
     amount: Optional[float] = None
@@ -30,7 +30,7 @@ class FeeScheduleUpdate(BaseModel):
     effective_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     is_active: Optional[bool] = None
-    generation_day: Optional[int] = None
+    due_day: Optional[int] = None
 
 class FeeScheduleResponse(BaseModel):
     id: str
@@ -39,7 +39,7 @@ class FeeScheduleResponse(BaseModel):
     effective_date: datetime
     end_date: Optional[datetime] = None
     is_active: bool
-    generation_day: int
+    due_day: int
 
 class FeeStatus(str, Enum):
     PENDING = "pending"

@@ -399,11 +399,11 @@ async def generate_fees(request: GenerateFeesRequest, current_user: User = Depen
             # Manual generation: all active schedules
             fee_schedules = await FeeSchedule.find({"is_active": True}).to_list()
         else:
-            # Automatic generation: only schedules with generation_day matching today
+            # Automatic generation: only schedules with due_day matching today
             current_day = now.day
             fee_schedules = await FeeSchedule.find({
                 "is_active": True,
-                "generation_day": current_day
+                "due_day": current_day
             }).to_list()
 
     generated_count = 0
@@ -423,8 +423,8 @@ async def generate_fees(request: GenerateFeesRequest, current_user: User = Depen
                 )
 
                 if not existing_fee:
-                    # Calculate due date: generation_day + 15 days (or end of month if generation_day + 15 > 31)
-                    due_day = min(fee_schedule.generation_day + 15, 31)
+                    # Calculate due date: use the due_day from fee schedule
+                    due_day = fee_schedule.due_day
                     try:
                         due_date = datetime(current_year, current_month, due_day)
                     except ValueError:
@@ -433,7 +433,7 @@ async def generate_fees(request: GenerateFeesRequest, current_user: User = Depen
 
                     # For past/future months, set generated_date to the specified month/year
                     if request.year or request.months:
-                        generated_date = datetime(current_year, current_month, fee_schedule.generation_day)
+                        generated_date = datetime(current_year, current_month, 1)  # Use first day of month
                     else:
                         generated_date = now
 

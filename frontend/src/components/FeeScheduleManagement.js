@@ -40,7 +40,7 @@ const FeeScheduleManagement = () => {
     description: '',
     effective_date: '',
     end_date: '',
-    generation_day: '',
+    due_day: '',
   });
 
   useEffect(() => {
@@ -69,7 +69,7 @@ const FeeScheduleManagement = () => {
         description: schedule.description,
         effective_date: new Date(schedule.effective_date).toISOString().split('T')[0],
         end_date: schedule.end_date ? new Date(schedule.end_date).toISOString().split('T')[0] : '',
-        generation_day: schedule.generation_day.toString(),
+        due_day: schedule.due_day.toString(),
       });
     } else {
       setEditingSchedule(null);
@@ -92,7 +92,7 @@ const FeeScheduleManagement = () => {
       description: '',
       effective_date: '',
       end_date: '',
-      generation_day: '1',
+      due_day: '1',
     });
   };
 
@@ -102,7 +102,7 @@ const FeeScheduleManagement = () => {
       const submitData = {
         ...formData,
         amount: parseFloat(formData.amount),
-        generation_day: parseInt(formData.generation_day),
+        due_day: parseInt(formData.due_day),
         effective_date: new Date(formData.effective_date).toISOString(),
         end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null,
       };
@@ -164,7 +164,7 @@ const FeeScheduleManagement = () => {
                 <TableCell>Monto</TableCell>
                 <TableCell>Fecha Efectiva</TableCell>
                 <TableCell>Fecha Fin</TableCell>
-                <TableCell>Día de Generación</TableCell>
+                <TableCell>Día de Vencimiento</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell>Acciones</TableCell>
               </TableRow>
@@ -193,7 +193,7 @@ const FeeScheduleManagement = () => {
                     <TableCell>
                       {schedule.end_date ? new Date(schedule.end_date).toLocaleDateString('es-ES') : '-'}
                     </TableCell>
-                    <TableCell>{schedule.generation_day}</TableCell>
+                    <TableCell>{schedule.due_day}</TableCell>
                     <TableCell>
                       <Chip
                         label={schedule.is_active ? 'Activo' : 'Inactivo'}
@@ -277,12 +277,12 @@ const FeeScheduleManagement = () => {
             />
             <TextField
               margin="dense"
-              label="Día de Generación (1-31)"
+              label="Día de Vencimiento (1-31)"
               type="number"
               fullWidth
               required
-              value={formData.generation_day}
-              onChange={(e) => setFormData({ ...formData, generation_day: e.target.value })}
+              value={formData.due_day}
+              onChange={(e) => setFormData({ ...formData, due_day: e.target.value })}
               inputProps={{ min: 1, max: 31 }}
             />
           </DialogContent>
