@@ -82,6 +82,7 @@ const PaymentManagement = () => {
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterProperty, setFilterProperty] = useState('');
   const [filteredPayments, setFilteredPayments] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -342,6 +343,7 @@ const PaymentManagement = () => {
     if (filterYear) filters.year = parseInt(filterYear);
     if (filterMonth) filters.month = parseInt(filterMonth);
     if (filterStatus) filters.status = filterStatus;
+    if (filterProperty) filters.property_id = filterProperty;
 
     fetchPayments(1, filters); // Reset to first page when filters change
     setSelectedPayments([]);
@@ -352,6 +354,7 @@ const PaymentManagement = () => {
     setFilterYear('');
     setFilterMonth('');
     setFilterStatus('');
+    setFilterProperty('');
     fetchPayments(1, {}); // Fetch without filters and reset to first page
     setSelectedPayments([]);
     setSelectAll(false);
@@ -901,6 +904,24 @@ const PaymentManagement = () => {
               <MenuItem value="rejected">Rechazado</MenuItem>
               <MenuItem value="failed">Fallido</MenuItem>
               <MenuItem value="cancelled">Cancelado</MenuItem>
+            </Select>
+          </FormControl>
+
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel>Propiedad</InputLabel>
+            <Select
+              value={filterProperty}
+              onChange={(e) => setFilterProperty(e.target.value)}
+              label="Propiedad"
+            >
+              <MenuItem value="">
+                <em>Todas las Propiedades</em>
+              </MenuItem>
+              {properties.map((property) => (
+                <MenuItem key={property.id} value={property.id}>
+                  {property.villa} - {property.row_letter}{property.number} ({property.owner_name})
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
 

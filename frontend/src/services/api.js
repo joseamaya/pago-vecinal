@@ -75,6 +75,7 @@ export const paymentsAPI = {
     if (filters.month !== undefined) params.month = filters.month;
     if (filters.status !== undefined) params.status = filters.status;
     if (filters.fee_id !== undefined) params.fee_id = filters.fee_id;
+    if (filters.property_id !== undefined) params.property_id = filters.property_id;
     return api.get('/payments/', { params });
   },
   getPayment: (id) => api.get(`/payments/${id}`),
