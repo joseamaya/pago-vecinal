@@ -695,6 +695,69 @@ async def bulk_import_payments(
                 )
                 await payment.insert()
 
+                # Auto-approve the payment and generate receipt
+                try:
+                    # Set payment status to approved
+                    payment.status = PaymentStatus.APPROVED
+                    await payment.save()
+
+                    # Fetch property and fee_schedule from fee if not already fetched
+                    if payment.fee:
+                        await payment.fee.fetch_link('property')
+                        await payment.fee.fetch_link('fee_schedule')
+
+                    # Generate correlative number - fee payments use CUOT
+                    from .receipts import generate_correlative_number
+                    correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
+
+                    # Create property and owner details snapshot
+                    if not payment.fee or not payment.fee.property:
+                        # If no property linked, create default details
+                        property_details = {
+                            "villa": "N/A",
+                            "row_letter": "N/A",
+                            "number": 0,
+                            "owner_name": "Propietario no registrado",
+                            "owner_phone": "N/A"
+                        }
+                        owner_details = {
+                            "name": "Propietario no registrado",
+                            "phone": "N/A"
+                        }
+                    else:
+                        property_details = {
+                            "villa": getattr(payment.fee.property, 'villa', 'N/A'),
+                            "row_letter": getattr(payment.fee.property, 'row_letter', 'N/A'),
+                            "number": getattr(payment.fee.property, 'number', 0),
+                            "owner_name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
+                            "owner_phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
+                        }
+                        owner_details = {
+                            "name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
+                            "phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
+                        }
+
+                    # Create receipt record
+                    receipt = Receipt(
+                        correlative_number=correlative_number,
+                        payment=payment,
+                        issue_date=datetime.utcnow(),
+                        total_amount=payment.amount,
+                        property_details=property_details,
+                        owner_details=owner_details,
+                        fee_period=f"Cuota {payment.fee.reference or 'N/A'}" if payment.fee else "N/A",
+                        notes=f"Recibo generado automáticamente al aprobar el pago (subida masiva)"
+                    )
+
+                    await receipt.insert()
+
+                    print(f"Receipt created in database with ID: {receipt.id} for bulk import payment {payment.id}")
+                except Exception as e:
+                    # Log the error but don't fail the bulk import
+                    print(f"Error creating receipt for bulk import payment {payment.id}: {e}")
+                    import traceback
+                    traceback.print_exc()
+
                 # Update fee status based on total payments
                 await update_fee_status_based_on_payments(fee)
 

@@ -254,6 +254,8 @@ Once the server is running, visit `http://localhost:8000/docs` for interactive S
 - `POST /payments/` - Create payment
 - `PUT /payments/{payment_id}` - Update payment
 - `DELETE /payments/{payment_id}` - Delete payment (Admin only)
+- `POST /payments/bulk-import` - Bulk import payments from Excel (Admin only) - **Automatically approves and generates receipts**
+- `POST /payments/bulk-approve` - Bulk approve multiple payments (Admin only)
 
 ### Receipts
 - `GET /receipts/` - List receipts (filtered by user role)
@@ -314,6 +316,32 @@ curl -X POST "http://localhost:8000/receipts/" \
 curl -X GET "http://localhost:8000/receipts/RECEIPT_ID_HERE/download" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   --output receipt.pdf
+```
+
+### Bulk Import Payments (Excel)
+```bash
+curl -X POST "http://localhost:8000/payments/bulk-import" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@payments.xlsx"
+```
+
+**Excel Format Requirements:**
+- Column headers: Villa, Fila, Número, Año, Mes, Monto, Fecha de Pago, Notas
+- **Important**: Payments are automatically approved and receipts are generated upon successful import
+- Returns JSON with successful_imports, failed_imports, and error details
+
+**Example Response:**
+```json
+{
+  "successful_imports": 5,
+  "failed_imports": 1,
+  "errors": [
+    {
+      "row": 3,
+      "error": "Property not found: Villa Central, B5"
+    }
+  ]
+}
 ```
 
 ## Database Models
