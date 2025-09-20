@@ -13,6 +13,7 @@ from ..models.user import User, UserRole
 from ..models.receipt import Receipt, ReceiptResponse
 from ..models.property import Property
 from ..routes.auth import get_current_user
+from ..config.database import database
 
 async def update_fee_status_based_on_payments(fee: Fee):
     """Update fee status and paid_amount based on total approved payments"""
@@ -90,57 +91,80 @@ async def get_payments(
         # Filter payments by property through the fee relationship
         query_filters["fee.property.id"] = property_id
 
-    # Get total count
-    if query_filters:
-        total_count = await Payment.find(query_filters).count()
-    else:
-        total_count = await Payment.count()
+    # Get motor collection for aggregation
+    payment_collection = database.payments
+
+    # Get total count using aggregation
+    count_pipeline = [{"$match": query_filters}, {"$count": "total"}]
+    count_result = await payment_collection.aggregate(count_pipeline).to_list(length=1)
+    total_count = count_result[0]["total"] if count_result else 0
 
     # Calculate skip
     skip = (page - 1) * limit
 
-    # Get paginated payments, sorted by payment_date descending
-    if query_filters:
-        payments = await Payment.find(query_filters).sort([("payment_date", -1)]).skip(skip).limit(limit).to_list()
-    else:
-        payments = await Payment.find_all().sort([("payment_date", -1)]).skip(skip).limit(limit).to_list()
+    # Aggregation pipeline for paginated results
+    pipeline = [
+        {"$match": query_filters},
+        {"$lookup": {
+            "from": "fees",
+            "localField": "fee.$id",
+            "foreignField": "_id",
+            "as": "fee_data"
+        }},
+        {"$unwind": "$fee_data"},
+        {"$lookup": {
+            "from": "properties",
+            "localField": "fee_data.property.$id",
+            "foreignField": "_id",
+            "as": "property_data"
+        }},
+        {"$unwind": "$property_data"},
+        {"$lookup": {
+            "from": "users",
+            "localField": "user.$id",
+            "foreignField": "_id",
+            "as": "user_data"
+        }},
+        {"$unwind": {"path": "$user_data", "preserveNullAndEmptyArrays": True}},
+        {"$sort": {
+            "fee_data.year": -1,
+            "fee_data.month": -1,
+            "property_data.row_letter": 1,
+            "property_data.number": 1
+        }},
+        {"$skip": skip},
+        {"$limit": limit}
+    ]
 
-    # Fetch links for each payment
-    for payment in payments:
-        await payment.fetch_link(Payment.fee)
-        await payment.fetch_link(Payment.user)
-        # Fetch property from fee
-        if payment.fee:
-            await payment.fee.fetch_link('property')
-
-        # Fetch associated receipt if exists
-        receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
-        receipt_correlative = receipt.correlative_number if receipt else None
+    # Execute aggregation
+    results = await payment_collection.aggregate(pipeline).to_list(length=None)
 
     # Calculate total pages
     total_pages = (total_count + limit - 1) // limit
 
+    # Build payment responses from aggregated data
     payment_responses = []
-    for payment in payments:
+    for result in results:
         # Find associated receipt
-        receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+        receipt = await Receipt.find_one(Receipt.payment.id == result["_id"])
         receipt_correlative = receipt.correlative_number if receipt else None
         receipt_issue_date = receipt.issue_date if receipt else None
+
         payment_responses.append(
             PaymentResponse(
-                id=str(payment.id),
-                fee_id=payment.fee_id,
-                user_id=str(payment.user.id),
-                amount=payment.amount,
-                payment_date=payment.payment_date,
-                receipt_file=payment.receipt_file,
-                generated_receipt_file=payment.generated_receipt_file,
-                status=payment.status,
-                notes=payment.notes,
-                property_row_letter=getattr(payment.fee.property, 'row_letter', None) if payment.fee and payment.fee.property else None,
-                property_number=getattr(payment.fee.property, 'number', None) if payment.fee and payment.fee.property else None,
-                fee_month=getattr(payment.fee, 'month', None) if payment.fee else None,
-                fee_year=getattr(payment.fee, 'year', None) if payment.fee else None,
+                id=str(result["_id"]),
+                fee_id=str(result["fee_data"]["_id"]),
+                user_id=str(result["user_data"]["_id"]) if result.get("user_data") else None,
+                amount=result["amount"],
+                payment_date=result["payment_date"],
+                receipt_file=result.get("receipt_file"),
+                generated_receipt_file=result.get("generated_receipt_file"),
+                status=result["status"],
+                notes=result.get("notes"),
+                property_row_letter=result["property_data"]["row_letter"],
+                property_number=result["property_data"]["number"],
+                fee_month=result["fee_data"]["month"],
+                fee_year=result["fee_data"]["year"],
                 receipt_correlative_number=receipt_correlative,
                 receipt_issue_date=receipt_issue_date
             )
