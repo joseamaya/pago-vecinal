@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -30,13 +30,7 @@ const PaymentsModal = ({ open, onClose, fee }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (open && fee) {
-      fetchPayments();
-    }
-  }, [open, fee]);
-
-  const fetchPayments = async () => {
+  const fetchPayments = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -48,7 +42,13 @@ const PaymentsModal = ({ open, onClose, fee }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fee]);
+
+  useEffect(() => {
+    if (open && fee) {
+      fetchPayments();
+    }
+  }, [open, fee, fetchPayments]);
 
   const handlePrintReceipt = (payment) => {
     // Create receipt data for printing

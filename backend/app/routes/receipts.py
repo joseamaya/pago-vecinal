@@ -11,13 +11,12 @@ from ..config.database import database
 
 router = APIRouter()
 
-async def generate_correlative_number() -> str:
+async def generate_correlative_number(year: int) -> str:
     """Generate a correlative receipt number"""
-    current_year = datetime.utcnow().year
 
     # Find the last receipt for this year
     last_receipt = await Receipt.find(
-        Receipt.correlative_number.startswith(f"REC-{current_year}")
+        Receipt.correlative_number.startswith(f"REC-{year}")
     ).sort([("correlative_number", -1)]).first_or_none()
 
     if last_receipt:
@@ -32,7 +31,7 @@ async def generate_correlative_number() -> str:
         new_number = 1
 
     # Format: REC-YYYY-XXXXX (padded to 5 digits)
-    return f"REC-{current_year}-{new_number:05d}"
+    return f"REC-{year}-{new_number:05d}"
 
 @router.get("/", response_model=List[ReceiptResponse])
 async def get_receipts(current_user: User = Depends(get_current_user)):
@@ -139,7 +138,7 @@ async def create_receipt(
         )
 
     # Generate correlative number
-    correlative_number = await generate_correlative_number()
+    correlative_number = await generate_correlative_number(payment.payment_date.year)
 
     # Create property and owner details snapshot
     property_details = {

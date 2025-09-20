@@ -31,9 +31,9 @@ async def generate_automatic_receipt(payment: Payment) -> str:
         raise Exception("Payment has no associated fee")
 
     # Generate correlative number
-    current_year = datetime.utcnow().year
+    payment_year = payment.payment_date.year
     last_receipt = await Receipt.find(
-        {"correlative_number": {"$regex": f"^REC-{current_year}"}}
+        {"correlative_number": {"$regex": f"^REC-{payment_year}"}}
     ).sort([("correlative_number", -1)]).first_or_none()
 
     if last_receipt:
@@ -46,7 +46,7 @@ async def generate_automatic_receipt(payment: Payment) -> str:
     else:
         new_number = 1
 
-    correlative_number = f"REC-{current_year}-{new_number:05d}"
+    correlative_number = f"REC-{payment_year}-{new_number:05d}"
 
     # Create property and owner details snapshot
     if not payment.fee.property:
