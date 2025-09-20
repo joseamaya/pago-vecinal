@@ -254,23 +254,9 @@ async def update_miscellaneous_payment(
         try:
             print(f"Creating receipt for miscellaneous payment {payment_id}")
 
-            # Generate correlative number
-            current_year = datetime.utcnow().year
-            last_receipt = await Receipt.find(
-                {"correlative_number": {"$regex": f"^REC-{current_year}"}}
-            ).sort([("correlative_number", -1)]).first_or_none()
-
-            if last_receipt:
-                parts = last_receipt.correlative_number.split("-")
-                if len(parts) == 3:
-                    last_number = int(parts[2])
-                    new_number = last_number + 1
-                else:
-                    new_number = 1
-            else:
-                new_number = 1
-
-            correlative_number = f"REC-{current_year}-{new_number:05d}"
+            # Generate correlative number - miscellaneous payments use OTR
+            from .receipts import generate_correlative_number
+            correlative_number = await generate_correlative_number(current_year, "OTR")
 
             # Use stored property and owner details or create defaults
             property_details = payment.property_details or {
@@ -450,23 +436,9 @@ async def bulk_approve_miscellaneous_payments(
             try:
                 print(f"Creating receipt for miscellaneous payment {payment_id}")
 
-                # Generate correlative number
-                current_year = datetime.utcnow().year
-                last_receipt = await Receipt.find(
-                    {"correlative_number": {"$regex": f"^REC-{current_year}"}}
-                ).sort([("correlative_number", -1)]).first_or_none()
-
-                if last_receipt:
-                    parts = last_receipt.correlative_number.split("-")
-                    if len(parts) == 3:
-                        last_number = int(parts[2])
-                        new_number = last_number + 1
-                    else:
-                        new_number = 1
-                else:
-                    new_number = 1
-
-                correlative_number = f"REC-{current_year}-{new_number:05d}"
+                # Generate correlative number - miscellaneous payments use OTR
+                from .receipts import generate_correlative_number
+                correlative_number = await generate_correlative_number(current_year, "OTR")
 
                 # Use stored property and owner details or create defaults
                 property_details = payment.property_details or {

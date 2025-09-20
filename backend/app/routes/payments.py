@@ -365,23 +365,9 @@ async def update_payment(
                 await payment.fee.fetch_link('property')
                 await payment.fee.fetch_link('fee_schedule')
 
-            # Generate correlative number
-            payment_year = payment.payment_date.year
-            last_receipt = await Receipt.find(
-                {"correlative_number": {"$regex": f"^REC-{payment_year}"}}
-            ).sort([("correlative_number", -1)]).first_or_none()
-
-            if last_receipt:
-                parts = last_receipt.correlative_number.split("-")
-                if len(parts) == 3:
-                    last_number = int(parts[2])
-                    new_number = last_number + 1
-                else:
-                    new_number = 1
-            else:
-                new_number = 1
-
-            correlative_number = f"REC-{payment_year}-{new_number:05d}"
+            # Generate correlative number - fee payments use CUOT
+            from .receipts import generate_correlative_number
+            correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
 
             # Create property and owner details snapshot
             if not payment.fee or not payment.fee.property:
@@ -790,23 +776,9 @@ async def bulk_approve_payments(
                     await payment.fee.fetch_link('property')
                     await payment.fee.fetch_link('fee_schedule')
 
-                # Generate correlative number
-                payment_year = payment.payment_date.year
-                last_receipt = await Receipt.find(
-                    {"correlative_number": {"$regex": f"^REC-{payment_year}"}}
-                ).sort([("correlative_number", -1)]).first_or_none()
-
-                if last_receipt:
-                    parts = last_receipt.correlative_number.split("-")
-                    if len(parts) == 3:
-                        last_number = int(parts[2])
-                        new_number = last_number + 1
-                    else:
-                        new_number = 1
-                else:
-                    new_number = 1
-
-                correlative_number = f"REC-{payment_year}-{new_number:05d}"
+                # Generate correlative number - fee payments use CUOT
+                from .receipts import generate_correlative_number
+                correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
 
                 # Create property and owner details snapshot
                 if not payment.fee or not payment.fee.property:

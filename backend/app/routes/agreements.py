@@ -683,8 +683,54 @@ async def pay_next_installment(
     installment_obj.notes = notes
     await installment_obj.save()
 
+    # Generate receipt for agreement installment payment
+    try:
+        print(f"Creating receipt for agreement installment {installment_obj.id}")
+
+        # Generate correlative number - agreement installments use CONV
+        from .receipts import generate_correlative_number
+        current_year = datetime.utcnow().year
+        correlative_number = await generate_correlative_number(current_year, "CONV")
+
+        # Get agreement and property details
+        agreement = await Agreement.get(agreement_data["id"])
+        await agreement.fetch_link(Agreement.property)
+
+        # Create property and owner details snapshot
+        property_details = {
+            "villa": getattr(agreement.property, 'villa', 'N/A'),
+            "row_letter": getattr(agreement.property, 'row_letter', 'N/A'),
+            "number": getattr(agreement.property, 'number', 0),
+            "owner_name": getattr(agreement.property, 'owner_name', 'Propietario no registrado'),
+            "owner_phone": getattr(agreement.property, 'owner_phone', 'N/A') or "N/A"
+        }
+        owner_details = {
+            "name": getattr(agreement.property, 'owner_name', 'Propietario no registrado'),
+            "phone": getattr(agreement.property, 'owner_phone', 'N/A') or "N/A"
+        }
+
+        # Create receipt record
+        from ..models.receipt import Receipt
+        receipt = Receipt(
+            correlative_number=correlative_number,
+            issue_date=datetime.utcnow(),
+            total_amount=installment_obj.amount,
+            property_details=property_details,
+            owner_details=owner_details,
+            fee_period=f"Convenio {agreement.agreement_number} - Cuota {installment_obj.installment_number}",
+            notes=f"Recibo generado automáticamente al pagar cuota de convenio"
+        )
+
+        await receipt.insert()
+
+        print(f"Receipt created in database with ID: {receipt.id}")
+    except Exception as e:
+        # Log the error but don't fail the payment
+        print(f"Error creating receipt for agreement installment {installment_obj.id}: {e}")
+        import traceback
+        traceback.print_exc()
+
     # Check if all installments are paid to update agreement status
-    agreement = await Agreement.get(agreement_data["id"])
     if agreement:
         all_installments = await AgreementInstallment.find(
             AgreementInstallment.agreement.id == agreement.id

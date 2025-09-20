@@ -11,12 +11,12 @@ from ..config.database import database
 
 router = APIRouter()
 
-async def generate_correlative_number(year: int) -> str:
-    """Generate a correlative receipt number"""
+async def generate_correlative_number(year: int, prefix: str = "REC") -> str:
+    """Generate a correlative receipt number with specified prefix"""
 
-    # Find the last receipt for this year
+    # Find the last receipt for this year and prefix
     last_receipt = await Receipt.find(
-        Receipt.correlative_number.startswith(f"REC-{year}")
+        {"correlative_number": {"$regex": f"^{prefix}-{year}"}}
     ).sort([("correlative_number", -1)]).first_or_none()
 
     if last_receipt:
@@ -30,8 +30,8 @@ async def generate_correlative_number(year: int) -> str:
     else:
         new_number = 1
 
-    # Format: REC-YYYY-XXXXX (padded to 5 digits)
-    return f"REC-{year}-{new_number:05d}"
+    # Format: PREFIX-YYYY-XXXXX (padded to 5 digits)
+    return f"{prefix}-{year}-{new_number:05d}"
 
 @router.get("/", response_model=List[ReceiptResponse])
 async def get_receipts(current_user: User = Depends(get_current_user)):
@@ -137,8 +137,8 @@ async def create_receipt(
             detail="Receipt already exists for this payment"
         )
 
-    # Generate correlative number
-    correlative_number = await generate_correlative_number(payment.payment_date.year)
+    # Generate correlative number - fee payments use CUOT
+    correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
 
     # Create property and owner details snapshot
     property_details = {
