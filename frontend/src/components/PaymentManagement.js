@@ -35,6 +35,7 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Print as PrintIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentsAPI, feesAPI, propertiesAPI, reportsAPI } from '../services/api';
@@ -586,6 +587,158 @@ const PaymentManagement = () => {
     }
   };
 
+  const handlePrintReceipt = (payment) => {
+    // Create receipt data for printing
+    const receiptData = {
+      correlative_number: payment.receipt_correlative_number || `REC-${new Date().getFullYear()}-${payment.id.slice(-5).toUpperCase()}`,
+      issue_date: payment.receipt_issue_date ? new Date(payment.receipt_issue_date) : new Date(),
+      payment_date: new Date(payment.payment_date),
+      total_amount: payment.amount,
+      property_details: {
+        villa: payment.property_villa || 'N/A',
+        row_letter: payment.property_row_letter || 'N/A',
+        number: payment.property_number || 0,
+        owner_name: payment.property_owner_name || 'Propietario no registrado'
+      },
+      fee_period: `${payment.fee_month}/${payment.fee_year}`,
+      notes: payment.notes || ''
+    };
+
+    // Open print window with HTML content
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Recibo de Pago - ${receiptData.correlative_number}</title>
+          <style>
+            body {
+              font-family: 'Courier New', monospace;
+              margin: 20px;
+              line-height: 1.6;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 20px;
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 24px;
+            }
+            .header h2 {
+              margin: 5px 0;
+              font-size: 16px;
+              color: #666;
+            }
+            .details {
+              margin-bottom: 20px;
+            }
+            .detail-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 8px;
+              padding: 5px 0;
+            }
+            .detail-label {
+              font-weight: bold;
+              min-width: 150px;
+            }
+            .amount {
+              font-size: 18px;
+              font-weight: bold;
+              text-align: center;
+              margin: 20px 0;
+              padding: 10px;
+              border: 2px solid #000;
+              background-color: #f9f9f9;
+            }
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+            }
+            .property-info {
+              margin: 20px 0;
+              padding: 15px;
+              background-color: #f5f5f5;
+              border-radius: 5px;
+            }
+            @media print {
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>PAGO VECINAL</h1>
+            <h2>Sistema de Gestión de Cuotas de Condominio</h2>
+          </div>
+
+          <div class="details">
+            <div class="detail-row">
+              <span class="detail-label">Número de Recibo:</span>
+              <span>${receiptData.correlative_number}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Fecha de Emisión:</span>
+              <span>${receiptData.issue_date.toLocaleDateString('es-ES')} ${receiptData.issue_date.toLocaleTimeString('es-ES')}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Período:</span>
+              <span>${receiptData.fee_period}</span>
+            </div>
+          </div>
+
+          <div class="property-info">
+            <h3>Información de la Propiedad</h3>
+            <div class="detail-row">
+              <span class="detail-label">Villa:</span>
+              <span>${receiptData.property_details.villa}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Fila - Número:</span>
+              <span>${receiptData.property_details.row_letter}${receiptData.property_details.number}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Propietario:</span>
+              <span>${receiptData.property_details.owner_name}</span>
+            </div>
+          </div>
+
+          <div class="details">
+            <div class="detail-row">
+              <span class="detail-label">Fecha del Pago:</span>
+              <span>${receiptData.payment_date.toLocaleDateString('es-ES')}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Estado:</span>
+              <span>COMPLETADO</span>
+            </div>
+            ${receiptData.notes ? `
+            <div class="detail-row">
+              <span class="detail-label">Notas:</span>
+              <span>${receiptData.notes}</span>
+            </div>
+            ` : ''}
+          </div>
+
+          <div class="amount">
+            MONTO PAGADO: S/ ${receiptData.total_amount.toFixed(2)}
+          </div>
+
+          <div class="footer">
+            <p>Este recibo es válido como comprobante de pago.</p>
+            <p>¡Gracias por su pago!</p>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'approved':
@@ -840,13 +993,16 @@ const PaymentManagement = () => {
                     </TableCell>
                     <TableCell>
                       {(payment.status === 'approved' || payment.status === 'completed') ? (
-                        payment.generated_receipt_file ? (
-                          <a href={`http://localhost:8000/payments/${payment.id}/download-receipt`} target="_blank" rel="noopener noreferrer">
-                            Descargar Recibo
-                          </a>
-                        ) : (
-                          <span style={{ color: 'orange' }}>Generando...</span>
-                        )
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handlePrintReceipt(payment)}
+                            title="Imprimir Recibo"
+                          >
+                            <PrintIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
                       ) : '-'}
                     </TableCell>
                     <TableCell>

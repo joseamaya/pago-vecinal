@@ -257,6 +257,7 @@ async def create_payment(
     # Fetch associated receipt if exists
     receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
     receipt_correlative = receipt.correlative_number if receipt else None
+    receipt_issue_date = receipt.issue_date if receipt else None
 
     return PaymentResponse(
         id=str(payment.id),
