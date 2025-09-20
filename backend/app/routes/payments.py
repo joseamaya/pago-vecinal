@@ -170,6 +170,7 @@ async def get_payment(payment_id: str, current_user: User = Depends(get_current_
     # Fetch associated receipt if exists
     receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
     receipt_correlative = receipt.correlative_number if receipt else None
+    receipt_issue_date = receipt.issue_date if receipt else None
 
     # Check permissions
     if (current_user.role != UserRole.ADMIN and

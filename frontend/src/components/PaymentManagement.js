@@ -839,12 +839,14 @@ const PaymentManagement = () => {
                       ) : '-'}
                     </TableCell>
                     <TableCell>
-                      {payment.generated_receipt_file ? (
-                        <a href={`http://localhost:8000/payments/${payment.id}/download-receipt`} target="_blank" rel="noopener noreferrer">
-                          Descargar Recibo
-                        </a>
-                      ) : payment.status === 'approved' ? (
-                        <span style={{ color: 'orange' }}>Generando...</span>
+                      {(payment.status === 'approved' || payment.status === 'completed') ? (
+                        payment.generated_receipt_file ? (
+                          <a href={`http://localhost:8000/payments/${payment.id}/download-receipt`} target="_blank" rel="noopener noreferrer">
+                            Descargar Recibo
+                          </a>
+                        ) : (
+                          <span style={{ color: 'orange' }}>Generando...</span>
+                        )
                       ) : '-'}
                     </TableCell>
                     <TableCell>

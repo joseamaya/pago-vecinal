@@ -307,13 +307,15 @@ const PaymentsModal = ({ open, onClose, fee }) => {
                     </TableCell>
                     <TableCell>{payment.notes || '-'}</TableCell>
                     <TableCell>
-                      <IconButton
-                        color="primary"
-                        onClick={() => handlePrintReceipt(payment)}
-                        title="Imprimir Recibo"
-                      >
-                        <PrintIcon />
-                      </IconButton>
+                      {(payment.status === 'approved' || payment.status === 'completed') && (
+                        <IconButton
+                          color="primary"
+                          onClick={() => handlePrintReceipt(payment)}
+                          title="Imprimir Recibo"
+                        >
+                          <PrintIcon />
+                        </IconButton>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
