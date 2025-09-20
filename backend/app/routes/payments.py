@@ -400,7 +400,7 @@ async def update_payment(
             receipt = Receipt(
                 correlative_number=correlative_number,
                 payment=payment,
-                issue_date=datetime.utcnow(),
+                issue_date=payment.payment_date,
                 total_amount=payment.amount,
                 property_details=property_details,
                 owner_details=owner_details,
@@ -741,7 +741,7 @@ async def bulk_import_payments(
                     receipt = Receipt(
                         correlative_number=correlative_number,
                         payment=payment,
-                        issue_date=datetime.utcnow(),
+                        issue_date=payment.payment_date,
                         total_amount=payment.amount,
                         property_details=property_details,
                         owner_details=owner_details,
@@ -874,7 +874,7 @@ async def bulk_approve_payments(
                 receipt = Receipt(
                     correlative_number=correlative_number,
                     payment=payment,
-                    issue_date=datetime.utcnow(),
+                    issue_date=payment.payment_date,
                     total_amount=payment.amount,
                     property_details=property_details,
                     owner_details=owner_details,
