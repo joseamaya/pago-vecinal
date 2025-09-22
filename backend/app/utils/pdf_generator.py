@@ -118,39 +118,61 @@ def generate_receipt_pdf(receipt_data):
     # Treasurer signature section
     if receipt_data.get('treasurer_details'):
         content.append(Spacer(1, 10))
-        content.append(Paragraph("Firma del Tesorero", styles['Heading4']))
 
         treasurer_name = receipt_data['treasurer_details'].get('name', 'N/A')
         signature = receipt_data['treasurer_details'].get('signature', 'N/A')
+        villa = receipt_data['treasurer_details'].get('villa', 'N/A')
 
         # Check if signature is a file path to an image
-        signature_element = Paragraph(signature, normal_style)
         if signature and os.path.exists(signature):
             try:
-                # Assume it's an image file, add as Image
-                signature_element = Image(signature, width=3*inch, height=1*inch)
+                # Assume it's an image file, add as Image centered
+                signature_image = Image(signature, width=3*inch, height=1*inch)
+                signature_image.hAlign = 'CENTER'
+                content.append(signature_image)
             except Exception as e:
                 print(f"Error loading signature image {signature}: {e}")
-                # Fall back to text
-                signature_element = Paragraph(signature, normal_style)
+                # Fall back to text centered
+                content.append(Paragraph(signature, ParagraphStyle(
+                    'Centered',
+                    parent=normal_style,
+                    alignment=TA_CENTER
+                )))
+        elif signature:
+            # Display as centered text if not an image
+            content.append(Paragraph(signature, ParagraphStyle(
+                'Centered',
+                parent=normal_style,
+                alignment=TA_CENTER
+            )))
 
-        treasurer_info = [
-            [Paragraph("Nombre:", normal_style), Paragraph(treasurer_name, normal_style)],
-            [Paragraph("Firma:", normal_style), signature_element]
-        ]
-
-        treasurer_table = Table(treasurer_info, colWidths=[1*inch, 5*inch])
-        treasurer_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        # Add a horizontal line (shorter, size of name)
+        line_table = Table([['']], colWidths=[3*inch])
+        line_table.setStyle(TableStyle([
+            ('LINEBELOW', (0, 0), (-1, -1), 1, colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER')
         ]))
-        content.append(treasurer_table)
+        content.append(line_table)
         content.append(Spacer(1, 5))
+
+        # Add treasurer name centered below
+        content.append(Paragraph(treasurer_name, ParagraphStyle(
+            'CenteredName',
+            parent=normal_style,
+            alignment=TA_CENTER,
+            fontSize=10
+        )))
+        content.append(Spacer(1, 2))
+
+        # Add "Tesorero" and villa
+        content.append(Paragraph(f"Tesorero - {villa}", ParagraphStyle(
+            'CenteredVilla',
+            parent=normal_style,
+            alignment=TA_CENTER,
+            fontSize=9
+        )))
+
+        content.append(Spacer(1, 10))
 
     # Footer
     content.append(Spacer(1, 15))

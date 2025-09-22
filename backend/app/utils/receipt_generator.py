@@ -73,7 +73,8 @@ async def generate_automatic_receipt(payment: Payment) -> str:
     treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
     treasurer_details = {
         "name": treasurer.name if treasurer else "Tesorero no configurado",
-        "signature": treasurer.signature if treasurer else None
+        "signature": treasurer.signature if treasurer else None,
+        "villa": treasurer.villa if treasurer else None
     }
 
     # Create receipt record
