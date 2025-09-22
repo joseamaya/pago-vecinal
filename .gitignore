@@ -68,5 +68,5 @@ logs/
 *.temp
 
 # Static uploads
-backend/static/uploads/
+backend/static/receipts/
 backend/static/agreements/
