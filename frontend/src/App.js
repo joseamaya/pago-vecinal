@@ -18,6 +18,7 @@ import FeeManagement from './components/FeeManagement';
 import AgreementManagement from './components/AgreementManagement';
 import FeeScheduleManagement from './components/FeeScheduleManagement';
 import ReportsManagement from './components/ReportsManagement';
+import TreasurerConfiguration from './components/TreasurerConfiguration';
 
 // Protected Route component
 const ProtectedRoute = ({ children }) => {
@@ -59,6 +60,7 @@ const AppRouter = () => {
                   <Route path="/agreements" element={<AgreementManagement />} />
                   <Route path="/fee-schedules" element={<FeeScheduleManagement />} />
                   <Route path="/reports" element={<ReportsManagement />} />
+                  <Route path="/configuration" element={<TreasurerConfiguration />} />
                   <Route path="/" element={<Navigate to="/dashboard" />} />
                 </Routes>
               </Layout>

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .config.database import init_db
 from .utils.init_admin import create_initial_admin
-from .routes import users, properties, fees, payments, auth, receipts, fee_schedules, reports, agreements, miscellaneous_payments, expenses, dashboard
+from .routes import users, properties, fees, payments, auth, receipts, fee_schedules, reports, agreements, miscellaneous_payments, expenses, dashboard, treasurers
 
 app = FastAPI(
     title="Pago Vecinal API",
@@ -36,6 +36,7 @@ app.include_router(agreements.router, prefix="/agreements", tags=["Agreements"])
 app.include_router(miscellaneous_payments.router, prefix="/miscellaneous-payments", tags=["Miscellaneous Payments"])
 app.include_router(expenses.router, prefix="/expenses", tags=["Expenses"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+app.include_router(treasurers.router, prefix="/treasurers", tags=["Treasurers"])
 
 @app.on_event("startup")
 async def startup_event():

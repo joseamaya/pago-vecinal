@@ -27,6 +27,7 @@ import {
   Assessment as ReportsIcon,
   Assignment as AgreementIcon,
   AccountBalance as InstallmentIcon,
+  Settings as SettingsIcon,
   Logout as LogoutIcon,
   ChevronLeft as ChevronLeftIcon,
   Brightness4 as DarkIcon,
@@ -117,6 +118,12 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle, handleDrawerClose }) => {
       icon: <ReportsIcon />,
       path: '/reports',
       roles: ['admin', 'owner'],
+    },
+    {
+      text: 'Configuración',
+      icon: <SettingsIcon />,
+      path: '/configuration',
+      roles: ['admin'],
     },
   ];
 

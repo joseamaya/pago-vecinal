@@ -116,6 +116,28 @@ def generate_receipt_pdf(receipt_data):
         content.append(Paragraph(receipt_data['notes'], normal_style))
         content.append(Spacer(1, 10))
 
+    # Treasurer signature section
+    if receipt_data.get('treasurer_details'):
+        content.append(Spacer(1, 20))
+        content.append(Paragraph("Firma del Tesorero", styles['Heading4']))
+        treasurer_info = [
+            ["Nombre:", receipt_data['treasurer_details'].get('name', 'N/A')],
+            ["Firma:", receipt_data['treasurer_details'].get('signature', 'N/A')]
+        ]
+
+        treasurer_table = Table(treasurer_info, colWidths=[1*inch, 5*inch])
+        treasurer_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        content.append(treasurer_table)
+        content.append(Spacer(1, 10))
+
     # Footer
     content.append(Spacer(1, 30))
     content.append(Paragraph("¡Gracias por su pago!", subtitle_style))

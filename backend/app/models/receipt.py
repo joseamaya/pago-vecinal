@@ -17,6 +17,7 @@ class Receipt(Document):
     owner_details: Optional[dict] = None     # Store owner info at time of receipt generation (None for admin expenses)
     fee_period: Optional[str] = None  # e.g., "Enero 2024" or "Pago varios: description" or "Gasto administrativo: description"
     notes: Optional[str] = None
+    treasurer_details: Optional[dict] = None  # Store treasurer info at time of receipt generation
 
     class Settings:
         name = "receipts"
@@ -38,3 +39,4 @@ class ReceiptResponse(BaseModel):
     owner_details: Optional[dict] = None
     fee_period: Optional[str] = None
     notes: Optional[str] = None
+    treasurer_details: Optional[dict] = None

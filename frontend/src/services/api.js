@@ -241,6 +241,13 @@ export const reportsAPI = {
   getPropertiesByVilla: () => api.get('/reports/properties-by-villa'),
 };
 
+// Treasurers API
+export const treasurersAPI = {
+  getTreasurer: () => api.get('/treasurers/'),
+  createTreasurer: (treasurerData) => api.post('/treasurers/', treasurerData),
+  updateTreasurer: (treasurerData) => api.put('/treasurers/', treasurerData),
+};
+
 // Dashboard Stats API
 export const dashboardAPI = {
   getStats: () => api.get('/dashboard/stats'),

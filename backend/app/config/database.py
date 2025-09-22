@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from ..models.expense import Expense
 from ..models.miscellaneous_payment import MiscellaneousPayment
+from ..models.treasurer import Treasurer
 from ..models.user import User
 from ..models.property import Property
 from ..models.fee import FeeSchedule, Fee
@@ -53,7 +54,7 @@ async def init_db():
     try:
         await init_beanie(
             database=database,
-            document_models=[User, Property, FeeSchedule, Fee, Payment, Receipt, Agreement, AgreementInstallment, MiscellaneousPayment, Expense]
+            document_models=[User, Property, FeeSchedule, Fee, Payment, Receipt, Agreement, AgreementInstallment, MiscellaneousPayment, Expense, Treasurer]
         )
         print("✅ Database initialized successfully!")
     except Exception as e:

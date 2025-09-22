@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 from ..models.receipt import Receipt
 from ..models.payment import Payment
+from ..models.treasurer import Treasurer
 from ..config.database import database
 from ..utils.pdf_generator import generate_receipt_pdf
 
@@ -67,16 +68,24 @@ async def generate_automatic_receipt(payment: Payment) -> str:
 
     print(f"Property details: {property_details}")
 
+    # Get treasurer data
+    treasurer = await Treasurer.find_one()
+    treasurer_details = {
+        "name": treasurer.name if treasurer else "Tesorero no configurado",
+        "signature": treasurer.signature if treasurer else None
+    }
+
     # Create receipt record
     receipt = Receipt(
         correlative_number=correlative_number,
         payment=payment,
-        issue_date=datetime.utcnow(),
+        issue_date=payment.payment_date,
         total_amount=payment.amount,
         property_details=property_details,
         owner_details=owner_details,
-        fee_period=f"Cuota {payment.fee.reference or 'N/A'}",
-        notes=f"Recibo generado automáticamente al aprobar el pago"
+        fee_period=f"{payment.fee.month}/{payment.fee.year}",
+        notes=f"Recibo generado automáticamente al aprobar el pago",
+        treasurer_details=treasurer_details
     )
 
     await receipt.insert()
@@ -93,8 +102,9 @@ async def generate_automatic_receipt(payment: Payment) -> str:
             "total_amount": payment.amount,
             "property_details": property_details,
             "reference": payment.fee_id,
-            "fee_period": f"Cuota {payment.fee.reference or 'N/A'}",
-            "notes": f"Recibo generado automáticamente al aprobar el pago"
+            "fee_period": f"{payment.fee.month}/{payment.fee.year}",
+            "notes": f"Recibo generado automáticamente al aprobar el pago",
+            "treasurer_details": treasurer_details
         }
 
         pdf_buffer = generate_receipt_pdf(pdf_data)
