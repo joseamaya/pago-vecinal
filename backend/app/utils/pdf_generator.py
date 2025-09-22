@@ -43,7 +43,7 @@ def generate_receipt_pdf(receipt_data):
     # Header
     content.append(Paragraph("PAGO VECINAL", title_style))
     content.append(Paragraph("Sistema de Gestión de Cuotas de Condominio", subtitle_style))
-    content.append(Spacer(1, 20))
+    content.append(Spacer(1, 15))
 
     # Receipt info
     receipt_info = [
@@ -55,15 +55,15 @@ def generate_receipt_pdf(receipt_data):
     receipt_table = Table(receipt_info, colWidths=[2*inch, 4*inch])
     receipt_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (0, -1), colors.black),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     content.append(receipt_table)
-    content.append(Spacer(1, 20))
+    content.append(Spacer(1, 10))
 
     # Property information
     content.append(Paragraph("Información de la Propiedad", styles['Heading3']))
@@ -71,8 +71,7 @@ def generate_receipt_pdf(receipt_data):
         ["Villa:", receipt_data['property_details']['villa']],
         ["Fila:", receipt_data['property_details']['row_letter']],
         ["Número:", str(receipt_data['property_details']['number'])],
-        ["Propietario:", receipt_data['property_details']['owner_name']],
-        ["Teléfono:", receipt_data['property_details'].get('owner_phone', 'N/A')]
+        ["Propietario:", receipt_data['property_details']['owner_name']]
     ]
 
     property_table = Table(property_info, colWidths=[2*inch, 4*inch])
@@ -102,22 +101,22 @@ def generate_receipt_pdf(receipt_data):
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     content.append(payment_table)
-    content.append(Spacer(1, 20))
+    content.append(Spacer(1, 10))
 
-    # Notes
-    if receipt_data.get('notes'):
+    # Notes (only if they exist)
+    if receipt_data.get('notes') and receipt_data['notes'].strip():
         content.append(Paragraph("Notas:", styles['Heading4']))
         content.append(Paragraph(receipt_data['notes'], normal_style))
-        content.append(Spacer(1, 10))
+        content.append(Spacer(1, 5))
 
     # Treasurer signature section
     if receipt_data.get('treasurer_details'):
-        content.append(Spacer(1, 20))
+        content.append(Spacer(1, 10))
         content.append(Paragraph("Firma del Tesorero", styles['Heading4']))
         treasurer_info = [
             ["Nombre:", receipt_data['treasurer_details'].get('name', 'N/A')],
@@ -130,15 +129,15 @@ def generate_receipt_pdf(receipt_data):
             ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
         content.append(treasurer_table)
-        content.append(Spacer(1, 10))
+        content.append(Spacer(1, 5))
 
     # Footer
-    content.append(Spacer(1, 30))
+    content.append(Spacer(1, 15))
     content.append(Paragraph("¡Gracias por su pago!", subtitle_style))
     content.append(Paragraph("Este recibo es válido como comprobante de pago.", normal_style))
 
@@ -163,21 +162,21 @@ def generate_property_payment_history_pdf(property_data, payments_data, fees_dat
     title_style = ParagraphStyle(
         'Title',
         parent=styles['Heading1'],
-        fontSize=20,
+        fontSize=18,
         alignment=TA_CENTER,
-        spaceAfter=30
+        spaceAfter=20
     )
 
     subtitle_style = ParagraphStyle(
         'Subtitle',
         parent=styles['Heading2'],
-        fontSize=14,
+        fontSize=12,
         alignment=TA_CENTER,
-        spaceAfter=20
+        spaceAfter=15
     )
 
     normal_style = styles['Normal']
-    normal_style.fontSize = 10
+    normal_style.fontSize = 9
 
     # Build the PDF content
     content = []
@@ -370,12 +369,12 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     content.append(property_table)
-    content.append(Spacer(1, 20))
+    content.append(Spacer(1, 10))
 
     # Debt summary
     content.append(Paragraph("Resumen de la Deuda", section_style))
