@@ -47,6 +47,9 @@ const AgreementManagement = () => {
   const [agreements, setAgreements] = useState([]);
   const [properties, setProperties] = useState([]);
   const [fees, setFees] = useState([]);
+  const [formFees, setFormFees] = useState([]);
+  const [letters, setLetters] = useState([]);
+  const [numbers, setNumbers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -59,6 +62,9 @@ const AgreementManagement = () => {
     start_date: '',
     notes: '',
   });
+  const [selectedLetter, setSelectedLetter] = useState('');
+  const [selectedNumber, setSelectedNumber] = useState('');
+  const [selectedProperty, setSelectedProperty] = useState(null);
   const [totalDebt, setTotalDebt] = useState(0);
   const [calculatedInstallments, setCalculatedInstallments] = useState('');
   const [filters, setFilters] = useState({
@@ -91,7 +97,13 @@ const AgreementManagement = () => {
   useEffect(() => {
     fetchProperties();
     fetchFees();
+    fetchLetters();
+    fetchNumbers();
   }, []);
+
+  useEffect(() => {
+    handleLetterNumberChange();
+  }, [selectedLetter, selectedNumber]);
 
   const fetchProperties = async () => {
     try {
@@ -105,9 +117,57 @@ const AgreementManagement = () => {
   const fetchFees = async () => {
     try {
       const response = await feesAPI.getFees({ status: 'pending' });
-      setFees(response.data);
+      setFees(response.data.data || []);
     } catch (err) {
       console.error('Error fetching fees:', err);
+    }
+  };
+
+  const fetchLetters = async () => {
+    try {
+      const response = await propertiesAPI.getDistinctLetters();
+      setLetters(response.data);
+    } catch (err) {
+      console.error('Error fetching letters:', err);
+    }
+  };
+
+  const fetchNumbers = async () => {
+    try {
+      const response = await propertiesAPI.getDistinctNumbers();
+      setNumbers(response.data);
+    } catch (err) {
+      console.error('Error fetching numbers:', err);
+    }
+  };
+
+  const handleLetterNumberChange = async () => {
+    if (selectedLetter && selectedNumber) {
+      try {
+        const response = await propertiesAPI.getPropertyByLetterNumber(selectedLetter, selectedNumber);
+        const property = response.data;
+        setSelectedProperty(property);
+        setFormData({ ...formData, property_id: property.id, fee_ids: editingAgreement ? formData.fee_ids : [] });
+        setTotalDebt(editingAgreement ? totalDebt : 0);
+        setCalculatedInstallments(editingAgreement ? calculatedInstallments : '');
+        // Fetch fees for this property
+        const status = editingAgreement ? undefined : 'pending';
+        const feesResponse = await feesAPI.getFees({ status, property_id: property.id });
+        setFormFees(feesResponse.data.data || []);
+      } catch (err) {
+        console.error('Error fetching property:', err);
+        setSelectedProperty(null);
+        setFormData({ ...formData, property_id: '', fee_ids: [] });
+        setTotalDebt(0);
+        setCalculatedInstallments('');
+        setFormFees([]);
+      }
+    } else {
+      setSelectedProperty(null);
+      setFormData({ ...formData, property_id: '', fee_ids: [] });
+      setTotalDebt(0);
+      setCalculatedInstallments('');
+      setFormFees([]);
     }
   };
 
@@ -124,6 +184,14 @@ const AgreementManagement = () => {
       });
       setTotalDebt(agreement.total_debt);
       setCalculatedInstallments(agreement.installments_count.toString());
+      // Set letter and number from property
+      const property = properties.find(p => p.id === agreement.property_id);
+      if (property) {
+        setSelectedLetter(property.row_letter);
+        setSelectedNumber(property.number);
+        setSelectedProperty(property);
+        // formFees will be set by handleLetterNumberChange
+      }
     } else {
       setEditingAgreement(null);
       setFormData({
@@ -136,6 +204,9 @@ const AgreementManagement = () => {
       });
       setTotalDebt(0);
       setCalculatedInstallments('');
+      setSelectedLetter('');
+      setSelectedNumber('');
+      setSelectedProperty(null);
     }
     setOpen(true);
   };
@@ -153,6 +224,11 @@ const AgreementManagement = () => {
     });
     setTotalDebt(0);
     setCalculatedInstallments('');
+    setSelectedLetter('');
+    setSelectedNumber('');
+    setSelectedProperty(null);
+    setFormFees([]);
+    setFormFees([]);
   };
 
   const handleSubmit = async (e) => {
@@ -288,10 +364,6 @@ const AgreementManagement = () => {
     return property ? `${property.villa} ${property.row_letter}${property.number}` : 'N/A';
   };
 
-  const getPropertyFees = (propertyId) => {
-    return fees.filter(fee => fee.property_id === propertyId);
-  };
-
   const handleFilterChange = (field, value) => {
     setFilters({
       ...filters,
@@ -323,7 +395,7 @@ const AgreementManagement = () => {
   };
 
   const calculateTotalDebt = (selectedFeeIds) => {
-    return fees
+    return formFees
       .filter(fee => selectedFeeIds.includes(fee.id))
       .reduce((total, fee) => total + fee.amount, 0);
   };
@@ -622,42 +694,77 @@ const AgreementManagement = () => {
         <form onSubmit={handleSubmit}>
           <DialogContent>
             <Grid container spacing={2}>
-              {/* Property Selection */}
-              <Grid item xs={12}>
+              {/* Letter Selection */}
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth margin="dense">
-                  <InputLabel>Propiedad</InputLabel>
+                  <InputLabel>Letra</InputLabel>
                   <Select
-                    value={formData.property_id}
-                    onChange={(e) => {
-                      setFormData({ ...formData, property_id: e.target.value, fee_ids: [] });
-                      setTotalDebt(0);
-                      setCalculatedInstallments('');
-                    }}
-                    label="Propiedad"
+                    value={selectedLetter}
+                    onChange={(e) => setSelectedLetter(e.target.value)}
+                    label="Letra"
                     required
                   >
-                    {properties.map((property) => (
-                      <MenuItem key={property.id} value={property.id}>
-                        {property.villa} {property.row_letter}{property.number} - {property.owner_name}
+                    <MenuItem value="">
+                      <em>Seleccionar letra</em>
+                    </MenuItem>
+                    {letters.map((letter) => (
+                      <MenuItem key={letter} value={letter}>
+                        {letter}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
 
+              {/* Number Selection */}
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="dense">
+                  <InputLabel>Número</InputLabel>
+                  <Select
+                    value={selectedNumber}
+                    onChange={(e) => setSelectedNumber(e.target.value)}
+                    label="Número"
+                    required
+                  >
+                    <MenuItem value="">
+                      <em>Seleccionar número</em>
+                    </MenuItem>
+                    {numbers.map((number) => (
+                      <MenuItem key={number} value={number}>
+                        {number}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Owner Display */}
+              <Grid item xs={12}>
+                <TextField
+                  margin="dense"
+                  label="Propietario"
+                  fullWidth
+                  value={selectedProperty ? selectedProperty.owner_name : ''}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  helperText="Se muestra automáticamente al seleccionar letra y número"
+                />
+              </Grid>
+
               {/* Fee Selection with Checkboxes */}
-              {formData.property_id && (
+              {selectedProperty && (
                 <Grid item xs={12}>
                   <Typography variant="h6" gutterBottom>
                     Seleccionar Cuotas
                   </Typography>
                   <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflow: 'auto' }}>
-                    {getPropertyFees(formData.property_id).length === 0 ? (
+                    {(!Array.isArray(formFees) || formFees.length === 0) ? (
                       <Typography color="text.secondary">
-                        No hay cuotas pendientes para esta propiedad
+                        {editingAgreement ? 'No hay cuotas para esta propiedad' : 'No hay cuotas pendientes para esta propiedad'}
                       </Typography>
                     ) : (
-                      getPropertyFees(formData.property_id).map((fee) => (
+                      formFees.map((fee) => (
                         <Box key={fee.id} display="flex" alignItems="center" sx={{ mb: 1 }}>
                           <Checkbox
                             checked={formData.fee_ids.includes(fee.id)}

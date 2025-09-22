@@ -143,6 +143,62 @@ async def delete_property(property_id: str, current_user: User = Depends(get_cur
     await prop.delete()
     return {"message": "Property deleted successfully"}
 
+@router.get("/distinct/letters", response_model=List[str])
+async def get_distinct_letters(current_user: User = Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN:
+        # Owners can only see their own properties
+        properties = await Property.find(Property.owner.id == current_user.id).to_list()
+    else:
+        properties = await Property.find_all().to_list()
+
+    letters = list(set(prop.row_letter for prop in properties))
+    return sorted(letters)
+
+@router.get("/distinct/numbers", response_model=List[int])
+async def get_distinct_numbers(current_user: User = Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN:
+        # Owners can only see their own properties
+        properties = await Property.find(Property.owner.id == current_user.id).to_list()
+    else:
+        properties = await Property.find_all().to_list()
+
+    numbers = list(set(prop.number for prop in properties))
+    return sorted(numbers)
+
+@router.get("/by-letter-number/", response_model=PropertyResponse)
+async def get_property_by_letter_number(
+    row_letter: str,
+    number: int,
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != UserRole.ADMIN:
+        prop = await Property.find_one(
+            Property.row_letter == row_letter,
+            Property.number == number,
+            Property.owner.id == current_user.id
+        )
+    else:
+        prop = await Property.find_one(
+            Property.row_letter == row_letter,
+            Property.number == number
+        )
+
+    if not prop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+
+    return PropertyResponse(
+        id=str(prop.id),
+        row_letter=prop.row_letter,
+        number=prop.number,
+        villa=prop.villa,
+        owner_name=prop.owner_name,
+        owner_phone=prop.owner_phone,
+        owner_id=str(prop.owner.id) if prop.owner else None
+    )
+
 @router.post("/bulk-import", response_model=BulkImportResponse)
 async def bulk_import_properties(
     file: UploadFile = File(...),
