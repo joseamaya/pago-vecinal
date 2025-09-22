@@ -355,62 +355,20 @@ async def update_payment(
     if notes is not None:
         payment.notes = notes
 
-    # Create receipt in database if status changed to approved
+    # Create receipt in database and generate PDF if status changed to approved
     if status == "approved":
         try:
             print(f"Creating receipt for payment {payment_id}")
 
-            # Fetch property and fee_schedule from fee if not already fetched
-            if payment.fee:
-                await payment.fee.fetch_link('property')
-                await payment.fee.fetch_link('fee_schedule')
+            # Use the automatic receipt generator which also creates the PDF
+            from ..utils.receipt_generator import generate_automatic_receipt
+            pdf_file_path = await generate_automatic_receipt(payment)
 
-            # Generate correlative number - fee payments use CUOT
-            from .receipts import generate_correlative_number
-            correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
+            # Store the PDF file path in the payment
+            if pdf_file_path:
+                payment.generated_receipt_file = pdf_file_path
+                print(f"PDF receipt file path stored: {pdf_file_path}")
 
-            # Create property and owner details snapshot
-            if not payment.fee or not payment.fee.property:
-                # If no property linked, create default details
-                property_details = {
-                    "villa": "N/A",
-                    "row_letter": "N/A",
-                    "number": 0,
-                    "owner_name": "Propietario no registrado",
-                    "owner_phone": "N/A"
-                }
-                owner_details = {
-                    "name": "Propietario no registrado",
-                    "phone": "N/A"
-                }
-            else:
-                property_details = {
-                    "villa": getattr(payment.fee.property, 'villa', 'N/A'),
-                    "row_letter": getattr(payment.fee.property, 'row_letter', 'N/A'),
-                    "number": getattr(payment.fee.property, 'number', 0),
-                    "owner_name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
-                    "owner_phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
-                }
-                owner_details = {
-                    "name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
-                    "phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
-                }
-
-            # Create receipt record
-            receipt = Receipt(
-                correlative_number=correlative_number,
-                payment=payment,
-                issue_date=payment.payment_date,
-                total_amount=payment.amount,
-                property_details=property_details,
-                owner_details=owner_details,
-                fee_period=f"Cuota {payment.fee.reference or 'N/A'}" if payment.fee else "N/A",
-                notes=f"Recibo generado automáticamente al aprobar el pago"
-            )
-
-            await receipt.insert()
-
-            print(f"Receipt created in database with ID: {receipt.id}")
         except Exception as e:
             # Log the error but don't fail the payment update
             print(f"Error creating receipt for payment {payment_id}: {e}")
@@ -701,57 +659,16 @@ async def bulk_import_payments(
                     payment.status = PaymentStatus.APPROVED
                     await payment.save()
 
-                    # Fetch property and fee_schedule from fee if not already fetched
-                    if payment.fee:
-                        await payment.fee.fetch_link('property')
-                        await payment.fee.fetch_link('fee_schedule')
+                    # Use the automatic receipt generator which also creates the PDF
+                    from ..utils.receipt_generator import generate_automatic_receipt
+                    pdf_file_path = await generate_automatic_receipt(payment)
 
-                    # Generate correlative number - fee payments use CUOT
-                    from .receipts import generate_correlative_number
-                    correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
+                    # Store the PDF file path in the payment
+                    if pdf_file_path:
+                        payment.generated_receipt_file = pdf_file_path
+                        await payment.save()  # Save the updated payment with the PDF path
+                        print(f"PDF receipt file path stored for bulk import: {pdf_file_path}")
 
-                    # Create property and owner details snapshot
-                    if not payment.fee or not payment.fee.property:
-                        # If no property linked, create default details
-                        property_details = {
-                            "villa": "N/A",
-                            "row_letter": "N/A",
-                            "number": 0,
-                            "owner_name": "Propietario no registrado",
-                            "owner_phone": "N/A"
-                        }
-                        owner_details = {
-                            "name": "Propietario no registrado",
-                            "phone": "N/A"
-                        }
-                    else:
-                        property_details = {
-                            "villa": getattr(payment.fee.property, 'villa', 'N/A'),
-                            "row_letter": getattr(payment.fee.property, 'row_letter', 'N/A'),
-                            "number": getattr(payment.fee.property, 'number', 0),
-                            "owner_name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
-                            "owner_phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
-                        }
-                        owner_details = {
-                            "name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
-                            "phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
-                        }
-
-                    # Create receipt record
-                    receipt = Receipt(
-                        correlative_number=correlative_number,
-                        payment=payment,
-                        issue_date=payment.payment_date,
-                        total_amount=payment.amount,
-                        property_details=property_details,
-                        owner_details=owner_details,
-                        fee_period=f"Cuota {payment.fee.reference or 'N/A'}" if payment.fee else "N/A",
-                        notes=f"Recibo generado automáticamente al aprobar el pago (subida masiva)"
-                    )
-
-                    await receipt.insert()
-
-                    print(f"Receipt created in database with ID: {receipt.id} for bulk import payment {payment.id}")
                 except Exception as e:
                     # Log the error but don't fail the bulk import
                     print(f"Error creating receipt for bulk import payment {payment.id}: {e}")
@@ -830,61 +747,20 @@ async def bulk_approve_payments(
             if payment.fee:
                 await update_fee_status_based_on_payments(payment.fee)
 
-            # Generate receipt (similar to individual approval)
+            # Generate receipt using the automatic generator
             try:
                 print(f"Creating receipt for payment {payment_id}")
 
-                # Fetch property and fee_schedule from fee if not already fetched
-                if payment.fee:
-                    await payment.fee.fetch_link('property')
-                    await payment.fee.fetch_link('fee_schedule')
+                # Use the automatic receipt generator which also creates the PDF
+                from ..utils.receipt_generator import generate_automatic_receipt
+                pdf_file_path = await generate_automatic_receipt(payment)
 
-                # Generate correlative number - fee payments use CUOT
-                from .receipts import generate_correlative_number
-                correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
+                # Store the PDF file path in the payment
+                if pdf_file_path:
+                    payment.generated_receipt_file = pdf_file_path
+                    await payment.save()  # Save the updated payment with the PDF path
+                    print(f"PDF receipt file path stored: {pdf_file_path}")
 
-                # Create property and owner details snapshot
-                if not payment.fee or not payment.fee.property:
-                    # If no property linked, create default details
-                    property_details = {
-                        "villa": "N/A",
-                        "row_letter": "N/A",
-                        "number": 0,
-                        "owner_name": "Propietario no registrado",
-                        "owner_phone": "N/A"
-                    }
-                    owner_details = {
-                        "name": "Propietario no registrado",
-                        "phone": "N/A"
-                    }
-                else:
-                    property_details = {
-                        "villa": getattr(payment.fee.property, 'villa', 'N/A'),
-                        "row_letter": getattr(payment.fee.property, 'row_letter', 'N/A'),
-                        "number": getattr(payment.fee.property, 'number', 0),
-                        "owner_name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
-                        "owner_phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
-                    }
-                    owner_details = {
-                        "name": getattr(payment.fee.property, 'owner_name', 'Propietario no registrado'),
-                        "phone": getattr(payment.fee.property, 'owner_phone', 'N/A') or "N/A"
-                    }
-
-                # Create receipt record
-                receipt = Receipt(
-                    correlative_number=correlative_number,
-                    payment=payment,
-                    issue_date=payment.payment_date,
-                    total_amount=payment.amount,
-                    property_details=property_details,
-                    owner_details=owner_details,
-                    fee_period=f"Cuota {payment.fee.reference or 'N/A'}" if payment.fee else "N/A",
-                    notes=f"Recibo generado automáticamente al aprobar el pago (aprobación masiva)"
-                )
-
-                await receipt.insert()
-
-                print(f"Receipt created in database with ID: {receipt.id}")
             except Exception as e:
                 # Log the error but don't fail the bulk operation
                 print(f"Error creating receipt for payment {payment_id}: {e}")

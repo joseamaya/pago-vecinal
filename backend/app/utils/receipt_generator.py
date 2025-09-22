@@ -3,6 +3,7 @@ import os
 from ..models.receipt import Receipt
 from ..models.payment import Payment
 from ..config.database import database
+from ..utils.pdf_generator import generate_receipt_pdf
 
 async def generate_automatic_receipt(payment: Payment) -> str:
     """
@@ -81,5 +82,37 @@ async def generate_automatic_receipt(payment: Payment) -> str:
     await receipt.insert()
 
     print(f"Receipt created in database with ID: {receipt.id}")
-    # Skip PDF generation for now
-    return None
+
+    # Generate PDF receipt
+    try:
+        # Prepare data for PDF generation
+        pdf_data = {
+            "correlative_number": correlative_number,
+            "issue_date": receipt.issue_date,
+            "payment_date": payment.payment_date,
+            "total_amount": payment.amount,
+            "property_details": property_details,
+            "reference": payment.fee_id,
+            "fee_period": f"Cuota {payment.fee.reference or 'N/A'}",
+            "notes": f"Recibo generado automáticamente al aprobar el pago"
+        }
+
+        pdf_buffer = generate_receipt_pdf(pdf_data)
+
+        # Generate filename similar to existing pattern
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        pdf_filename = f"recibo_{correlative_number}_{timestamp}.pdf"
+        pdf_path = os.path.join("static", "receipts", pdf_filename)
+
+        # Save PDF to file
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_buffer.getvalue())
+
+        print(f"PDF receipt saved to: {pdf_path}")
+        return pdf_path
+
+    except Exception as e:
+        print(f"Error generating PDF receipt: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
