@@ -46,7 +46,6 @@ const AgreementManagement = () => {
   const { isAdmin } = useAuth();
   const [agreements, setAgreements] = useState([]);
   const [properties, setProperties] = useState([]);
-  const [fees, setFees] = useState([]);
   const [formFees, setFormFees] = useState([]);
   const [letters, setLetters] = useState([]);
   const [numbers, setNumbers] = useState([]);
@@ -96,14 +95,49 @@ const AgreementManagement = () => {
 
   useEffect(() => {
     fetchProperties();
-    fetchFees();
     fetchLetters();
     fetchNumbers();
   }, []);
 
+  const handleLetterNumberChange = useCallback(async () => {
+    if (selectedLetter && selectedNumber) {
+      try {
+        const response = await propertiesAPI.getPropertyByLetterNumber(selectedLetter, selectedNumber);
+        const property = response.data;
+        setSelectedProperty(property);
+        setFormData(prev => ({ ...prev, property_id: property.id, fee_ids: [] }));
+        setTotalDebt(0);
+        setCalculatedInstallments('');
+        // Fetch fees for this property
+        const status = editingAgreement ? undefined : 'pending';
+        const feesResponse = await feesAPI.getFees({ status, property_id: property.id });
+        setFormFees(feesResponse.data.data || []);
+        // If editing, set fee_ids to the agreement's fee_ids
+        if (editingAgreement) {
+          setFormData(prev => ({ ...prev, fee_ids: editingAgreement.fee_ids }));
+          setTotalDebt(editingAgreement.total_debt);
+          setCalculatedInstallments(editingAgreement.installments_count.toString());
+        }
+      } catch (err) {
+        console.error('Error fetching property:', err);
+        setSelectedProperty(null);
+        setFormData(prev => ({ ...prev, property_id: '', fee_ids: [] }));
+        setTotalDebt(0);
+        setCalculatedInstallments('');
+        setFormFees([]);
+      }
+    } else {
+      setSelectedProperty(null);
+      setFormData(prev => ({ ...prev, property_id: '', fee_ids: [] }));
+      setTotalDebt(0);
+      setCalculatedInstallments('');
+      setFormFees([]);
+    }
+  }, [selectedLetter, selectedNumber, editingAgreement]);
+
   useEffect(() => {
     handleLetterNumberChange();
-  }, [selectedLetter, selectedNumber]);
+  }, [handleLetterNumberChange]);
 
   const fetchProperties = async () => {
     try {
@@ -114,14 +148,6 @@ const AgreementManagement = () => {
     }
   };
 
-  const fetchFees = async () => {
-    try {
-      const response = await feesAPI.getFees({ status: 'pending' });
-      setFees(response.data.data || []);
-    } catch (err) {
-      console.error('Error fetching fees:', err);
-    }
-  };
 
   const fetchLetters = async () => {
     try {
@@ -141,56 +167,27 @@ const AgreementManagement = () => {
     }
   };
 
-  const handleLetterNumberChange = async () => {
-    if (selectedLetter && selectedNumber) {
-      try {
-        const response = await propertiesAPI.getPropertyByLetterNumber(selectedLetter, selectedNumber);
-        const property = response.data;
-        setSelectedProperty(property);
-        setFormData({ ...formData, property_id: property.id, fee_ids: editingAgreement ? formData.fee_ids : [] });
-        setTotalDebt(editingAgreement ? totalDebt : 0);
-        setCalculatedInstallments(editingAgreement ? calculatedInstallments : '');
-        // Fetch fees for this property
-        const status = editingAgreement ? undefined : 'pending';
-        const feesResponse = await feesAPI.getFees({ status, property_id: property.id });
-        setFormFees(feesResponse.data.data || []);
-      } catch (err) {
-        console.error('Error fetching property:', err);
-        setSelectedProperty(null);
-        setFormData({ ...formData, property_id: '', fee_ids: [] });
-        setTotalDebt(0);
-        setCalculatedInstallments('');
-        setFormFees([]);
-      }
-    } else {
-      setSelectedProperty(null);
-      setFormData({ ...formData, property_id: '', fee_ids: [] });
-      setTotalDebt(0);
-      setCalculatedInstallments('');
-      setFormFees([]);
-    }
-  };
 
   const handleOpenDialog = (agreement = null) => {
     if (agreement) {
       setEditingAgreement(agreement);
       setFormData({
         property_id: agreement.property_id,
-        fee_ids: agreement.fee_ids,
+        fee_ids: [],
         monthly_amount: agreement.monthly_amount.toString(),
         installments_count: agreement.installments_count.toString(),
         start_date: new Date(agreement.start_date).toISOString().split('T')[0],
         notes: agreement.notes || '',
       });
-      setTotalDebt(agreement.total_debt);
-      setCalculatedInstallments(agreement.installments_count.toString());
+      setTotalDebt(0);
+      setCalculatedInstallments('');
       // Set letter and number from property
       const property = properties.find(p => p.id === agreement.property_id);
       if (property) {
         setSelectedLetter(property.row_letter);
         setSelectedNumber(property.number);
         setSelectedProperty(property);
-        // formFees will be set by handleLetterNumberChange
+        // formFees and fee_ids will be set by handleLetterNumberChange
       }
     } else {
       setEditingAgreement(null);

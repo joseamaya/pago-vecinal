@@ -290,7 +290,7 @@ async def create_agreement(
     try:
         pdf_buffer = generate_agreement_pdf(agreement, prop, fees, installments)
         pdf_filename = f"agreement_{agreement_number}.pdf"
-        pdf_path = os.path.join("static", "uploads", pdf_filename)
+        pdf_path = os.path.join("static", "agreements", pdf_filename)
 
         with open(pdf_path, "wb") as f:
             f.write(pdf_buffer.getvalue())
