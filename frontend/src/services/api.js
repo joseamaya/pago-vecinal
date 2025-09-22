@@ -248,6 +248,13 @@ export const treasurersAPI = {
   createTreasurer: (treasurerData) => api.post('/treasurers/', treasurerData),
   updateTreasurer: (villa, treasurerData) => api.put(`/treasurers/${villa}`, treasurerData),
   deleteTreasurer: (villa) => api.delete(`/treasurers/${villa}`),
+  uploadSignature: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/treasurers/upload-signature', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
 };
 
 // Dashboard Stats API

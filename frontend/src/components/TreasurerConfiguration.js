@@ -25,6 +25,7 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { treasurersAPI, propertiesAPI } from '../services/api';
@@ -44,6 +45,8 @@ const TreasurerConfiguration = () => {
     name: '',
     signature: '',
   });
+  const [signatureFile, setSignatureFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (isAdmin) {
@@ -91,6 +94,7 @@ const TreasurerConfiguration = () => {
         signature: '',
       });
     }
+    setSignatureFile(null);
     setDialogOpen(true);
   };
 
@@ -118,11 +122,26 @@ const TreasurerConfiguration = () => {
     setSuccess('');
 
     try {
+      let signaturePath = formData.signature;
+
+      // Upload signature file if selected
+      if (signatureFile) {
+        setUploading(true);
+        const uploadResponse = await treasurersAPI.uploadSignature(signatureFile);
+        signaturePath = uploadResponse.data.file_path;
+        setUploading(false);
+      }
+
+      const treasurerData = {
+        ...formData,
+        signature: signaturePath,
+      };
+
       if (editingTreasurer) {
-        await treasurersAPI.updateTreasurer(editingTreasurer.villa, formData);
+        await treasurersAPI.updateTreasurer(editingTreasurer.villa, treasurerData);
         setSuccess('Tesorero actualizado exitosamente');
       } else {
-        await treasurersAPI.createTreasurer(formData);
+        await treasurersAPI.createTreasurer(treasurerData);
         setSuccess('Tesorero creado exitosamente');
       }
       fetchTreasurers();
@@ -132,6 +151,7 @@ const TreasurerConfiguration = () => {
       console.error('Error saving treasurer:', err);
     } finally {
       setSaving(false);
+      setUploading(false);
     }
   };
 
@@ -280,14 +300,35 @@ const TreasurerConfiguration = () => {
                 />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Firma del Tesorero"
-                  value={formData.signature}
-                  onChange={(e) => handleInputChange('signature', e.target.value)}
-                  disabled={saving}
-                  helperText="Texto que representa la firma (opcional)"
-                />
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Button
+                    variant="outlined"
+                    component="label"
+                    startIcon={<CloudUploadIcon />}
+                    disabled={saving || uploading}
+                  >
+                    Subir Firma
+                    <input
+                      type="file"
+                      hidden
+                      accept="image/*"
+                      onChange={(e) => setSignatureFile(e.target.files[0])}
+                    />
+                  </Button>
+                  {signatureFile && (
+                    <Typography variant="body2">
+                      {signatureFile.name}
+                    </Typography>
+                  )}
+                  {formData.signature && !signatureFile && (
+                    <Typography variant="body2" color="textSecondary">
+                      Firma actual: {formData.signature.split('/').pop()}
+                    </Typography>
+                  )}
+                </Box>
+                <Typography variant="caption" color="textSecondary">
+                  Selecciona una imagen para la firma del tesorero (opcional)
+                </Typography>
               </Grid>
             </Grid>
           </DialogContent>

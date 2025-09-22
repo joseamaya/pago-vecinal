@@ -1,9 +1,10 @@
 import io
+import os
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
@@ -118,9 +119,24 @@ def generate_receipt_pdf(receipt_data):
     if receipt_data.get('treasurer_details'):
         content.append(Spacer(1, 10))
         content.append(Paragraph("Firma del Tesorero", styles['Heading4']))
+
+        treasurer_name = receipt_data['treasurer_details'].get('name', 'N/A')
+        signature = receipt_data['treasurer_details'].get('signature', 'N/A')
+
+        # Check if signature is a file path to an image
+        signature_element = Paragraph(signature, normal_style)
+        if signature and os.path.exists(signature):
+            try:
+                # Assume it's an image file, add as Image
+                signature_element = Image(signature, width=3*inch, height=1*inch)
+            except Exception as e:
+                print(f"Error loading signature image {signature}: {e}")
+                # Fall back to text
+                signature_element = Paragraph(signature, normal_style)
+
         treasurer_info = [
-            ["Nombre:", receipt_data['treasurer_details'].get('name', 'N/A')],
-            ["Firma:", receipt_data['treasurer_details'].get('signature', 'N/A')]
+            [Paragraph("Nombre:", normal_style), Paragraph(treasurer_name, normal_style)],
+            [Paragraph("Firma:", normal_style), signature_element]
         ]
 
         treasurer_table = Table(treasurer_info, colWidths=[1*inch, 5*inch])

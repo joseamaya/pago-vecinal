@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List
+import os
+import shutil
 from ..models.treasurer import Treasurer, TreasurerCreate, TreasurerUpdate, TreasurerResponse
 from ..models.user import User, UserRole
 from ..routes.auth import get_current_user
@@ -134,5 +136,41 @@ async def delete_treasurer(
             detail=f"Treasurer not found for villa {villa}"
         )
 
+    # Delete signature file if exists
+    if treasurer.signature and os.path.exists(treasurer.signature):
+        try:
+            os.remove(treasurer.signature)
+        except Exception as e:
+            print(f"Error deleting signature file {treasurer.signature}: {e}")
+
     await treasurer.delete()
     return {"message": f"Treasurer for villa {villa} deleted successfully"}
+
+@router.post("/upload-signature")
+async def upload_signature(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Ensure signatures directory exists
+    signatures_dir = os.path.join("static", "signatures")
+    os.makedirs(signatures_dir, exist_ok=True)
+
+    # Validate file type
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image"
+        )
+
+    # Save file
+    file_path = os.path.join(signatures_dir, file.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {"file_path": file_path}

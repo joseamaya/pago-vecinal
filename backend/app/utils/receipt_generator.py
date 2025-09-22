@@ -85,7 +85,7 @@ async def generate_automatic_receipt(payment: Payment) -> str:
         property_details=property_details,
         owner_details=owner_details,
         fee_period=f"{payment.fee.month}/{payment.fee.year}",
-        notes=f"Recibo generado automáticamente al aprobar el pago",
+        notes=payment.notes or None,
         treasurer_details=treasurer_details
     )
 
@@ -103,7 +103,7 @@ async def generate_automatic_receipt(payment: Payment) -> str:
             "total_amount": payment.amount,
             "property_details": property_details,
             "fee_period": f"{payment.fee.month}/{payment.fee.year}",
-            "notes": f"Recibo generado automáticamente al aprobar el pago",
+            "notes": payment.notes or "",
             "treasurer_details": treasurer_details
         }
 
