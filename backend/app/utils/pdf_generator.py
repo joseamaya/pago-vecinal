@@ -42,8 +42,9 @@ def generate_receipt_pdf(receipt_data):
     content = []
 
     # Header
-    content.append(Paragraph("PAGO VECINAL", title_style))
-    content.append(Paragraph("Sistema de Gestión de Cuotas de Condominio", subtitle_style))
+    villa_name = receipt_data.get('property_details', {}).get('villa', 'N/A')
+    content.append(Paragraph("Condominio Parques del Chipe", title_style))
+    content.append(Paragraph(villa_name, subtitle_style))
     content.append(Spacer(1, 15))
 
     # Receipt info
