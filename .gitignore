@@ -69,3 +69,4 @@ logs/
 
 # Static uploads
 backend/static/uploads/
+backend/static/agreements/
