@@ -155,6 +155,7 @@ export const receiptsAPI = {
   createReceipt: (receiptData) => api.post('/receipts/', receiptData),
   updateReceipt: (id, receiptData) => api.put(`/receipts/${id}`, receiptData),
   deleteReceipt: (id) => api.delete(`/receipts/${id}`),
+  downloadReceiptPDF: (id) => api.get(`/receipts/${id}/download`, { responseType: 'blob' }),
 };
 
 // Fees API

@@ -27,7 +27,7 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Print as PrintIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { receiptsAPI, paymentsAPI } from '../services/api';
@@ -132,39 +132,21 @@ const ReceiptManagement = () => {
     }
   };
 
-  const handlePrint = (receipt) => {
-    // Simple print functionality - in a real app, this would generate a PDF
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Recibo ${receipt.correlative_number}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .details { margin-bottom: 20px; }
-            .amount { font-size: 18px; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Pago Vecinal</h1>
-            <h2>Recibo de Pago</h2>
-          </div>
-          <div class="details">
-            <p><strong>Número de Recibo:</strong> ${receipt.correlative_number}</p>
-            <p><strong>Fecha de Emisión:</strong> ${new Date(receipt.issue_date).toLocaleDateString('es-ES')}</p>
-            <p><strong>Propiedad:</strong> ${receipt.property_details?.villa || ''} ${receipt.property_details?.row_letter || ''}${receipt.property_details?.number || ''}</p>
-            <p><strong>Propietario:</strong> ${receipt.owner_details?.name || ''}</p>
-            <p><strong>Período:</strong> ${receipt.fee_period || ''}</p>
-            <p class="amount"><strong>Monto Total: S/</strong> ${receipt.total_amount?.toFixed(2) || '0.00'}</p>
-            ${receipt.notes ? `<p><strong>Notas:</strong> ${receipt.notes}</p>` : ''}
-          </div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+  const handleDownload = async (receipt) => {
+    try {
+      const response = await receiptsAPI.downloadReceiptPDF(receipt.id);
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `recibo_${receipt.correlative_number}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('Error al descargar el recibo');
+      console.error('Error downloading receipt:', err);
+    }
   };
 
 
@@ -232,10 +214,10 @@ const ReceiptManagement = () => {
                     <TableCell>
                       <IconButton
                         color="primary"
-                        onClick={() => handlePrint(receipt)}
-                        title="Imprimir Recibo"
+                        onClick={() => handleDownload(receipt)}
+                        title="Descargar Recibo PDF"
                       >
-                        <PrintIcon />
+                        <DownloadIcon />
                       </IconButton>
                       <IconButton
                         color="primary"
