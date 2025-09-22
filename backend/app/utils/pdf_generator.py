@@ -93,8 +93,7 @@ def generate_receipt_pdf(receipt_data):
     payment_info = [
         ["Fecha del Pago:", receipt_data['payment_date'].strftime("%d/%m/%Y")],
         ["Monto Pagado:", f"S/ {receipt_data['total_amount']:.2f}"],
-        ["Estado:", "COMPLETADO"],
-        ["Referencia:", receipt_data.get('reference', 'N/A')]
+        ["Estado:", "COMPLETADO"]
     ]
 
     payment_table = Table(payment_info, colWidths=[2*inch, 4*inch])

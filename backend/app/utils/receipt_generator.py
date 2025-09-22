@@ -68,8 +68,9 @@ async def generate_automatic_receipt(payment: Payment) -> str:
 
     print(f"Property details: {property_details}")
 
-    # Get treasurer data
-    treasurer = await Treasurer.find_one()
+    # Get treasurer data based on villa
+    villa = payment.fee.property.villa if payment.fee and payment.fee.property else None
+    treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
     treasurer_details = {
         "name": treasurer.name if treasurer else "Tesorero no configurado",
         "signature": treasurer.signature if treasurer else None
@@ -101,7 +102,6 @@ async def generate_automatic_receipt(payment: Payment) -> str:
             "payment_date": payment.payment_date,
             "total_amount": payment.amount,
             "property_details": property_details,
-            "reference": payment.fee_id,
             "fee_period": f"{payment.fee.month}/{payment.fee.year}",
             "notes": f"Recibo generado automáticamente al aprobar el pago",
             "treasurer_details": treasurer_details

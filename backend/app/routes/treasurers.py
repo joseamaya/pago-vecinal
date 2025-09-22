@@ -1,27 +1,51 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
 from ..models.treasurer import Treasurer, TreasurerCreate, TreasurerUpdate, TreasurerResponse
 from ..models.user import User, UserRole
 from ..routes.auth import get_current_user
 
 router = APIRouter()
 
-@router.get("/", response_model=TreasurerResponse)
-async def get_treasurer(current_user: User = Depends(get_current_user)):
+@router.get("/", response_model=List[TreasurerResponse])
+async def get_treasurers(current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
 
-    treasurer = await Treasurer.find_one()
+    treasurers = await Treasurer.find_all().to_list()
+    return [
+        TreasurerResponse(
+            id=str(treasurer.id),
+            villa=treasurer.villa,
+            name=treasurer.name,
+            signature=treasurer.signature
+        )
+        for treasurer in treasurers
+    ]
+
+@router.get("/{villa}", response_model=TreasurerResponse)
+async def get_treasurer_by_villa(
+    villa: str,
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    treasurer = await Treasurer.find_one(Treasurer.villa == villa)
     if not treasurer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Treasurer not configured"
+            detail=f"Treasurer not configured for villa {villa}"
         )
 
     return TreasurerResponse(
         id=str(treasurer.id),
+        villa=treasurer.villa,
         name=treasurer.name,
         signature=treasurer.signature
     )
@@ -37,15 +61,16 @@ async def create_treasurer(
             detail="Not enough permissions"
         )
 
-    # Check if treasurer already exists
-    existing_treasurer = await Treasurer.find_one()
+    # Check if treasurer already exists for this villa
+    existing_treasurer = await Treasurer.find_one(Treasurer.villa == treasurer_data.villa)
     if existing_treasurer:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Treasurer already configured. Use PUT to update."
+            detail=f"Treasurer already configured for villa {treasurer_data.villa}. Use PUT to update."
         )
 
     treasurer = Treasurer(
+        villa=treasurer_data.villa,
         name=treasurer_data.name,
         signature=treasurer_data.signature
     )
@@ -53,12 +78,14 @@ async def create_treasurer(
 
     return TreasurerResponse(
         id=str(treasurer.id),
+        villa=treasurer.villa,
         name=treasurer.name,
         signature=treasurer.signature
     )
 
-@router.put("/", response_model=TreasurerResponse)
+@router.put("/{villa}", response_model=TreasurerResponse)
 async def update_treasurer(
+    villa: str,
     treasurer_data: TreasurerUpdate,
     current_user: User = Depends(get_current_user)
 ):
@@ -68,11 +95,11 @@ async def update_treasurer(
             detail="Not enough permissions"
         )
 
-    treasurer = await Treasurer.find_one()
+    treasurer = await Treasurer.find_one(Treasurer.villa == villa)
     if not treasurer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Treasurer not configured"
+            detail=f"Treasurer not configured for villa {villa}"
         )
 
     # Update fields
@@ -84,6 +111,28 @@ async def update_treasurer(
 
     return TreasurerResponse(
         id=str(treasurer.id),
+        villa=treasurer.villa,
         name=treasurer.name,
         signature=treasurer.signature
     )
+
+@router.delete("/{villa}")
+async def delete_treasurer(
+    villa: str,
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    treasurer = await Treasurer.find_one(Treasurer.villa == villa)
+    if not treasurer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Treasurer not found for villa {villa}"
+        )
+
+    await treasurer.delete()
+    return {"message": f"Treasurer for villa {villa} deleted successfully"}

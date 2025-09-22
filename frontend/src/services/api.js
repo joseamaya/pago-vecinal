@@ -243,9 +243,11 @@ export const reportsAPI = {
 
 // Treasurers API
 export const treasurersAPI = {
-  getTreasurer: () => api.get('/treasurers/'),
+  getTreasurers: () => api.get('/treasurers/'),
+  getTreasurerByVilla: (villa) => api.get(`/treasurers/${villa}`),
   createTreasurer: (treasurerData) => api.post('/treasurers/', treasurerData),
-  updateTreasurer: (treasurerData) => api.put('/treasurers/', treasurerData),
+  updateTreasurer: (villa, treasurerData) => api.put(`/treasurers/${villa}`, treasurerData),
+  deleteTreasurer: (villa) => api.delete(`/treasurers/${villa}`),
 };
 
 // Dashboard Stats API
