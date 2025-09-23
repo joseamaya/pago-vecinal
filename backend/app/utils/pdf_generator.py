@@ -127,8 +127,18 @@ def generate_receipt_pdf(receipt_data):
         # Check if signature is a file path to an image
         if signature and os.path.exists(signature):
             try:
-                # Assume it's an image file, add as Image centered
-                signature_image = Image(signature, width=3*inch, height=1*inch)
+                # Assume it's an image file, add as Image centered, preserving aspect ratio
+                signature_image = Image(signature)
+                # Get natural dimensions
+                natural_width = signature_image.imageWidth
+                natural_height = signature_image.imageHeight
+                # Set maximum dimensions
+                max_width = 3*inch
+                max_height = 1*inch
+                # Calculate scale to fit within bounds while preserving aspect ratio
+                scale = min(max_width / natural_width, max_height / natural_height, 1.0)
+                signature_image.drawWidth = natural_width * scale
+                signature_image.drawHeight = natural_height * scale
                 signature_image.hAlign = 'CENTER'
                 content.append(signature_image)
             except Exception as e:
@@ -524,8 +534,18 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
         # Check if signature is a file path to an image
         if signature and os.path.exists(signature):
             try:
-                # Assume it's an image file, add as Image centered
-                signature_image = Image(signature, width=3*inch, height=1*inch)
+                # Assume it's an image file, add as Image centered, preserving aspect ratio
+                signature_image = Image(signature)
+                # Get natural dimensions
+                natural_width = signature_image.imageWidth
+                natural_height = signature_image.imageHeight
+                # Set maximum dimensions
+                max_width = 3*inch
+                max_height = 1*inch
+                # Calculate scale to fit within bounds while preserving aspect ratio
+                scale = min(max_width / natural_width, max_height / natural_height, 1.0)
+                signature_image.drawWidth = natural_width * scale
+                signature_image.drawHeight = natural_height * scale
                 signature_image.hAlign = 'CENTER'
                 content.append(signature_image)
             except Exception as e:
