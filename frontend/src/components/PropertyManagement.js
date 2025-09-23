@@ -18,6 +18,7 @@ import {
   IconButton,
   Box,
   Alert,
+  Pagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -38,6 +39,9 @@ const PropertyManagement = () => {
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [editingProperty, setEditingProperty] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [formData, setFormData] = useState({
     row_letter: '',
     number: '',
@@ -47,14 +51,17 @@ const PropertyManagement = () => {
   });
 
   useEffect(() => {
-    fetchProperties();
+    fetchProperties(1);
   }, []);
 
-  const fetchProperties = async () => {
+  const fetchProperties = async (page = 1) => {
     try {
       setLoading(true);
-      const response = await propertiesAPI.getProperties();
-      setProperties(response.data);
+      const response = await propertiesAPI.getProperties(page, 20);
+      setProperties(response.data.data);
+      setTotalPages(response.data.pagination.total_pages);
+      setTotalCount(response.data.pagination.total_count);
+      setCurrentPage(page);
       setError('');
     } catch (err) {
       setError('Error al cargar propiedades');
@@ -62,6 +69,10 @@ const PropertyManagement = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (event, page) => {
+    fetchProperties(page);
   };
 
 
@@ -113,7 +124,7 @@ const PropertyManagement = () => {
       } else {
         await propertiesAPI.createProperty(submitData);
       }
-      fetchProperties();
+      fetchProperties(currentPage);
       handleCloseDialog();
     } catch (err) {
       setError(editingProperty ? 'Error al actualizar propiedad' : 'Error al crear propiedad');
@@ -125,7 +136,7 @@ const PropertyManagement = () => {
     if (window.confirm('¿Estás seguro de que quieres eliminar esta propiedad?')) {
       try {
         await propertiesAPI.deleteProperty(propertyId);
-        fetchProperties();
+        fetchProperties(currentPage);
       } catch (err) {
         setError('Error al eliminar propiedad');
         console.error('Error deleting property:', err);
@@ -146,7 +157,7 @@ const PropertyManagement = () => {
       if (errors.length > 0) {
         console.error('Errores de importación:', errors);
       }
-      fetchProperties();
+      fetchProperties(1); // Go back to first page after bulk import
       setBulkImportOpen(false);
       setSelectedFile(null);
     } catch (err) {
@@ -239,6 +250,19 @@ const PropertyManagement = () => {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Box display="flex" justifyContent="center" mt={3}>
+          <Pagination
+            count={totalPages}
+            page={currentPage}
+            onChange={handlePageChange}
+            color="primary"
+            size="large"
+          />
+        </Box>
+      )}
 
       {/* Dialog for Add/Edit Property */}
       <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

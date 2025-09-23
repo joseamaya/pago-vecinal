@@ -53,7 +53,7 @@ export const usersAPI = {
 
 // Properties API
 export const propertiesAPI = {
-  getProperties: () => api.get('/properties/'),
+  getProperties: (page = 1, limit = 20) => api.get('/properties/', { params: { page, limit } }),
   getProperty: (id) => api.get(`/properties/${id}`),
   getDistinctLetters: () => api.get('/properties/distinct/letters'),
   getDistinctNumbers: () => api.get('/properties/distinct/numbers'),

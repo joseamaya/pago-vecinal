@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from ..models.property import Property, PropertyCreate, PropertyUpdate, PropertyResponse
 from ..models.user import User, UserRole
@@ -10,17 +10,37 @@ class BulkImportResponse(BaseModel):
     imported: int
     errors: List[str]
 
+class PaginatedPropertyResponse(BaseModel):
+    data: List[PropertyResponse]
+    pagination: dict
+
 router = APIRouter()
 
-@router.get("/", response_model=List[PropertyResponse])
-async def get_properties(current_user: User = Depends(get_current_user)):
+@router.get("/", response_model=PaginatedPropertyResponse)
+async def get_properties(
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user)
+):
+    # Build query
+    query = {}
     if current_user.role != UserRole.ADMIN:
         # Owners can only see their own properties
-        properties = await Property.find(Property.owner.id == current_user.id).to_list()
-    else:
-        properties = await Property.find_all().to_list()
+        query["owner.id"] = current_user.id
 
-    return [
+    # Get total count
+    total_count = await Property.find(query).count()
+
+    # Calculate skip
+    skip = (page - 1) * limit
+
+    # Get paginated results
+    properties = await Property.find(query).skip(skip).limit(limit).to_list()
+
+    # Calculate total pages
+    total_pages = (total_count + limit - 1) // limit
+
+    property_responses = [
         PropertyResponse(
             id=str(prop.id),
             row_letter=prop.row_letter,
@@ -32,6 +52,16 @@ async def get_properties(current_user: User = Depends(get_current_user)):
         )
         for prop in properties
     ]
+
+    return PaginatedPropertyResponse(
+        data=property_responses,
+        pagination={
+            "page": page,
+            "limit": limit,
+            "total_count": total_count,
+            "total_pages": total_pages
+        }
+    )
 
 @router.get("/{property_id}", response_model=PropertyResponse)
 async def get_property(property_id: str, current_user: User = Depends(get_current_user)):
