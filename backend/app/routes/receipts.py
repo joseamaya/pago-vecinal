@@ -307,6 +307,20 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
             detail="Not enough permissions"
         )
 
+    # Update property details with current information
+    if receipt.payment.fee:
+        await receipt.payment.fee.fetch_link(Fee.property)
+        if receipt.payment.fee.property:
+            property = receipt.payment.fee.property
+            updated_property_details = {
+                "villa": property.villa,
+                "row_letter": property.row_letter,
+                "number": property.number,
+                "owner_name": property.owner_name,
+                "owner_phone": property.owner_phone
+            }
+            receipt.property_details = updated_property_details
+
     # Update treasurer details with current information
     villa = receipt.property_details.get('villa') if receipt.property_details else None
     treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
@@ -316,7 +330,7 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
         "villa": treasurer.villa if treasurer else None
     }
 
-    # Update receipt with latest treasurer details
+    # Update receipt with latest details
     receipt.treasurer_details = updated_treasurer_details
     await receipt.save()
 
@@ -367,6 +381,20 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
             # Fetch linked payment
             await receipt.fetch_link(Receipt.payment)
 
+            # Update property details with current information
+            if receipt.payment.fee:
+                await receipt.payment.fee.fetch_link(Fee.property)
+                if receipt.payment.fee.property:
+                    property = receipt.payment.fee.property
+                    updated_property_details = {
+                        "villa": property.villa,
+                        "row_letter": property.row_letter,
+                        "number": property.number,
+                        "owner_name": property.owner_name,
+                        "owner_phone": property.owner_phone
+                    }
+                    receipt.property_details = updated_property_details
+
             # Update treasurer details with current information
             villa = receipt.property_details.get('villa') if receipt.property_details else None
             treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
@@ -376,7 +404,7 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
                 "villa": treasurer.villa if treasurer else None
             }
 
-            # Update receipt with latest treasurer details
+            # Update receipt with latest details
             receipt.treasurer_details = updated_treasurer_details
 
             # Regenerate PDF data with updated information
