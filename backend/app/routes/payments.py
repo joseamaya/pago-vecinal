@@ -395,7 +395,7 @@ async def update_payment(
 
             # Save PDF to file
             pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-            pdf_file_path = f"backend/static/receipts/{pdf_filename}"
+            pdf_file_path = f"static/receipts/{pdf_filename}"
             os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
 
             with open(pdf_file_path, "wb") as f:
@@ -757,7 +757,7 @@ async def bulk_import_payments(
 
                     # Save PDF to file
                     pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-                    pdf_file_path = f"backend/static/receipts/{pdf_filename}"
+                    pdf_file_path = f"static/receipts/{pdf_filename}"
                     os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
 
                     with open(pdf_file_path, "wb") as f:
@@ -913,7 +913,7 @@ async def bulk_approve_payments(
 
                 # Save PDF to file
                 pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-                pdf_file_path = f"backend/static/receipts/{pdf_filename}"
+                pdf_file_path = f"static/receipts/{pdf_filename}"
                 os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
 
                 with open(pdf_file_path, "wb") as f:
