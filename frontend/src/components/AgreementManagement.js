@@ -142,7 +142,7 @@ const AgreementManagement = () => {
   const fetchProperties = async () => {
     try {
       const response = await propertiesAPI.getProperties();
-      setProperties(response.data);
+      setProperties(response.data.data || []);
     } catch (err) {
       console.error('Error fetching properties:', err);
     }
