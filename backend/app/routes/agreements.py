@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import FileResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 import os
 from ..models.agreement import (
     Agreement, AgreementCreate, AgreementUpdate, AgreementResponse,
@@ -243,8 +244,8 @@ async def create_agreement(
             detail="Installments count must be greater than 0"
         )
 
-    # Calculate end date
-    end_date = agreement_data.start_date + timedelta(days=30 * agreement_data.installments_count)
+    # Calculate end date (last installment date)
+    end_date = agreement_data.start_date + relativedelta(months=agreement_data.installments_count)
 
     # Generate agreement number
     current_year = datetime.utcnow().year
@@ -287,7 +288,8 @@ async def create_agreement(
     # Create installments
     installments = []
     for i in range(1, agreement_data.installments_count + 1):
-        due_date = agreement_data.start_date + timedelta(days=30 * (i - 1))
+        # First installment starts the next month, all installments on the same day of month
+        due_date = agreement_data.start_date + relativedelta(months=i)
         installment = AgreementInstallment(
             agreement=agreement,
             installment_number=i,
@@ -385,7 +387,7 @@ async def update_agreement(
     for field, value in update_data.items():
         if field == "installments_count" and value != agreement.installments_count:
             # Recalculate end date if installments count changed
-            agreement.end_date = agreement.start_date + timedelta(days=30 * value)
+            agreement.end_date = agreement.start_date + relativedelta(months=value)
         setattr(agreement, field, value)
 
     agreement.updated_at = datetime.utcnow()

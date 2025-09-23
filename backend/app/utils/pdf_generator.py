@@ -467,18 +467,17 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
     # Installment schedule
     if installments_data:
         content.append(Paragraph("Cronograma de Pagos", section_style))
-        installment_headers = ["Cuota", "Monto", "Fecha Vencimiento", "Estado"]
+        installment_headers = ["Cuota", "Monto", "Fecha Vencimiento"]
         installment_rows = [installment_headers]
 
         for installment in installments_data:
             installment_rows.append([
                 str(installment.installment_number),
                 f"S/ {installment.amount:.2f}",
-                installment.due_date.strftime("%d/%m/%Y"),
-                installment.status.value.upper()
+                installment.due_date.strftime("%d/%m/%Y")
             ])
 
-        installments_table = Table(installment_rows, colWidths=[1*inch, 1.5*inch, 2*inch, 1.5*inch])
+        installments_table = Table(installment_rows, colWidths=[1.5*inch, 2*inch, 2.5*inch])
         installments_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
