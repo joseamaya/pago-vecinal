@@ -54,7 +54,6 @@ const PaymentManagement = () => {
     amount: '',
     notes: '',
   });
-  const [receiptFile, setReceiptFile] = useState(null);
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkResults, setBulkResults] = useState(null);
@@ -132,7 +131,6 @@ const PaymentManagement = () => {
         notes: payment.notes || '',
       });
       setSelectedFeeAmount(payment.amount); // For editing, allow any amount
-      setReceiptFile(null); // Reset file input
     } else {
       setEditingPayment(null);
       setFormData({
@@ -141,7 +139,6 @@ const PaymentManagement = () => {
         notes: '',
       });
       setSelectedFeeAmount(0);
-      setReceiptFile(null);
     }
     setOpen(true);
   };
@@ -154,7 +151,6 @@ const PaymentManagement = () => {
       amount: '',
       notes: '',
     });
-    setReceiptFile(null);
     setSelectedVilla('');
     setSelectedRow('');
     setSelectedHouse('');
@@ -201,10 +197,6 @@ const PaymentManagement = () => {
       formDataToSend.append('fee_id', formData.fee_id);
       formDataToSend.append('amount', parseFloat(formData.amount));
       formDataToSend.append('notes', formData.notes || '');
-
-      if (receiptFile) {
-        formDataToSend.append('receipt_file', receiptFile);
-      }
 
       if (editingPayment) {
         await paymentsAPI.updatePayment(editingPayment.id, formDataToSend);
@@ -831,17 +823,16 @@ const PaymentManagement = () => {
                 <TableCell>Monto</TableCell>
                 <TableCell>Fecha de Pago</TableCell>
                 <TableCell>Estado</TableCell>
-                <TableCell>Comprobante</TableCell>
                 <TableCell>Recibo</TableCell>
                 <TableCell>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
-                <LoadingSkeleton type="table" rows={5} columns={8} />
+                <LoadingSkeleton type="table" rows={5} columns={7} />
               ) : filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={7} align="center">
                     No hay pagos registrados
                   </TableCell>
                 </TableRow>
@@ -871,13 +862,6 @@ const PaymentManagement = () => {
                         color={getStatusColor(payment.status)}
                         size="small"
                       />
-                    </TableCell>
-                    <TableCell>
-                      {payment.receipt_file ? (
-                        <a href={`http://localhost:8000${payment.receipt_file}`} target="_blank" rel="noopener noreferrer">
-                          Ver Comprobante
-                        </a>
-                      ) : '-'}
                     </TableCell>
                     <TableCell>
                       {(payment.status === 'approved' || payment.status === 'completed') ? (
@@ -1114,13 +1098,6 @@ const PaymentManagement = () => {
                 </Box>
               </>
             )}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setReceiptFile(e.target.files[0])}
-              style={{ marginTop: 16, marginBottom: 8 }}
-            />
-            {receiptFile && <Typography variant="body2">{receiptFile.name}</Typography>}
             <TextField
               margin="dense"
               label="Notas"

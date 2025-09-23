@@ -20,8 +20,6 @@ class Payment(Document):
     user: Link[User]  # Who made the payment
     amount: float
     payment_date: datetime
-    receipt_file: Optional[str] = None  # Path to uploaded receipt image
-    generated_receipt_file: Optional[str] = None  # Path to auto-generated PDF receipt
     status: PaymentStatus = PaymentStatus.PENDING
     notes: Optional[str] = None
 
@@ -32,12 +30,9 @@ class PaymentCreate(BaseModel):
     fee_id: str
     amount: float
     notes: Optional[str] = None
-    receipt_file: Optional[str] = None
 
 class PaymentUpdate(BaseModel):
     amount: Optional[float] = None
-    receipt_file: Optional[str] = None
-    generated_receipt_file: Optional[str] = None
     status: Optional[PaymentStatus] = None
     notes: Optional[str] = None
 
@@ -47,8 +42,6 @@ class PaymentResponse(BaseModel):
     user_id: str
     amount: float
     payment_date: datetime
-    receipt_file: Optional[str] = None
-    generated_receipt_file: Optional[str] = None
     status: PaymentStatus
     notes: Optional[str] = None
     property_row_letter: Optional[str] = None

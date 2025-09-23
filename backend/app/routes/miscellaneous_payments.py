@@ -10,6 +10,7 @@ from ..models.miscellaneous_payment import (
     MiscellaneousPaymentResponse, MiscellaneousPaymentStatus, MiscellaneousPaymentType
 )
 from ..models.receipt import Receipt
+from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..models.property import Property
 from ..routes.auth import get_current_user
@@ -271,6 +272,15 @@ async def update_miscellaneous_payment(
                 "phone": "N/A"
             }
 
+            # Get treasurer data based on villa
+            villa = property_details.get('villa') if property_details and property_details.get('villa') != 'N/A' else None
+            treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+            treasurer_details = {
+                "name": treasurer.name if treasurer else "Tesorero no configurado",
+                "signature": treasurer.signature if treasurer else None,
+                "villa": treasurer.villa if treasurer else None
+            }
+
             # Create receipt record
             receipt = Receipt(
                 correlative_number=correlative_number,
@@ -280,7 +290,8 @@ async def update_miscellaneous_payment(
                 property_details=property_details,
                 owner_details=owner_details,
                 fee_period=f"Pago varios: {payment.description}",
-                notes=f"Recibo generado automáticamente al aprobar el pago varios"
+                notes=f"Recibo generado automáticamente al aprobar el pago varios",
+                treasurer_details=treasurer_details
             )
 
             await receipt.insert()
@@ -453,6 +464,15 @@ async def bulk_approve_miscellaneous_payments(
                     "phone": "N/A"
                 }
 
+                # Get treasurer data based on villa
+                villa = property_details.get('villa') if property_details and property_details.get('villa') != 'N/A' else None
+                treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+                treasurer_details = {
+                    "name": treasurer.name if treasurer else "Tesorero no configurado",
+                    "signature": treasurer.signature if treasurer else None,
+                    "villa": treasurer.villa if treasurer else None
+                }
+
                 # Create receipt record
                 receipt = Receipt(
                     correlative_number=correlative_number,
@@ -462,7 +482,8 @@ async def bulk_approve_miscellaneous_payments(
                     property_details=property_details,
                     owner_details=owner_details,
                     fee_period=f"Pago varios: {payment.description}",
-                    notes=f"Recibo generado automáticamente al aprobar el pago varios (aprobación masiva)"
+                    notes=f"Recibo generado automáticamente al aprobar el pago varios (aprobación masiva)",
+                    treasurer_details=treasurer_details
                 )
 
                 await receipt.insert()

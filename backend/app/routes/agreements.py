@@ -722,6 +722,15 @@ async def pay_next_installment(
             "phone": getattr(agreement.property, 'owner_phone', 'N/A') or "N/A"
         }
 
+        # Get treasurer data based on villa
+        villa = agreement.property.villa if agreement.property else None
+        treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+        treasurer_details = {
+            "name": treasurer.name if treasurer else "Tesorero no configurado",
+            "signature": treasurer.signature if treasurer else None,
+            "villa": treasurer.villa if treasurer else None
+        }
+
         # Create receipt record
         from ..models.receipt import Receipt
         receipt = Receipt(
@@ -731,7 +740,8 @@ async def pay_next_installment(
             property_details=property_details,
             owner_details=owner_details,
             fee_period=f"Convenio {agreement.agreement_number} - Cuota {installment_obj.installment_number}",
-            notes=f"Recibo generado automáticamente al pagar cuota de convenio"
+            notes=f"Recibo generado automáticamente al pagar cuota de convenio",
+            treasurer_details=treasurer_details
         )
 
         await receipt.insert()

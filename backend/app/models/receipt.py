@@ -18,6 +18,7 @@ class Receipt(Document):
     fee_period: Optional[str] = None  # e.g., "Enero 2024" or "Pago varios: description" or "Gasto administrativo: description"
     notes: Optional[str] = None
     treasurer_details: Optional[dict] = None  # Store treasurer info at time of receipt generation
+    generated_receipt_file: Optional[str] = None  # Path to auto-generated PDF receipt
 
     class Settings:
         name = "receipts"
@@ -40,3 +41,4 @@ class ReceiptResponse(BaseModel):
     fee_period: Optional[str] = None
     notes: Optional[str] = None
     treasurer_details: Optional[dict] = None
+    generated_receipt_file: Optional[str] = None
