@@ -25,7 +25,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { agreementsAPI } from '../services/api';
 
 const AgreementPayments = () => {
-  const { isAdmin } = useAuth();
+  const {} = useAuth();
   const [nextInstallment, setNextInstallment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
