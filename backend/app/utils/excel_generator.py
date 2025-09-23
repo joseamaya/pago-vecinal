@@ -618,14 +618,10 @@ def generate_traffic_light_excel(traffic_light_data):
     ws.title = "Semáforo Cuotas"
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Reporte Semáforo de Cuotas"
+    ws['A1'] = "Reporte Semáforo de Cuotas"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:D1')
 
-    # Sort data by house (already sorted in the route, but ensure it)
-    traffic_light_data.sort(key=lambda x: x['house'])
-
-    # Split data into two columns
     total_properties = len(traffic_light_data)
     mid_point = (total_properties + 1) // 2  # Ceiling division
 

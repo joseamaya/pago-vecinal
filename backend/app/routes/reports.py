@@ -637,22 +637,6 @@ async def download_traffic_light_report(
             "status": status
         })
 
-    # Sort by house - first by letter, then by number numerically
-    def sort_key(item):
-        house = item['house']
-        # Find where the number starts
-        letter_part = ''
-        number_part = ''
-        for char in house:
-            if char.isalpha():
-                letter_part += char
-            else:
-                number_part += char
-        return (letter_part, int(number_part) if number_part else 0)
-
-    traffic_light_data.sort(key=sort_key)
-
-    # Generate Excel report
     buffer = generate_traffic_light_excel(traffic_light_data)
     media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     extension = "xlsx"
