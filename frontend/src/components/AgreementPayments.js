@@ -21,11 +21,9 @@ import {
   Receipt as ReceiptIcon,
   Download as DownloadIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../contexts/AuthContext';
 import { agreementsAPI } from '../services/api';
 
 const AgreementPayments = () => {
-  const {} = useAuth();
   const [nextInstallment, setNextInstallment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
