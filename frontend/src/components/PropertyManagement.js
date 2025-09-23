@@ -41,7 +41,6 @@ const PropertyManagement = () => {
   const [editingProperty, setEditingProperty] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const [formData, setFormData] = useState({
     row_letter: '',
     number: '',
@@ -60,7 +59,6 @@ const PropertyManagement = () => {
       const response = await propertiesAPI.getProperties(page, 20);
       setProperties(response.data.data);
       setTotalPages(response.data.pagination.total_pages);
-      setTotalCount(response.data.pagination.total_count);
       setCurrentPage(page);
       setError('');
     } catch (err) {
