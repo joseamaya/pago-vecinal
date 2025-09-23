@@ -690,33 +690,31 @@ def generate_traffic_light_excel(traffic_light_data):
     legend_row = max(len(left_column), len(right_column)) + 6
 
     ws[f'A{legend_row-1}'] = "LEYENDA:"
+    ws.merge_cells(f'A{legend_row-1}:C{legend_row-1}')
     ws[f'A{legend_row-1}'].font = Font(bold=True)
 
     # Verde
     ws.cell(row=legend_row, column=1).fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
     ws.cell(row=legend_row, column=2).value = "VERDE: 0-1 cuotas pendientes"
+    ws.merge_cells(f'B{legend_row}:E{legend_row}')
 
     # Amarillo
     ws.cell(row=legend_row+1, column=1).fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
     ws.cell(row=legend_row+1, column=2).value = "AMARILLO: 2 cuotas pendientes"
+    ws.merge_cells(f'B{legend_row+1}:E{legend_row+1}')
 
     # Rojo
     ws.cell(row=legend_row+2, column=1).fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
     ws.cell(row=legend_row+2, column=2).value = "ROJO: 3 o más cuotas pendientes"
+    ws.merge_cells(f'B{legend_row+2}:E{legend_row+2}')
 
-    # Apply borders to legend
-    for r in range(legend_row, legend_row + 3):
-        ws.cell(row=r, column=1).border = thin_border
-        ws.cell(row=r, column=2).border = thin_border
-
-    # Footer
     footer_row = legend_row + 4
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
     ws.column_dimensions['A'].width = 10
-    ws.column_dimensions['B'].width = 30
-    ws.column_dimensions['C'].width = 5  # Empty column
+    ws.column_dimensions['B'].width = 10
+    ws.column_dimensions['C'].width = 5
     ws.column_dimensions['D'].width = 10
     ws.column_dimensions['E'].width = 15
 
