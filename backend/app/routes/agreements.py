@@ -303,7 +303,7 @@ async def create_agreement(
     try:
         pdf_buffer = generate_agreement_pdf(agreement, prop, fees, installments, treasurer_details)
         pdf_filename = f"agreement_{agreement_number}.pdf"
-        pdf_path = f"static/receipts/{pdf_filename}"
+        pdf_path = f"static/agreements/{pdf_filename}"
         os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
 
         with open(pdf_path, "wb") as f:
