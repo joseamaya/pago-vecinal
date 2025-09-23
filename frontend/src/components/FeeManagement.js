@@ -348,6 +348,22 @@ const FeeManagement = () => {
     }
   };
 
+  const handleDownloadTrafficLightReport = async () => {
+    try {
+      const response = await reportsAPI.getTrafficLightReport();
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `reporte_semaforo_cuotas_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      setError('Error al descargar el reporte semáforo');
+      console.error('Error downloading traffic light report:', err);
+    }
+  };
+
   const handleViewPayments = (fee) => {
     setSelectedFeeForPayments(fee);
     setPaymentsModalOpen(true);
@@ -382,6 +398,14 @@ const FeeManagement = () => {
                 sx={{ mr: 2 }}
               >
                 Descargar Excel
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={handleDownloadTrafficLightReport}
+                sx={{ mr: 2 }}
+              >
+                Reporte Semáforo
               </Button>
             </>
           )}

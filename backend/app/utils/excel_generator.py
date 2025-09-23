@@ -609,6 +609,109 @@ def generate_filtered_fees_excel(fees_data):
     return buffer
 
 
+def generate_traffic_light_excel(traffic_light_data):
+    """
+    Generate an Excel report with traffic light system for condominium fees
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Semáforo Cuotas"
+
+    # Title
+    ws['A1'] = "PAGO VECINAL - Reporte Semáforo de Cuotas"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:D1')
+
+    # Sort data by house (already sorted in the route, but ensure it)
+    traffic_light_data.sort(key=lambda x: x['house'])
+
+    # Split data into two columns
+    total_properties = len(traffic_light_data)
+    mid_point = (total_properties + 1) // 2  # Ceiling division
+
+    left_column = traffic_light_data[:mid_point]
+    right_column = traffic_light_data[mid_point:]
+
+    # Headers for left column
+    ws['A3'] = "Casa"
+    ws['B3'] = "Estado"
+    ws['A3'].font = Font(bold=True)
+    ws['B3'].font = Font(bold=True)
+
+    # Headers for right column
+    ws['C3'] = "Casa"
+    ws['D3'] = "Estado"
+    ws['C3'].font = Font(bold=True)
+    ws['D3'].font = Font(bold=True)
+
+    # Left column data
+    for row, data in enumerate(left_column, 4):
+        ws.cell(row=row, column=1).value = data['house']
+        ws.cell(row=row, column=2).value = data['status']
+
+        # Apply color based on status
+        if data['status'] == 'ROJO':
+            ws.cell(row=row, column=2).fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+            ws.cell(row=row, column=2).font = Font(color="FFFFFF", bold=True)
+        elif data['status'] == 'AMARILLO':
+            ws.cell(row=row, column=2).fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+            ws.cell(row=row, column=2).font = Font(bold=True)
+        elif data['status'] == 'VERDE':
+            ws.cell(row=row, column=2).fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+            ws.cell(row=row, column=2).font = Font(bold=True)
+
+    # Right column data
+    for row, data in enumerate(right_column, 4):
+        ws.cell(row=row, column=3).value = data['house']
+        ws.cell(row=row, column=4).value = data['status']
+
+        # Apply color based on status
+        if data['status'] == 'ROJO':
+            ws.cell(row=row, column=4).fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+            ws.cell(row=row, column=4).font = Font(color="FFFFFF", bold=True)
+        elif data['status'] == 'AMARILLO':
+            ws.cell(row=row, column=4).fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+            ws.cell(row=row, column=4).font = Font(bold=True)
+        elif data['status'] == 'VERDE':
+            ws.cell(row=row, column=4).fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+            ws.cell(row=row, column=4).font = Font(bold=True)
+
+    # Legend
+    legend_row = max(len(left_column), len(right_column)) + 6
+    ws[f'A{legend_row}'] = "LEYENDA:"
+    ws[f'A{legend_row}'].font = Font(bold=True)
+
+    legend_row += 1
+    ws[f'A{legend_row}'] = "VERDE:"
+    ws[f'A{legend_row}'].font = Font(bold=True)
+    ws[f'B{legend_row}'] = "0-1 cuotas pendientes"
+
+    legend_row += 1
+    ws[f'A{legend_row}'] = "AMARILLO:"
+    ws[f'A{legend_row}'].font = Font(bold=True)
+    ws[f'B{legend_row}'] = "2 cuotas pendientes"
+
+    legend_row += 1
+    ws[f'A{legend_row}'] = "ROJO:"
+    ws[f'A{legend_row}'].font = Font(bold=True)
+    ws[f'B{legend_row}'] = "3 o más cuotas pendientes"
+
+    # Footer
+    footer_row = legend_row + 3
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    ws.column_dimensions['A'].width = 10
+    ws.column_dimensions['B'].width = 15
+    ws.column_dimensions['C'].width = 10
+    ws.column_dimensions['D'].width = 15
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
 def generate_annual_property_statement_excel(property_data, year, fees_data, payments_data):
     """
     Generate an annual Excel statement for a property

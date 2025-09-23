@@ -21,7 +21,8 @@ from ..utils.excel_generator import (
     generate_monthly_fees_excel,
     generate_annual_property_statement_excel,
     generate_all_payments_excel,
-    generate_filtered_fees_excel
+    generate_filtered_fees_excel,
+    generate_traffic_light_excel
 )
 
 router = APIRouter()
@@ -585,6 +586,78 @@ async def download_filtered_fees_report(
     extension = "xlsx"
 
     filename = f"cuotas_filtradas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.get("/traffic-light")
+async def download_traffic_light_report(
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel report with traffic light system for condominium fees"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Get current date for comparison
+    current_date = datetime.now().date()
+
+    # Get all properties
+    properties = await Property.find_all().to_list()
+
+    traffic_light_data = []
+
+    for property_obj in properties:
+        # Get all pending fees for this property that are overdue
+        overdue_fees = await Fee.find(
+            Fee.property.id == property_obj.id,
+            Fee.status == FeeStatus.PENDING,
+            Fee.due_date < current_date
+        ).to_list()
+
+        overdue_count = len(overdue_fees)
+
+        # Determine status based on overdue count
+        if overdue_count >= 3:
+            status = "ROJO"
+        elif overdue_count == 2:
+            status = "AMARILLO"
+        else:
+            status = "VERDE"
+
+        # House identifier: row_letter + number
+        house = f"{property_obj.row_letter}{property_obj.number}"
+
+        traffic_light_data.append({
+            "house": house,
+            "status": status
+        })
+
+    # Sort by house - first by letter, then by number numerically
+    def sort_key(item):
+        house = item['house']
+        # Find where the number starts
+        letter_part = ''
+        number_part = ''
+        for char in house:
+            if char.isalpha():
+                letter_part += char
+            else:
+                number_part += char
+        return (letter_part, int(number_part) if number_part else 0)
+
+    traffic_light_data.sort(key=sort_key)
+
+    # Generate Excel report
+    buffer = generate_traffic_light_excel(traffic_light_data)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"reporte_semaforo_cuotas_{datetime.now().strftime('%Y%m%d')}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,

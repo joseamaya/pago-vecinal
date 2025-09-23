@@ -236,6 +236,7 @@ export const reportsAPI = {
     if (filters.property) params.property_id = filters.property;
     return api.get('/reports/filtered-fees', { params, responseType: 'blob' });
   },
+  getTrafficLightReport: () => api.get('/reports/traffic-light', { responseType: 'blob' }),
   getPaymentsOverTime: () => api.get('/reports/payments-over-time'),
   getFeesByStatus: () => api.get('/reports/fees-by-status'),
   getPropertiesByVilla: () => api.get('/reports/properties-by-villa'),
