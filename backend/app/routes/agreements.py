@@ -11,6 +11,7 @@ from ..models.agreement import (
 from ..models.fee import Fee, FeeStatus
 from ..models.property import Property
 from ..models.user import User, UserRole
+from ..models.treasurer import Treasurer
 from ..routes.auth import get_current_user
 from ..utils.pdf_generator import generate_agreement_pdf
 
@@ -182,6 +183,16 @@ async def create_agreement(
             detail="Property not found"
         )
 
+    # Get the treasurer for this villa
+    treasurer = await Treasurer.find_one(Treasurer.villa == prop.villa)
+    treasurer_details = None
+    if treasurer:
+        treasurer_details = {
+            "name": treasurer.name,
+            "signature": treasurer.signature,
+            "villa": treasurer.villa
+        }
+
     # Check permissions
     if (current_user.role != UserRole.ADMIN and
         (not prop.owner or str(prop.owner.id) != str(current_user.id))):
@@ -288,7 +299,7 @@ async def create_agreement(
 
     # Generate PDF
     try:
-        pdf_buffer = generate_agreement_pdf(agreement, prop, fees, installments)
+        pdf_buffer = generate_agreement_pdf(agreement, prop, fees, installments, treasurer_details)
         pdf_filename = f"agreement_{agreement_number}.pdf"
         pdf_path = os.path.join("static", "agreements", pdf_filename)
 

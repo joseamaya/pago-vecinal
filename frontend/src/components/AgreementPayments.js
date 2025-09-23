@@ -3,45 +3,34 @@ import {
   Container,
   Typography,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Box,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
-  Chip,
-  IconButton,
-  Box,
   Alert,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+  Card,
+  CardContent,
+  Grid,
+  Chip,
 } from '@mui/material';
 import {
   Payment as PaymentIcon,
   Receipt as ReceiptIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { agreementsAPI } from '../services/api';
 
 const AgreementPayments = () => {
   const { isAdmin } = useAuth();
-  const [installments, setInstallments] = useState([]);
+  const [nextInstallment, setNextInstallment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
-  const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [formData, setFormData] = useState({
-    installment_id: '',
     amount: '',
     payment_reference: '',
     notes: '',
@@ -51,68 +40,44 @@ const AgreementPayments = () => {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    fetchInstallments();
+    fetchNextInstallment();
   }, []);
 
-  const fetchInstallments = async () => {
+  const fetchNextInstallment = async () => {
     try {
       setLoading(true);
-      const response = await agreementsAPI.getAgreements();
-      // Flatten all installments from all agreements
-      const allInstallments = [];
-      response.data.forEach(agreement => {
-        if (agreement.installments && agreement.installments.length > 0) {
-          agreement.installments.forEach(installment => {
-            allInstallments.push({
-              ...installment,
-              agreement_number: agreement.agreement_number,
-              property_info: `${agreement.property_villa} ${agreement.property_row_letter}${agreement.property_number}`,
-              property_owner_name: agreement.property_owner_name,
-              agreement_id: agreement.id
-            });
-          });
-        }
-      });
-      // Sort by due date descending (most recent first)
-      allInstallments.sort((a, b) => new Date(b.due_date) - new Date(a.due_date));
-      setInstallments(allInstallments);
+      const response = await agreementsAPI.getNextPendingInstallment();
+      setNextInstallment(response.data);
       setError('');
+
+      // Auto-fill amount if installment exists
+      if (response.data && response.data.installment) {
+        setFormData(prev => ({
+          ...prev,
+          amount: response.data.installment.amount.toString()
+        }));
+      }
     } catch (err) {
-      setError('Error al cargar cuotas de convenios');
-      console.error('Error fetching installments:', err);
+      if (err.response?.status === 404) {
+        setNextInstallment(null);
+        setError('');
+      } else {
+        setError('Error al cargar la próxima cuota pendiente');
+        console.error('Error fetching next installment:', err);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOpenDialog = (installment = null) => {
-    if (installment) {
-      setSelectedInstallment(installment);
-      setFormData({
-        installment_id: installment.id,
-        amount: installment.amount.toString(),
-        payment_reference: '',
-        notes: '',
-      });
-    } else {
-      setSelectedInstallment(null);
-      setFormData({
-        installment_id: '',
-        amount: '',
-        payment_reference: '',
-        notes: '',
-      });
-    }
-    setReceiptFile(null);
+  const handleOpenDialog = () => {
     setOpen(true);
   };
 
   const handleCloseDialog = () => {
     setOpen(false);
-    setSelectedInstallment(null);
     setFormData({
-      installment_id: '',
-      amount: '',
+      amount: nextInstallment?.installment?.amount?.toString() || '',
       payment_reference: '',
       notes: '',
     });
@@ -140,7 +105,7 @@ const AgreementPayments = () => {
       setSuccess(true);
       setTimeout(() => {
         handleCloseDialog();
-        fetchInstallments(); // Refresh to update the list
+        fetchNextInstallment(); // Refresh to get the next installment
       }, 2000);
 
     } catch (err) {
@@ -181,23 +146,17 @@ const AgreementPayments = () => {
     }
   };
 
-  const getInstallmentInfo = (installment) => {
-    return `${installment.property_info} - Cuota ${installment.installment_number} - S/ ${installment.amount.toFixed(2)}`;
-  };
-
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Gestión de Pagos de Convenios
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<PaymentIcon />}
-          onClick={() => handleOpenDialog(null)}
-        >
-          Nuevo Pago
-        </Button>
+        <Box>
+          <Typography variant="h4" component="h1">
+            Pago de Cuotas de Convenio
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            🔄 Se muestra automáticamente la cuota pendiente más antigua para facilitar el pago
+          </Typography>
+        </Box>
       </Box>
 
       {error && (
@@ -206,115 +165,102 @@ const AgreementPayments = () => {
         </Alert>
       )}
 
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Convenio</TableCell>
-                <TableCell>Cuota</TableCell>
-                <TableCell>Monto</TableCell>
-                <TableCell>Fecha de Vencimiento</TableCell>
-                <TableCell>Fecha de Pago</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Comprobante</TableCell>
-                <TableCell>Recibo</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={9} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
-              ) : installments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} align="center">
-                    No hay cuotas de convenios registradas
-                  </TableCell>
-                </TableRow>
-              ) : (
-                installments.map((installment) => (
-                  <TableRow key={installment.id}>
-                    <TableCell>{installment.agreement_number}</TableCell>
-                    <TableCell>{getInstallmentInfo(installment)}</TableCell>
-                    <TableCell>S/ {installment.amount.toFixed(2)}</TableCell>
-                    <TableCell>
-                      {new Date(installment.due_date).toLocaleDateString('es-ES')}
-                    </TableCell>
-                    <TableCell>
-                      {installment.paid_date
-                        ? new Date(installment.paid_date).toLocaleDateString('es-ES')
-                        : '-'
-                      }
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getStatusLabel(installment.status)}
-                        color={getStatusColor(installment.status)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {installment.receipt_file ? (
-                        <a href={`http://localhost:8000${installment.receipt_file}`} target="_blank" rel="noopener noreferrer">
-                          Ver Comprobante
-                        </a>
-                      ) : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {installment.status === 'paid' ? (
-                        <a href={`http://localhost:8000/agreements/${installment.agreement_id}/installments/${installment.id}/download-receipt`} target="_blank" rel="noopener noreferrer">
-                          Descargar Recibo
-                        </a>
-                      ) : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleOpenDialog(installment)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      {installment.status === 'pending' && (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          startIcon={<PaymentIcon />}
-                          onClick={() => handleOpenDialog(installment)}
-                          sx={{ ml: 1 }}
-                        >
-                          Pagar
-                        </Button>
-                      )}
-                      {isAdmin && (
-                        <IconButton
-                          color="error"
-                          onClick={() => {
-                            if (window.confirm('¿Estás seguro de que quieres eliminar esta cuota?')) {
-                              // Handle delete
-                            }
-                          }}
-                          sx={{ ml: 1 }}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+      {loading ? (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Typography>Cargando...</Typography>
+        </Paper>
+      ) : !nextInstallment ? (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Typography variant="h6" color="text.secondary">
+            No hay cuotas pendientes de pago
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Todas las cuotas de tus convenios están al día
+          </Typography>
+        </Paper>
+      ) : (
+        <Card>
+          <CardContent>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+              <Typography variant="h6">
+                Próxima Cuota a Pagar
+              </Typography>
+              <Chip
+                label={getStatusLabel(nextInstallment.installment.status)}
+                color={getStatusColor(nextInstallment.installment.status)}
+                size="small"
+              />
+            </Box>
+
+            <Grid container spacing={2} mb={3}>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Convenio
+                </Typography>
+                <Typography variant="body1">
+                  {nextInstallment.agreement.agreement_number}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Propiedad
+                </Typography>
+                <Typography variant="body1">
+                  {nextInstallment.agreement.property_villa} {nextInstallment.agreement.property_row_letter}{nextInstallment.agreement.property_number}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Cuota N°
+                </Typography>
+                <Typography variant="body1">
+                  {nextInstallment.installment.installment_number}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Monto
+                </Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  S/ {nextInstallment.installment.amount.toFixed(2)}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Fecha de Vencimiento
+                </Typography>
+                <Typography variant="body1">
+                  {new Date(nextInstallment.installment.due_date).toLocaleDateString('es-ES')}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Propietario
+                </Typography>
+                <Typography variant="body1">
+                  {nextInstallment.agreement.property_owner_name}
+                </Typography>
+              </Grid>
+            </Grid>
+
+            <Box display="flex" justifyContent="center">
+              <Button
+                variant="contained"
+                startIcon={<PaymentIcon />}
+                onClick={handleOpenDialog}
+                size="large"
+              >
+                Pagar Esta Cuota
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Payment Dialog */}
       <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {selectedInstallment ? `Pagar Cuota - ${selectedInstallment.agreement_number} (Cuota ${selectedInstallment.installment_number})` : 'Nuevo Pago'}
+          Pagar Cuota Más Antigua - {nextInstallment?.agreement?.agreement_number}
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
@@ -323,32 +269,6 @@ const AgreementPayments = () => {
                 ¡Pago procesado exitosamente!
               </Alert>
             )}
-
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Cuota de Convenio</InputLabel>
-              <Select
-                value={formData.installment_id}
-                onChange={(e) => {
-                  const installmentId = e.target.value;
-                  const installment = installments.find(inst => inst.id === installmentId);
-                  setFormData({
-                    ...formData,
-                    installment_id: installmentId,
-                    amount: installment ? installment.amount.toString() : '',
-                  });
-                }}
-                label="Cuota de Convenio"
-                required
-              >
-                {installments
-                  .filter(inst => inst.status === 'pending')
-                  .map((installment) => (
-                    <MenuItem key={installment.id} value={installment.id}>
-                      {installment.agreement_number} - {installment.property_info} - Cuota {installment.installment_number} - S/ {installment.amount.toFixed(2)} - Vence: {new Date(installment.due_date).toLocaleDateString('es-ES')}
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
 
             <TextField
               margin="dense"
@@ -394,14 +314,24 @@ const AgreementPayments = () => {
             <Button onClick={handleCloseDialog} disabled={submitting}>
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={submitting || success}
-              startIcon={<ReceiptIcon />}
-            >
-              {submitting ? 'Procesando...' : 'Confirmar Pago'}
-            </Button>
+            {success ? (
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={() => window.open(`http://localhost:8000/agreements/${nextInstallment.agreement.id}/installments/${nextInstallment.installment.id}/download-receipt`, '_blank')}
+              >
+                Descargar Recibo
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={submitting}
+                startIcon={<ReceiptIcon />}
+              >
+                {submitting ? 'Procesando...' : 'Confirmar Pago'}
+              </Button>
+            )}
           </DialogActions>
         </form>
       </Dialog>

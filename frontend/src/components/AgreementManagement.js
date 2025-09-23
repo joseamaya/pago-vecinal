@@ -65,7 +65,7 @@ const AgreementManagement = () => {
   const [selectedNumber, setSelectedNumber] = useState('');
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [totalDebt, setTotalDebt] = useState(0);
-  const [calculatedInstallments, setCalculatedInstallments] = useState('');
+  const [calculatedMonthlyAmount, setCalculatedMonthlyAmount] = useState(0);
   const [filters, setFilters] = useState({
     property_id: '',
     status: '',
@@ -107,7 +107,7 @@ const AgreementManagement = () => {
         setSelectedProperty(property);
         setFormData(prev => ({ ...prev, property_id: property.id, fee_ids: [] }));
         setTotalDebt(0);
-        setCalculatedInstallments('');
+        setCalculatedMonthlyAmount(0);
         // Fetch fees for this property
         const status = editingAgreement ? undefined : 'pending';
         const feesResponse = await feesAPI.getFees({ status, property_id: property.id });
@@ -116,21 +116,21 @@ const AgreementManagement = () => {
         if (editingAgreement) {
           setFormData(prev => ({ ...prev, fee_ids: editingAgreement.fee_ids }));
           setTotalDebt(editingAgreement.total_debt);
-          setCalculatedInstallments(editingAgreement.installments_count.toString());
+          setCalculatedMonthlyAmount(editingAgreement.monthly_amount);
         }
       } catch (err) {
         console.error('Error fetching property:', err);
         setSelectedProperty(null);
         setFormData(prev => ({ ...prev, property_id: '', fee_ids: [] }));
         setTotalDebt(0);
-        setCalculatedInstallments('');
+        setCalculatedMonthlyAmount(0);
         setFormFees([]);
       }
     } else {
       setSelectedProperty(null);
       setFormData(prev => ({ ...prev, property_id: '', fee_ids: [] }));
       setTotalDebt(0);
-      setCalculatedInstallments('');
+      setCalculatedMonthlyAmount(0);
       setFormFees([]);
     }
   }, [selectedLetter, selectedNumber, editingAgreement]);
@@ -180,7 +180,7 @@ const AgreementManagement = () => {
         notes: agreement.notes || '',
       });
       setTotalDebt(0);
-      setCalculatedInstallments('');
+      setCalculatedMonthlyAmount(agreement.monthly_amount);
       // Set letter and number from property
       const property = properties.find(p => p.id === agreement.property_id);
       if (property) {
@@ -200,7 +200,7 @@ const AgreementManagement = () => {
         notes: '',
       });
       setTotalDebt(0);
-      setCalculatedInstallments('');
+      setCalculatedMonthlyAmount(0);
       setSelectedLetter('');
       setSelectedNumber('');
       setSelectedProperty(null);
@@ -220,7 +220,7 @@ const AgreementManagement = () => {
       notes: '',
     });
     setTotalDebt(0);
-    setCalculatedInstallments('');
+    setCalculatedMonthlyAmount(0);
     setSelectedLetter('');
     setSelectedNumber('');
     setSelectedProperty(null);
@@ -237,21 +237,21 @@ const AgreementManagement = () => {
       return;
     }
 
-    if (parseFloat(formData.monthly_amount) <= 0) {
-      setError('El monto mensual debe ser mayor a 0');
+    if (parseInt(formData.installments_count) <= 0) {
+      setError('El número de cuotas debe ser mayor a 0');
       return;
     }
 
-    if (parseFloat(formData.monthly_amount) > totalDebt) {
-      setError('El monto mensual no puede ser mayor a la deuda total');
+    if (calculatedMonthlyAmount <= 0) {
+      setError('El monto mensual calculado debe ser mayor a 0');
       return;
     }
 
     try {
       const submitData = {
         ...formData,
-        monthly_amount: parseFloat(formData.monthly_amount),
-        installments_count: parseInt(calculatedInstallments),
+        monthly_amount: calculatedMonthlyAmount,
+        installments_count: parseInt(formData.installments_count),
         start_date: new Date(formData.start_date).toISOString(),
       };
 
@@ -397,30 +397,25 @@ const AgreementManagement = () => {
       .reduce((total, fee) => total + fee.amount, 0);
   };
 
-  const calculateInstallmentsCount = (totalDebt, monthlyAmount) => {
-    if (monthlyAmount <= 0) return '';
-    return Math.ceil(totalDebt / monthlyAmount);
-  };
-
   const handleFeeSelection = (feeId) => {
     const newSelectedFees = formData.fee_ids.includes(feeId)
       ? formData.fee_ids.filter(id => id !== feeId)
       : [...formData.fee_ids, feeId];
 
     const newTotalDebt = calculateTotalDebt(newSelectedFees);
-    const newCalculatedInstallments = calculateInstallmentsCount(newTotalDebt, parseFloat(formData.monthly_amount) || 0);
+    const newCalculatedMonthlyAmount = formData.installments_count ? (newTotalDebt / parseInt(formData.installments_count)) : 0;
 
     setFormData({ ...formData, fee_ids: newSelectedFees });
     setTotalDebt(newTotalDebt);
-    setCalculatedInstallments(newCalculatedInstallments);
+    setCalculatedMonthlyAmount(newCalculatedMonthlyAmount);
   };
 
-  const handleMonthlyAmountChange = (value) => {
-    const monthlyAmount = parseFloat(value) || 0;
-    const newCalculatedInstallments = calculateInstallmentsCount(totalDebt, monthlyAmount);
+  const handleInstallmentsCountChange = (value) => {
+    const installmentsCount = parseInt(value) || 0;
+    const newCalculatedMonthlyAmount = installmentsCount > 0 ? (totalDebt / installmentsCount) : 0;
 
-    setFormData({ ...formData, monthly_amount: value });
-    setCalculatedInstallments(newCalculatedInstallments);
+    setFormData({ ...formData, installments_count: value });
+    setCalculatedMonthlyAmount(newCalculatedMonthlyAmount);
   };
 
   return (
@@ -789,33 +784,33 @@ const AgreementManagement = () => {
                 </Grid>
               )}
 
-              {/* Monthly Amount */}
+              {/* Installments Count */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   margin="dense"
-                  label="Monto Mensual"
+                  label="Número de Cuotas"
                   type="number"
                   fullWidth
                   required
-                  value={formData.monthly_amount}
-                  onChange={(e) => handleMonthlyAmountChange(e.target.value)}
-                  inputProps={{ min: 0.01, step: 0.01 }}
-                  helperText={totalDebt > 0 ? `Máximo recomendado: S/ ${totalDebt.toFixed(2)}` : ''}
+                  value={formData.installments_count}
+                  onChange={(e) => handleInstallmentsCountChange(e.target.value)}
+                  inputProps={{ min: 1 }}
+                  helperText="Ingrese el número de cuotas deseado"
                 />
               </Grid>
 
-              {/* Auto-calculated Installments */}
+              {/* Auto-calculated Monthly Amount */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   margin="dense"
-                  label="Número de Cuotas (Calculado)"
+                  label="Monto Mensual (Calculado)"
                   type="number"
                   fullWidth
-                  value={calculatedInstallments}
+                  value={calculatedMonthlyAmount.toFixed(2)}
                   InputProps={{
                     readOnly: true,
                   }}
-                  helperText="Calculado automáticamente basado en deuda total / monto mensual"
+                  helperText="Calculado automáticamente basado en deuda total / número de cuotas"
                 />
               </Grid>
 

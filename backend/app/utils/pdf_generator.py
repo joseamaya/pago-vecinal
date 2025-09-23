@@ -4,7 +4,7 @@ from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
@@ -324,7 +324,7 @@ def generate_property_payment_history_pdf(property_data, payments_data, fees_dat
     return buffer
 
 
-def generate_agreement_pdf(agreement, property_data, fees_data, installments_data):
+def generate_agreement_pdf(agreement, property_data, fees_data, installments_data, treasurer_details=None):
     """
     Generate a PDF agreement document
     """
@@ -365,8 +365,9 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
     content = []
 
     # Header
-    content.append(Paragraph("CONVENIO DE PAGO", title_style))
-    content.append(Paragraph("Sistema de Gestión de Cuotas de Condominio", subtitle_style))
+    content.append(Paragraph("Condominio Parques del Chipe", title_style))
+    content.append(Paragraph(property_data.villa, subtitle_style))
+    content.append(Paragraph("Convenio de Pagos", subtitle_style))
     content.append(Spacer(1, 20))
 
     # Agreement info
@@ -374,7 +375,6 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
     agreement_info = [
         ["Número de Convenio:", agreement.agreement_number],
         ["Fecha de Creación:", agreement.created_at.strftime("%d/%m/%Y %H:%M")],
-        ["Estado:", agreement.status.value.upper()],
         ["Fecha de Inicio:", agreement.start_date.strftime("%d/%m/%Y")],
         ["Fecha de Fin:", agreement.end_date.strftime("%d/%m/%Y")]
     ]
@@ -398,8 +398,7 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
         ["Villa:", property_data.villa],
         ["Fila:", property_data.row_letter],
         ["Número:", str(property_data.number)],
-        ["Propietario:", property_data.owner_name],
-        ["Teléfono:", property_data.owner_phone or "N/A"]
+        ["Propietario:", property_data.owner_name]
     ]
 
     property_table = Table(property_info, colWidths=[2*inch, 4*inch])
@@ -436,6 +435,7 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
     ]))
     content.append(debt_table)
     content.append(Spacer(1, 20))
+    content.append(PageBreak())
 
     # Fees covered by agreement
     if fees_data:
@@ -497,10 +497,9 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
     terms = [
         "1. El propietario se compromete a pagar las cuotas mensuales según el cronograma establecido.",
         "2. Los pagos deben realizarse antes de la fecha de vencimiento de cada cuota.",
-        "3. En caso de retraso en el pago, se aplicarán intereses moratorios.",
-        "4. El convenio queda sin efecto si se incumple con 2 cuotas consecutivas.",
-        "5. Una vez completado el pago de todas las cuotas, las deudas originales quedan canceladas.",
-        "6. Este documento es válido como comprobante del acuerdo establecido."
+        "3. El convenio queda sin efecto si se incumple con 2 cuotas consecutivas.",
+        "4. Una vez completado el pago de todas las cuotas, las deudas originales quedan canceladas.",
+        "5. Este documento es válido como comprobante del acuerdo establecido."
     ]
 
     for term in terms:
@@ -515,10 +514,67 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
         content.append(Paragraph(agreement.notes, normal_style))
         content.append(Spacer(1, 20))
 
+    # Treasurer signature section (like in receipt)
+    if treasurer_details:
+        content.append(Spacer(1, 10))
+
+        treasurer_name = treasurer_details.get('name', 'N/A')
+        signature = treasurer_details.get('signature', 'N/A')
+        villa = treasurer_details.get('villa', property_data.villa)
+
+        # Check if signature is a file path to an image
+        if signature and os.path.exists(signature):
+            try:
+                # Assume it's an image file, add as Image centered
+                signature_image = Image(signature, width=3*inch, height=1*inch)
+                signature_image.hAlign = 'CENTER'
+                content.append(signature_image)
+            except Exception as e:
+                print(f"Error loading signature image {signature}: {e}")
+                # Fall back to text centered
+                content.append(Paragraph(signature, ParagraphStyle(
+                    'Centered',
+                    parent=normal_style,
+                    alignment=TA_CENTER
+                )))
+        elif signature:
+            # Display as centered text if not an image
+            content.append(Paragraph(signature, ParagraphStyle(
+                'Centered',
+                parent=normal_style,
+                alignment=TA_CENTER
+            )))
+
+        # Add a horizontal line (shorter, size of name)
+        line_table = Table([['']], colWidths=[3*inch])
+        line_table.setStyle(TableStyle([
+            ('LINEBELOW', (0, 0), (-1, -1), 1, colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER')
+        ]))
+        content.append(line_table)
+        content.append(Spacer(1, 5))
+
+        # Add treasurer name centered below
+        content.append(Paragraph(treasurer_name, ParagraphStyle(
+            'CenteredName',
+            parent=normal_style,
+            alignment=TA_CENTER,
+            fontSize=10
+        )))
+        content.append(Spacer(1, 2))
+
+        # Add "Tesorero" and villa
+        content.append(Paragraph(f"Tesorero - {villa}", ParagraphStyle(
+            'CenteredVilla',
+            parent=normal_style,
+            alignment=TA_CENTER,
+            fontSize=9
+        )))
+
+        content.append(Spacer(1, 10))
+
     # Footer
     content.append(Spacer(1, 30))
-    content.append(Paragraph("Este convenio ha sido generado automáticamente por el sistema.", normal_style))
-    content.append(Paragraph(f"Fecha de generación: {datetime.now().strftime('%d/%m/%Y %H:%M')}", normal_style))
 
     # Build the PDF
     doc.build(content)
