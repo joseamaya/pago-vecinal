@@ -617,6 +617,9 @@ def generate_traffic_light_excel(traffic_light_data):
     ws = wb.active
     ws.title = "Semáforo Cuotas"
 
+    # Define border style
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
     # Title
     ws['A1'] = "Reporte Semáforo de Cuotas"
     ws['A1'].font = Font(size=16, bold=True)
@@ -643,7 +646,7 @@ def generate_traffic_light_excel(traffic_light_data):
     # Left column data
     for row, data in enumerate(left_column, 4):
         ws.cell(row=row, column=1).value = data['house']
-        ws.cell(row=row, column=2).value = data['status']
+        ws.cell(row=row, column=2).value = ""
 
         # Apply color based on status
         if data['status'] == 'ROJO':
@@ -659,7 +662,7 @@ def generate_traffic_light_excel(traffic_light_data):
     # Right column data
     for row, data in enumerate(right_column, 4):
         ws.cell(row=row, column=3).value = data['house']
-        ws.cell(row=row, column=4).value = data['status']
+        ws.cell(row=row, column=4).value = ""
 
         # Apply color based on status
         if data['status'] == 'ROJO':
@@ -672,25 +675,32 @@ def generate_traffic_light_excel(traffic_light_data):
             ws.cell(row=row, column=4).fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
             ws.cell(row=row, column=4).font = Font(bold=True)
 
+    # Apply borders to tables
+    # Left table
+    for r in range(3, len(left_column) + 4):
+        for c in [1, 2]:
+            ws.cell(row=r, column=c).border = thin_border
+
+    # Right table
+    for r in range(3, len(right_column) + 4):
+        for c in [3, 4]:
+            ws.cell(row=r, column=c).border = thin_border
+
     # Legend
     legend_row = max(len(left_column), len(right_column)) + 6
-    ws[f'A{legend_row}'] = "LEYENDA:"
-    ws[f'A{legend_row}'].font = Font(bold=True)
 
-    legend_row += 1
-    ws[f'A{legend_row}'] = "VERDE:"
-    ws[f'A{legend_row}'].font = Font(bold=True)
-    ws[f'B{legend_row}'] = "0-1 cuotas pendientes"
+    # Verde
+    ws.cell(row=legend_row, column=1).fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
 
-    legend_row += 1
-    ws[f'A{legend_row}'] = "AMARILLO:"
-    ws[f'A{legend_row}'].font = Font(bold=True)
-    ws[f'B{legend_row}'] = "2 cuotas pendientes"
+    # Amarillo
+    ws.cell(row=legend_row+1, column=1).fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 
-    legend_row += 1
-    ws[f'A{legend_row}'] = "ROJO:"
-    ws[f'A{legend_row}'].font = Font(bold=True)
-    ws[f'B{legend_row}'] = "3 o más cuotas pendientes"
+    # Rojo
+    ws.cell(row=legend_row+2, column=1).fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+
+    # Apply borders to legend
+    for r in range(legend_row, legend_row + 3):
+        ws.cell(row=r, column=1).border = thin_border
 
     # Footer
     footer_row = legend_row + 3
@@ -699,7 +709,7 @@ def generate_traffic_light_excel(traffic_light_data):
     # Auto-adjust column widths
     ws.column_dimensions['A'].width = 10
     ws.column_dimensions['B'].width = 15
-    ws.column_dimensions['C'].width = 10
+    ws.column_dimensions['C'].width = 15  # Increased to separate the two tables
     ws.column_dimensions['D'].width = 15
 
     buffer = io.BytesIO()
