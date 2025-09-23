@@ -152,8 +152,8 @@ const PropertyManagement = () => {
 
     try {
       const response = await propertiesAPI.bulkImportProperties(selectedFile);
-      const { imported, errors } = response.data;
-      alert(`Importación completada. Propiedades importadas: ${imported}. Errores: ${errors.length}`);
+      const { imported, updated, errors } = response.data;
+      alert(`Importación completada. Propiedades importadas: ${imported}. Propiedades actualizadas: ${updated}. Errores: ${errors.length}`);
       if (errors.length > 0) {
         console.error('Errores de importación:', errors);
       }

@@ -8,6 +8,7 @@ import openpyxl
 
 class BulkImportResponse(BaseModel):
     imported: int
+    updated: int
     errors: List[str]
 
 class PaginatedPropertyResponse(BaseModel):
@@ -251,6 +252,7 @@ async def bulk_import_properties(
         sheet = workbook.active
 
         imported = 0
+        updated = 0
         errors = []
 
         # Skip header row
@@ -274,20 +276,22 @@ async def bulk_import_properties(
                 Property.villa == villa
             )
             if existing:
-                errors.append(f"Row {row_idx}: Property already exists")
-                continue
+                existing.owner_name = owner_name
+                existing.owner_phone = owner_phone
+                await existing.save()
+                updated += 1
+            else:
+                prop = Property(
+                    row_letter=row_letter.upper(),
+                    number=number,
+                    villa=villa,
+                    owner_name=owner_name,
+                    owner_phone=owner_phone
+                )
+                await prop.insert()
+                imported += 1
 
-            prop = Property(
-                row_letter=row_letter.upper(),
-                number=number,
-                villa=villa,
-                owner_name=owner_name,
-                owner_phone=owner_phone
-            )
-            await prop.insert()
-            imported += 1
-
-        return BulkImportResponse(imported=imported, errors=errors)
+        return BulkImportResponse(imported=imported, updated=updated, errors=errors)
 
     except Exception as e:
         raise HTTPException(
