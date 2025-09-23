@@ -28,6 +28,8 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
+  Refresh as RefreshIcon,
+  Sync as SyncIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { receiptsAPI, paymentsAPI } from '../services/api';
@@ -149,6 +151,39 @@ const ReceiptManagement = () => {
     }
   };
 
+  const handleRegenerate = async (receipt) => {
+    if (window.confirm('¿Estás seguro de que quieres regenerar el PDF de este recibo? Esto sobreescribirá el archivo existente.')) {
+      try {
+        await receiptsAPI.regenerateReceiptPDF(receipt.id);
+        setError('');
+        alert('PDF regenerado exitosamente');
+      } catch (err) {
+        setError('Error al regenerar el PDF del recibo');
+        console.error('Error regenerating receipt PDF:', err);
+      }
+    }
+  };
+
+  const handleRegenerateAll = async () => {
+    if (window.confirm('¿Estás seguro de que quieres regenerar TODOS los PDFs de recibos? Esto sobreescribirá todos los archivos existentes y puede tomar tiempo.')) {
+      try {
+        setLoading(true);
+        const response = await receiptsAPI.regenerateAllReceiptPDFs();
+        setError('');
+        alert(`PDFs regenerados exitosamente: ${response.data.updated_count} recibos actualizados`);
+        if (response.data.errors && response.data.errors.length > 0) {
+          console.warn('Errores durante la regeneración:', response.data.errors);
+          alert(`Hubo ${response.data.errors.length} errores. Revisa la consola para más detalles.`);
+        }
+      } catch (err) {
+        setError('Error al regenerar los PDFs de los recibos');
+        console.error('Error regenerating all receipt PDFs:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -156,13 +191,26 @@ const ReceiptManagement = () => {
         <Typography variant="h4" component="h1">
           Gestión de Recibos
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Nuevo Recibo
-        </Button>
+        <Box>
+          {isAdmin && (
+            <Button
+              variant="outlined"
+              startIcon={<SyncIcon />}
+              onClick={handleRegenerateAll}
+              disabled={loading}
+              sx={{ mr: 2 }}
+            >
+              Regenerar Todos los PDFs
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+          >
+            Nuevo Recibo
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -218,6 +266,13 @@ const ReceiptManagement = () => {
                         title="Descargar Recibo PDF"
                       >
                         <DownloadIcon />
+                      </IconButton>
+                      <IconButton
+                        color="secondary"
+                        onClick={() => handleRegenerate(receipt)}
+                        title="Regenerar PDF"
+                      >
+                        <RefreshIcon />
                       </IconButton>
                       <IconButton
                         color="primary"

@@ -287,6 +287,136 @@ async def download_receipt_pdf(receipt_id: str, current_user: User = Depends(get
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
 
+@router.post("/{receipt_id}/regenerate-pdf")
+async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(get_current_user)):
+    receipt = await Receipt.get(receipt_id)
+    if not receipt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receipt not found"
+        )
+
+    # Fetch linked documents
+    await receipt.fetch_link(Receipt.payment)
+
+    # Check permissions
+    if (current_user.role != UserRole.ADMIN and
+        (not receipt.payment.user or str(receipt.payment.user.id) != str(current_user.id))):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Update treasurer details with current information
+    villa = receipt.property_details.get('villa') if receipt.property_details else None
+    treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+    updated_treasurer_details = {
+        "name": treasurer.name if treasurer else "Tesorero no configurado",
+        "signature": treasurer.signature if treasurer else None,
+        "villa": treasurer.villa if treasurer else None
+    }
+
+    # Update receipt with latest treasurer details
+    receipt.treasurer_details = updated_treasurer_details
+    await receipt.save()
+
+    # Regenerate PDF data with updated information
+    pdf_data = {
+        "correlative_number": receipt.correlative_number,
+        "issue_date": receipt.issue_date,
+        "payment_date": receipt.payment.payment_date,
+        "total_amount": receipt.total_amount,
+        "property_details": receipt.property_details,
+        "reference": receipt.payment.fee_id,
+        "fee_period": receipt.fee_period,
+        "notes": receipt.notes,
+        "treasurer_details": updated_treasurer_details
+    }
+
+    pdf_buffer = generate_receipt_pdf(pdf_data)
+
+    # Overwrite the existing PDF file
+    pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
+    pdf_file_path = f"static/receipts/{pdf_filename}"
+    os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
+
+    with open(pdf_file_path, "wb") as f:
+        f.write(pdf_buffer.getvalue())
+
+    # Update receipt with generated file path (in case it wasn't set)
+    receipt.generated_receipt_file = pdf_file_path
+    await receipt.save()
+
+    return {"message": "PDF regenerated successfully with updated treasurer information"}
+
+@router.post("/regenerate-all-pdfs")
+async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions - only admins can regenerate all PDFs"
+        )
+
+    # Get all receipts
+    receipts = await Receipt.find_all().to_list()
+    updated_count = 0
+    errors = []
+
+    for receipt in receipts:
+        try:
+            # Fetch linked payment
+            await receipt.fetch_link(Receipt.payment)
+
+            # Update treasurer details with current information
+            villa = receipt.property_details.get('villa') if receipt.property_details else None
+            treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+            updated_treasurer_details = {
+                "name": treasurer.name if treasurer else "Tesorero no configurado",
+                "signature": treasurer.signature if treasurer else None,
+                "villa": treasurer.villa if treasurer else None
+            }
+
+            # Update receipt with latest treasurer details
+            receipt.treasurer_details = updated_treasurer_details
+
+            # Regenerate PDF data with updated information
+            pdf_data = {
+                "correlative_number": receipt.correlative_number,
+                "issue_date": receipt.issue_date,
+                "payment_date": receipt.payment.payment_date,
+                "total_amount": receipt.total_amount,
+                "property_details": receipt.property_details,
+                "reference": receipt.payment.fee_id,
+                "fee_period": receipt.fee_period,
+                "notes": receipt.notes,
+                "treasurer_details": updated_treasurer_details
+            }
+
+            pdf_buffer = generate_receipt_pdf(pdf_data)
+
+            # Overwrite the existing PDF file
+            pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
+            pdf_file_path = f"static/receipts/{pdf_filename}"
+            os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
+
+            with open(pdf_file_path, "wb") as f:
+                f.write(pdf_buffer.getvalue())
+
+            # Update receipt with generated file path
+            receipt.generated_receipt_file = pdf_file_path
+            await receipt.save()
+
+            updated_count += 1
+
+        except Exception as e:
+            errors.append(f"Error processing receipt {receipt.correlative_number}: {str(e)}")
+
+    return {
+        "message": f"Regenerated {updated_count} receipt PDFs successfully",
+        "updated_count": updated_count,
+        "errors": errors
+    }
+
 @router.delete("/{receipt_id}")
 async def delete_receipt(receipt_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.ADMIN:
