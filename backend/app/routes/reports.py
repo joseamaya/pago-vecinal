@@ -1,3 +1,4 @@
+from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from typing import Optional
@@ -550,6 +551,9 @@ async def download_filtered_fees_report(
 
     if property_id is not None and property_id.strip():
         query_filters["property.$id"] = PydanticObjectId(property_id)
+
+    # Only report fees up to the current date
+    query_filters["due_date"] = {"$lte": datetime.now().date()}
 
     # Get fees with filters
     fees = await Fee.find(query_filters).to_list()
