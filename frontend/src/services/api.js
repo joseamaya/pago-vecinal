@@ -144,6 +144,13 @@ export const expensesAPI = {
     return api.put(`/expenses/${id}`, expenseData, config);
   },
   deleteExpense: (id) => api.delete(`/expenses/${id}`),
+  bulkImportExpenses: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/expenses/bulk-import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
   bulkApproveExpenses: (expenseIds) => api.post('/expenses/bulk-approve', { expense_ids: expenseIds }),
   downloadExpenseReceipt: (id) => api.get(`/expenses/${id}/download-receipt`, { responseType: 'blob' }),
 };

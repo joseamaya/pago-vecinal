@@ -30,6 +30,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   FileDownload as FileDownloadIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { expensesAPI } from '../services/api';
@@ -76,6 +77,8 @@ const ExpenseManagement = () => {
     beneficiary_details: '',
   });
   const [receiptFile, setReceiptFile] = useState(null);
+  const [bulkImportFile, setBulkImportFile] = useState(null);
+  const [bulkImportResult, setBulkImportResult] = useState(null);
   const [filters, setFilters] = useState({
     expense_type: '',
     status: '',
@@ -257,6 +260,40 @@ const ExpenseManagement = () => {
     fetchExpenses();
   };
 
+  const handleBulkImport = async () => {
+    if (!bulkImportFile) {
+      setError('Por favor selecciona un archivo Excel');
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', bulkImportFile);
+
+      const response = await expensesAPI.bulkImportExpenses(formData);
+      setBulkImportResult(response.data);
+      setBulkImportFile(null);
+      fetchExpenses(); // Refresh the list
+      setError('');
+    } catch (err) {
+      setError('Error al importar gastos masivamente');
+      console.error('Error bulk importing expenses:', err);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    // Create a sample Excel template
+    const headers = ['Tipo de Gasto', 'Monto', 'Fecha de Gasto', 'Año', 'Mes', 'Beneficiario', 'Descripción', 'Detalles del Beneficiario', 'Notas'];
+    const sampleData = [
+      ['maintenance', '150.50', '2024-01-15', '2024', '1', 'Proveedor ABC', 'Mantenimiento de jardín', 'Detalles adicionales', 'Notas opcionales'],
+      ['utilities', '200.00', '2024-01-20', '2024', '1', 'Empresa Eléctrica', 'Pago de luz', '', ''],
+      ['supplies', '75.25', '2024-01-25', '2024', '1', 'Tienda XYZ', 'Compra de materiales', 'Factura #12345', 'Urgente']
+    ];
+
+    // For now, just show an alert with instructions
+    alert('Descarga la plantilla desde: /templates/plantilla_gastos_administrativos.xlsx\n\nEncabezados esperados:\n' + headers.join(', '));
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'approved':
@@ -291,19 +328,89 @@ const ExpenseManagement = () => {
           Gestión de Gastos Administrativos
         </Typography>
         {isAdmin && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nuevo Gasto
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+            >
+              Nuevo Gasto
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<UploadIcon />}
+              onClick={() => document.getElementById('bulk-import-input').click()}
+            >
+              Importar Masivo
+            </Button>
+            <Button
+              variant="text"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleDownloadTemplate}
+            >
+              Plantilla Excel
+            </Button>
+          </Box>
         )}
+        <input
+          id="bulk-import-input"
+          type="file"
+          accept=".xlsx,.xls"
+          style={{ display: 'none' }}
+          onChange={(e) => setBulkImportFile(e.target.files[0])}
+        />
       </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
+        </Alert>
+      )}
+
+      {bulkImportFile && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Archivo seleccionado: {bulkImportFile.name}
+          <Button
+            size="small"
+            onClick={handleBulkImport}
+            sx={{ ml: 2 }}
+          >
+            Importar
+          </Button>
+          <Button
+            size="small"
+            onClick={() => setBulkImportFile(null)}
+            sx={{ ml: 1 }}
+          >
+            Cancelar
+          </Button>
+        </Alert>
+      )}
+
+      {bulkImportResult && (
+        <Alert
+          severity={bulkImportResult.failed_imports > 0 ? "warning" : "success"}
+          sx={{ mb: 2 }}
+          onClose={() => setBulkImportResult(null)}
+        >
+          <Typography variant="body2">
+            Importación completada: {bulkImportResult.successful_imports} exitosos, {bulkImportResult.failed_imports} fallidos
+          </Typography>
+          {bulkImportResult.errors.length > 0 && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="body2" fontWeight="bold">Errores:</Typography>
+              {bulkImportResult.errors.slice(0, 5).map((error, index) => (
+                <Typography key={index} variant="body2" sx={{ fontSize: '0.8rem' }}>
+                  Fila {error.row}: {error.error}
+                </Typography>
+              ))}
+              {bulkImportResult.errors.length > 5 && (
+                <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                  ... y {bulkImportResult.errors.length - 5} más errores
+                </Typography>
+              )}
+            </Box>
+          )}
         </Alert>
       )}
 

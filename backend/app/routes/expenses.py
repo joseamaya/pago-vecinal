@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from datetime import datetime
 import os
 import shutil
+from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 from ..models.expense import (
     Expense, ExpenseCreate, ExpenseUpdate,
     ExpenseResponse, ExpenseStatus, ExpenseType
@@ -15,6 +17,11 @@ from ..routes.auth import get_current_user
 
 class BulkApproveRequest(BaseModel):
     expense_ids: List[str]
+
+class BulkImportResponse(BaseModel):
+    successful_imports: int
+    failed_imports: int
+    errors: List[dict]
 
 router = APIRouter()
 
@@ -458,3 +465,166 @@ async def bulk_approve_expenses(
         "approved_count": approved_count,
         "errors": errors
     }
+
+@router.post("/bulk-import", response_model=BulkImportResponse)
+async def bulk_import_expenses(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk import expenses from Excel file"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can bulk import expenses"
+        )
+
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an Excel file (.xlsx or .xls)"
+        )
+
+    try:
+        # Load workbook
+        wb = load_workbook(file.file)
+        ws = wb.active
+
+        # Expected columns: Tipo de Gasto, Monto, Fecha de Gasto, Año, Mes, Beneficiario, Descripción, Detalles del Beneficiario, Notas
+        expected_headers = ['Tipo de Gasto', 'Monto', 'Fecha de Gasto', 'Año', 'Mes', 'Beneficiario', 'Descripción', 'Detalles del Beneficiario', 'Notas']
+
+        # Check headers
+        actual_headers = []
+        for col in range(1, 10):
+            cell_value = ws.cell(row=1, column=col).value
+            if cell_value:
+                actual_headers.append(str(cell_value).strip())
+            else:
+                actual_headers.append("")
+
+        if actual_headers[:7] != expected_headers[:7]:  # Required fields up to Descripción
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid Excel format. Expected headers: {', '.join(expected_headers[:7])}"
+            )
+
+        results = {
+            "successful_imports": 0,
+            "failed_imports": 0,
+            "errors": []
+        }
+
+        # Process each row starting from row 2
+        for row_idx in range(2, ws.max_row + 1):
+            try:
+                # Extract data
+                expense_type_str = str(ws.cell(row=row_idx, column=1).value or "").strip()
+                amount = ws.cell(row=row_idx, column=2).value
+                expense_date_cell = ws.cell(row=row_idx, column=3).value
+                year = ws.cell(row=row_idx, column=4).value
+                month = ws.cell(row=row_idx, column=5).value
+                beneficiary = str(ws.cell(row=row_idx, column=6).value or "").strip()
+                description = str(ws.cell(row=row_idx, column=7).value or "").strip()
+                beneficiary_details = str(ws.cell(row=row_idx, column=8).value or "").strip()
+                notes = str(ws.cell(row=row_idx, column=9).value or "").strip()
+
+                # Validate required fields
+                if not all([expense_type_str, amount is not None, expense_date_cell is not None, year is not None, month is not None, beneficiary, description]):
+                    results["errors"].append({
+                        "row": row_idx,
+                        "error": "Missing required fields"
+                    })
+                    results["failed_imports"] += 1
+                    continue
+
+                # Validate expense type
+                try:
+                    expense_type = ExpenseType(expense_type_str.lower())
+                except ValueError:
+                    results["errors"].append({
+                        "row": row_idx,
+                        "error": f"Invalid expense type: {expense_type_str}. Must be one of: {', '.join([e.value for e in ExpenseType])}"
+                    })
+                    results["failed_imports"] += 1
+                    continue
+
+                # Convert types
+                try:
+                    amount = float(amount)
+                    year = int(year)
+                    month = int(month)
+
+                    if isinstance(expense_date_cell, datetime):
+                        expense_date = expense_date_cell
+                    else:
+                        expense_date = datetime.strptime(str(expense_date_cell), '%Y-%m-%d')
+
+                except (ValueError, TypeError) as e:
+                    results["errors"].append({
+                        "row": row_idx,
+                        "error": f"Invalid data types: {str(e)}"
+                    })
+                    results["failed_imports"] += 1
+                    continue
+
+                # Validate data ranges
+                if month < 1 or month > 12:
+                    results["errors"].append({
+                        "row": row_idx,
+                        "error": "Month must be between 1 and 12"
+                    })
+                    results["failed_imports"] += 1
+                    continue
+
+                if amount <= 0:
+                    results["errors"].append({
+                        "row": row_idx,
+                        "error": "Amount must be greater than 0"
+                    })
+                    results["failed_imports"] += 1
+                    continue
+
+                if expense_date > datetime.utcnow():
+                    results["errors"].append({
+                        "row": row_idx,
+                        "error": "Expense date cannot be in the future"
+                    })
+                    results["failed_imports"] += 1
+                    continue
+
+                # Create expense
+                expense = Expense(
+                    user=current_user,
+                    expense_type=expense_type,
+                    amount=amount,
+                    expense_date=expense_date,
+                    year=year,
+                    month=month,
+                    description=description,
+                    notes=notes if notes else None,
+                    beneficiary=beneficiary,
+                    beneficiary_details=beneficiary_details if beneficiary_details else None
+                )
+                await expense.insert()
+
+                results["successful_imports"] += 1
+
+            except Exception as e:
+                results["errors"].append({
+                    "row": row_idx,
+                    "error": f"Unexpected error: {str(e)}"
+                })
+                results["failed_imports"] += 1
+                continue
+
+        return BulkImportResponse(**results)
+
+    except InvalidFileException:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Excel file"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing file: {str(e)}"
+        )
