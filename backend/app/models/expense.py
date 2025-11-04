@@ -34,7 +34,6 @@ class Expense(Document):
     month: int  # Month of the expense
     receipt_file: Optional[str] = None  # Path to uploaded receipt image
     generated_receipt_file: Optional[str] = None  # Path to auto-generated PDF receipt
-    status: ExpenseStatus = ExpenseStatus.PENDING
     description: str  # Description of the expense
     notes: Optional[str] = None
     beneficiary: str  # Name of the third party receiving the payment
@@ -63,7 +62,6 @@ class ExpenseUpdate(BaseModel):
     description: Optional[str] = None
     receipt_file: Optional[str] = None
     generated_receipt_file: Optional[str] = None
-    status: Optional[ExpenseStatus] = None
     notes: Optional[str] = None
     beneficiary: Optional[str] = None
     beneficiary_details: Optional[str] = None
@@ -78,7 +76,6 @@ class ExpenseResponse(BaseModel):
     month: int
     receipt_file: Optional[str] = None
     generated_receipt_file: Optional[str] = None
-    status: ExpenseStatus
     description: str
     notes: Optional[str] = None
     beneficiary: str

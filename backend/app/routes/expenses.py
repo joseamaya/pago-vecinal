@@ -9,14 +9,12 @@ from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from ..models.expense import (
     Expense, ExpenseCreate, ExpenseUpdate,
-    ExpenseResponse, ExpenseStatus, ExpenseType
+    ExpenseResponse, ExpenseType
 )
 from ..models.receipt import Receipt
 from ..models.user import User, UserRole
 from ..routes.auth import get_current_user
 
-class BulkApproveRequest(BaseModel):
-    expense_ids: List[str]
 
 class BulkImportResponse(BaseModel):
     successful_imports: int
@@ -51,7 +49,6 @@ async def get_expenses(current_user: User = Depends(get_current_user)):
             month=expense.month,
             receipt_file=expense.receipt_file,
             generated_receipt_file=expense.generated_receipt_file,
-            status=expense.status,
             description=expense.description,
             notes=expense.notes,
             beneficiary=expense.beneficiary,
@@ -90,7 +87,6 @@ async def get_expense(expense_id: str, current_user: User = Depends(get_current_
         month=expense.month,
         receipt_file=expense.receipt_file,
         generated_receipt_file=expense.generated_receipt_file,
-        status=expense.status,
         description=expense.description,
         notes=expense.notes,
         beneficiary=expense.beneficiary,
@@ -148,6 +144,49 @@ async def create_expense(
     )
     await expense.insert()
 
+    # Generate receipt automatically on creation
+    try:
+        print(f"Creating receipt for expense {expense.id}")
+
+        # Generate correlative number
+        current_year = datetime.utcnow().year
+        last_receipt = await Receipt.find(
+            {"correlative_number": {"$regex": f"^REC-{current_year}"}}
+        ).sort([("correlative_number", -1)]).first_or_none()
+
+        if last_receipt:
+            parts = last_receipt.correlative_number.split("-")
+            if len(parts) == 3:
+                last_number = int(parts[2])
+                new_number = last_number + 1
+            else:
+                new_number = 1
+        else:
+            new_number = 1
+
+        correlative_number = f"REC-{current_year}-{new_number:05d}"
+
+        # Create receipt record
+        receipt = Receipt(
+            correlative_number=correlative_number,
+            expense=expense,
+            issue_date=datetime.utcnow(),
+            total_amount=expense.amount,
+            property_details=None,  # No property for admin expenses
+            owner_details=None,  # No owner for admin expenses
+            fee_period=f"Gasto administrativo: {expense.description}",
+            notes=f"Recibo generado automáticamente al crear el gasto administrativo"
+        )
+
+        await receipt.insert()
+
+        print(f"Receipt created in database with ID: {receipt.id}")
+    except Exception as e:
+        # Log the error but don't fail the expense creation
+        print(f"Error creating receipt for expense {expense.id}: {e}")
+        import traceback
+        traceback.print_exc()
+
     # Fetch linked documents for the response
     await expense.fetch_link(Expense.user)
 
@@ -161,7 +200,6 @@ async def create_expense(
         month=expense.month,
         receipt_file=expense.receipt_file,
         generated_receipt_file=expense.generated_receipt_file,
-        status=expense.status,
         description=expense.description,
         notes=expense.notes,
         beneficiary=expense.beneficiary,
@@ -177,7 +215,6 @@ async def update_expense(
     year: Optional[int] = Form(None),
     month: Optional[int] = Form(None),
     description: Optional[str] = Form(None),
-    status: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     beneficiary: Optional[str] = Form(None),
     beneficiary_details: Optional[str] = Form(None),
@@ -225,58 +262,12 @@ async def update_expense(
         expense.month = month
     if description is not None:
         expense.description = description
-    if status is not None:
-        expense.status = ExpenseStatus(status)
     if notes is not None:
         expense.notes = notes
     if beneficiary is not None:
         expense.beneficiary = beneficiary
     if beneficiary_details is not None:
         expense.beneficiary_details = beneficiary_details
-
-    # Create receipt in database if status changed to approved
-    if status == "approved":
-        try:
-            print(f"Creating receipt for expense {expense_id}")
-
-            # Generate correlative number
-            current_year = datetime.utcnow().year
-            last_receipt = await Receipt.find(
-                {"correlative_number": {"$regex": f"^REC-{current_year}"}}
-            ).sort([("correlative_number", -1)]).first_or_none()
-
-            if last_receipt:
-                parts = last_receipt.correlative_number.split("-")
-                if len(parts) == 3:
-                    last_number = int(parts[2])
-                    new_number = last_number + 1
-                else:
-                    new_number = 1
-            else:
-                new_number = 1
-
-            correlative_number = f"REC-{current_year}-{new_number:05d}"
-
-            # Create receipt record
-            receipt = Receipt(
-                correlative_number=correlative_number,
-                expense=expense,
-                issue_date=datetime.utcnow(),
-                total_amount=expense.amount,
-                property_details=None,  # No property for admin expenses
-                owner_details=None,  # No owner for admin expenses
-                fee_period=f"Gasto administrativo: {expense.description}",
-                notes=f"Recibo generado automáticamente al aprobar el gasto administrativo"
-            )
-
-            await receipt.insert()
-
-            print(f"Receipt created in database with ID: {receipt.id}")
-        except Exception as e:
-            # Log the error but don't fail the expense update
-            print(f"Error creating receipt for expense {expense_id}: {e}")
-            import traceback
-            traceback.print_exc()
 
     await expense.save()
 
@@ -293,7 +284,6 @@ async def update_expense(
         month=expense.month,
         receipt_file=expense.receipt_file,
         generated_receipt_file=expense.generated_receipt_file,
-        status=expense.status,
         description=expense.description,
         notes=expense.notes,
         beneficiary=expense.beneficiary,
@@ -370,101 +360,6 @@ async def download_expense_receipt(expense_id: str, current_user: User = Depends
         media_type="application/pdf"
     )
 
-@router.post("/bulk-approve")
-async def bulk_approve_expenses(
-    request: BulkApproveRequest,
-    current_user: User = Depends(get_current_user)
-):
-    # Only admins can bulk approve expenses
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can approve expenses"
-        )
-
-    expense_ids = request.expense_ids
-    """Bulk approve multiple expenses"""
-    if not expense_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No expense IDs provided"
-        )
-
-    approved_count = 0
-    errors = []
-
-    for expense_id in expense_ids:
-        try:
-            expense = await Expense.get(expense_id)
-            if not expense:
-                errors.append(f"Expense {expense_id} not found")
-                continue
-
-            # Check if expense is already approved
-            if expense.status == ExpenseStatus.APPROVED:
-                errors.append(f"Expense {expense_id} is already approved")
-                continue
-
-            # Fetch linked documents
-            await expense.fetch_link(Expense.user)
-
-            # Update expense status
-            expense.status = ExpenseStatus.APPROVED
-            await expense.save()
-
-            # Generate receipt (similar to individual approval)
-            try:
-                print(f"Creating receipt for expense {expense_id}")
-
-                # Generate correlative number
-                current_year = datetime.utcnow().year
-                last_receipt = await Receipt.find(
-                    {"correlative_number": {"$regex": f"^REC-{current_year}"}}
-                ).sort([("correlative_number", -1)]).first_or_none()
-
-                if last_receipt:
-                    parts = last_receipt.correlative_number.split("-")
-                    if len(parts) == 3:
-                        last_number = int(parts[2])
-                        new_number = last_number + 1
-                    else:
-                        new_number = 1
-                else:
-                    new_number = 1
-
-                correlative_number = f"REC-{current_year}-{new_number:05d}"
-
-                # Create receipt record
-                receipt = Receipt(
-                    correlative_number=correlative_number,
-                    expense=expense,
-                    issue_date=datetime.utcnow(),
-                    total_amount=expense.amount,
-                    property_details=None,  # No property for admin expenses
-                    owner_details=None,  # No owner for admin expenses
-                    fee_period=f"Gasto administrativo: {expense.description}",
-                    notes=f"Recibo generado automáticamente al aprobar el gasto administrativo (aprobación masiva)"
-                )
-
-                await receipt.insert()
-
-                print(f"Receipt created in database with ID: {receipt.id}")
-            except Exception as e:
-                # Log the error but don't fail the bulk operation
-                print(f"Error creating receipt for expense {expense_id}: {e}")
-                import traceback
-                traceback.print_exc()
-
-            approved_count += 1
-
-        except Exception as e:
-            errors.append(f"Error processing expense {expense_id}: {str(e)}")
-
-    return {
-        "message": f"Successfully approved {approved_count} expenses",
-        "approved_count": approved_count,
-        "errors": errors
-    }
 
 @router.post("/bulk-import", response_model=BulkImportResponse)
 async def bulk_import_expenses(
@@ -605,6 +500,49 @@ async def bulk_import_expenses(
                     beneficiary_details=beneficiary_details if beneficiary_details else None
                 )
                 await expense.insert()
+
+                # Generate receipt automatically on bulk import
+                try:
+                    print(f"Creating receipt for bulk imported expense {expense.id}")
+
+                    # Generate correlative number
+                    current_year = datetime.utcnow().year
+                    last_receipt = await Receipt.find(
+                        {"correlative_number": {"$regex": f"^REC-{current_year}"}}
+                    ).sort([("correlative_number", -1)]).first_or_none()
+
+                    if last_receipt:
+                        parts = last_receipt.correlative_number.split("-")
+                        if len(parts) == 3:
+                            last_number = int(parts[2])
+                            new_number = last_number + 1
+                        else:
+                            new_number = 1
+                    else:
+                        new_number = 1
+
+                    correlative_number = f"REC-{current_year}-{new_number:05d}"
+
+                    # Create receipt record
+                    receipt = Receipt(
+                        correlative_number=correlative_number,
+                        expense=expense,
+                        issue_date=datetime.utcnow(),
+                        total_amount=expense.amount,
+                        property_details=None,  # No property for admin expenses
+                        owner_details=None,  # No owner for admin expenses
+                        fee_period=f"Gasto administrativo: {expense.description}",
+                        notes=f"Recibo generado automáticamente al importar el gasto administrativo masivamente"
+                    )
+
+                    await receipt.insert()
+
+                    print(f"Receipt created in database with ID: {receipt.id}")
+                except Exception as e:
+                    # Log the error but don't fail the bulk import
+                    print(f"Error creating receipt for bulk imported expense {expense.id}: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 results["successful_imports"] += 1
 

@@ -49,14 +49,6 @@ const EXPENSE_TYPES = {
   other: 'Otros'
 };
 
-const EXPENSE_STATUSES = {
-  pending: 'Pendiente',
-  approved: 'Aprobado',
-  rejected: 'Rechazado',
-  completed: 'Completado',
-  failed: 'Fallido',
-  cancelled: 'Cancelado'
-};
 
 const ExpenseManagement = () => {
   const { isAdmin } = useAuth();
@@ -81,7 +73,6 @@ const ExpenseManagement = () => {
   const [bulkImportResult, setBulkImportResult] = useState(null);
   const [filters, setFilters] = useState({
     expense_type: '',
-    status: '',
     year: '',
     month: '',
   });
@@ -199,29 +190,6 @@ const ExpenseManagement = () => {
     }
   };
 
-  const handleApprove = async (expenseId) => {
-    try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('status', 'approved');
-      await expensesAPI.updateExpense(expenseId, formDataToSend);
-      fetchExpenses();
-    } catch (err) {
-      setError('Error al aprobar gasto');
-      console.error('Error approving expense:', err);
-    }
-  };
-
-  const handleReject = async (expenseId) => {
-    try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('status', 'rejected');
-      await expensesAPI.updateExpense(expenseId, formDataToSend);
-      fetchExpenses();
-    } catch (err) {
-      setError('Error al rechazar gasto');
-      console.error('Error rejecting expense:', err);
-    }
-  };
 
   const handleDownloadReceipt = async (expenseId) => {
     try {
@@ -253,7 +221,6 @@ const ExpenseManagement = () => {
   const handleClearFilters = () => {
     setFilters({
       expense_type: '',
-      status: '',
       year: '',
       month: '',
     });
@@ -291,28 +258,9 @@ const ExpenseManagement = () => {
     alert('Descarga la plantilla desde: /templates/plantilla_gastos_administrativos.xlsx\n\nEncabezados esperados:\n' + headers.join(', '));
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-        return 'success';
-      case 'completed':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'rejected':
-        return 'error';
-      case 'failed':
-        return 'error';
-      case 'cancelled':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
 
   const filteredExpenses = expenses.filter(expense => {
     if (filters.expense_type && expense.expense_type !== filters.expense_type) return false;
-    if (filters.status && expense.status !== filters.status) return false;
     if (filters.year && expense.year.toString() !== filters.year) return false;
     if (filters.month && expense.month.toString() !== filters.month) return false;
     return true;
@@ -437,25 +385,6 @@ const ExpenseManagement = () => {
              </FormControl>
            </Grid>
            <Grid item xs={12} sm={6}>
-             <FormControl fullWidth>
-               <InputLabel>Estado</InputLabel>
-               <Select
-                 value={filters.status}
-                 onChange={(e) => handleFilterChange('status', e.target.value)}
-                 label="Estado"
-               >
-                 <MenuItem value="">
-                   <em>Todos</em>
-                 </MenuItem>
-                 {Object.entries(EXPENSE_STATUSES).map(([key, label]) => (
-                   <MenuItem key={key} value={key}>
-                     {label}
-                   </MenuItem>
-                 ))}
-               </Select>
-             </FormControl>
-           </Grid>
-           <Grid item xs={12} sm={6}>
              <TextField
                fullWidth
                label="Año"
@@ -524,7 +453,6 @@ const ExpenseManagement = () => {
                 <TableCell>Fecha de Gasto</TableCell>
                 <TableCell>Año</TableCell>
                 <TableCell>Mes</TableCell>
-                <TableCell>Estado</TableCell>
                 <TableCell>Recibo</TableCell>
                 <TableCell>Acciones</TableCell>
               </TableRow>
@@ -534,7 +462,7 @@ const ExpenseManagement = () => {
                 <LoadingSkeleton type="table" rows={5} columns={10} />
               ) : filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center">
+                  <TableCell colSpan={8} align="center">
                     No hay gastos administrativos registrados
                   </TableCell>
                 </TableRow>
@@ -553,13 +481,6 @@ const ExpenseManagement = () => {
                       {['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][expense.month] || expense.month}
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={EXPENSE_STATUSES[expense.status] || expense.status}
-                        color={getStatusColor(expense.status)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
                       {expense.generated_receipt_file ? (
                         <Button
                           size="small"
@@ -569,9 +490,9 @@ const ExpenseManagement = () => {
                         >
                           Descargar
                         </Button>
-                      ) : expense.status === 'approved' ? (
+                      ) : (
                         <span style={{ color: 'orange' }}>Generando...</span>
-                      ) : '-'}
+                      )}
                     </TableCell>
                     <TableCell>
                       {isAdmin && (
@@ -582,28 +503,6 @@ const ExpenseManagement = () => {
                           >
                             <EditIcon />
                           </IconButton>
-                          {expense.status === 'pending' && (
-                            <>
-                              <Button
-                                size="small"
-                                variant="contained"
-                                color="success"
-                                onClick={() => handleApprove(expense.id)}
-                                sx={{ ml: 1 }}
-                              >
-                                Aprobar
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="contained"
-                                color="error"
-                                onClick={() => handleReject(expense.id)}
-                                sx={{ ml: 1 }}
-                              >
-                                Rechazar
-                              </Button>
-                            </>
-                          )}
                           <IconButton
                             color="error"
                             onClick={() => handleDelete(expense.id)}
