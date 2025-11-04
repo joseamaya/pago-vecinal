@@ -267,10 +267,7 @@ const ExpenseManagement = () => {
     }
 
     try {
-      const formData = new FormData();
-      formData.append('file', bulkImportFile);
-
-      const response = await expensesAPI.bulkImportExpenses(formData);
+      const response = await expensesAPI.bulkImportExpenses(bulkImportFile);
       setBulkImportResult(response.data);
       setBulkImportFile(null);
       fetchExpenses(); // Refresh the list
