@@ -115,7 +115,8 @@ const PaymentManagement = () => {
 
   const fetchProperties = async () => {
     try {
-      const response = await propertiesAPI.getProperties();
+      // Fetch all properties for filters and selection dropdowns (set high limit)
+      const response = await propertiesAPI.getProperties(1, 10000);
       setProperties(response.data.data || []);
     } catch (err) {
       console.error('Error fetching properties:', err);
