@@ -1,5 +1,7 @@
 from datetime import datetime
 import os
+import cloudinary
+import cloudinary.uploader
 from ..models.receipt import Receipt
 from ..models.payment import Payment
 from ..models.treasurer import Treasurer
@@ -9,7 +11,7 @@ from ..utils.pdf_generator import generate_receipt_pdf
 async def generate_automatic_receipt(payment: Payment) -> str:
     """
     Generate a receipt automatically when payment is approved
-    Returns the file path of the generated PDF
+    Returns the Cloudinary URL of the generated PDF
     """
     print(f"Starting receipt generation for payment {payment.id}")
 
@@ -94,7 +96,7 @@ async def generate_automatic_receipt(payment: Payment) -> str:
 
     print(f"Receipt created in database with ID: {receipt.id}")
 
-    # Generate PDF receipt
+    # Generate PDF receipt and upload to Cloudinary
     try:
         # Prepare data for PDF generation
         pdf_data = {
@@ -110,20 +112,36 @@ async def generate_automatic_receipt(payment: Payment) -> str:
 
         pdf_buffer = generate_receipt_pdf(pdf_data)
 
-        # Generate filename similar to existing pattern
+        # Upload PDF to Cloudinary
+        cloudinary.config(
+            cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+            api_key=os.getenv('CLOUDINARY_API_KEY'),
+            api_secret=os.getenv('CLOUDINARY_API_SECRET')
+        )
+
+        # Generate filename
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         pdf_filename = f"recibo_{correlative_number}_{timestamp}.pdf"
-        pdf_path = os.path.join("static", "receipts", pdf_filename)
 
-        # Save PDF to file
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_buffer.getvalue())
+        # Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            pdf_buffer.getvalue(),
+            public_id=pdf_filename,
+            resource_type="raw",
+            folder="receipts"
+        )
 
-        print(f"PDF receipt saved to: {pdf_path}")
-        return pdf_path
+        cloudinary_url = upload_result['secure_url']
+        print(f"PDF receipt uploaded to Cloudinary: {cloudinary_url}")
+
+        # Update receipt with Cloudinary URL
+        receipt.generated_receipt_file = cloudinary_url
+        await receipt.save()
+
+        return cloudinary_url
 
     except Exception as e:
-        print(f"Error generating PDF receipt: {e}")
+        print(f"Error generating/uploading PDF receipt: {e}")
         import traceback
         traceback.print_exc()
         return None

@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 from typing import List, Optional
 from datetime import datetime
 import os
+import requests
+import cloudinary
+import cloudinary.uploader
 from ..models.receipt import Receipt, ReceiptCreate, ReceiptResponse
 from ..models.payment import Payment
 from ..models.fee import Fee
@@ -186,7 +189,7 @@ async def create_receipt(
 
     await receipt.insert()
 
-    # Generate PDF receipt
+    # Generate PDF receipt and upload to Cloudinary
     pdf_data = {
         "correlative_number": receipt.correlative_number,
         "issue_date": receipt.issue_date,
@@ -201,16 +204,29 @@ async def create_receipt(
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
-    # Save PDF to file
-    pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-    pdf_file_path = f"static/receipts/{pdf_filename}"
-    os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
+    # Upload PDF to Cloudinary
+    cloudinary.config(
+        cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+        api_key=os.getenv('CLOUDINARY_API_KEY'),
+        api_secret=os.getenv('CLOUDINARY_API_SECRET')
+    )
 
-    with open(pdf_file_path, "wb") as f:
-        f.write(pdf_buffer.getvalue())
+    # Generate filename
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
 
-    # Update receipt with generated file path
-    receipt.generated_receipt_file = pdf_file_path
+    # Upload to Cloudinary
+    upload_result = cloudinary.uploader.upload(
+        pdf_buffer.getvalue(),
+        public_id=pdf_filename,
+        resource_type="raw",
+        folder="receipts"
+    )
+
+    cloudinary_url = upload_result['secure_url']
+
+    # Update receipt with Cloudinary URL
+    receipt.generated_receipt_file = cloudinary_url
     await receipt.save()
 
     # Fetch linked documents for the response
@@ -250,21 +266,12 @@ async def download_receipt_pdf(receipt_id: str, current_user: User = Depends(get
             detail="Not enough permissions"
         )
 
-    # Check if PDF file exists
-    if receipt.generated_receipt_file and os.path.exists(receipt.generated_receipt_file):
-        # Serve the existing file
-        def file_generator():
-            with open(receipt.generated_receipt_file, "rb") as f:
-                yield from f
-
-        filename = f"recibo_{receipt.correlative_number}.pdf"
-        return StreamingResponse(
-            file_generator(),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
+    # Check if PDF URL exists in Cloudinary
+    if receipt.generated_receipt_file and receipt.generated_receipt_file.startswith('https://'):
+        # Redirect to Cloudinary URL
+        return RedirectResponse(url=receipt.generated_receipt_file)
     else:
-        # Generate PDF on the fly
+        # Generate PDF on the fly and return it
         pdf_data = {
             "correlative_number": receipt.correlative_number,
             "issue_date": receipt.issue_date,
@@ -349,16 +356,29 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
-    # Overwrite the existing PDF file
-    pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-    pdf_file_path = f"static/receipts/{pdf_filename}"
-    os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
+    # Upload new PDF to Cloudinary
+    cloudinary.config(
+        cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+        api_key=os.getenv('CLOUDINARY_API_KEY'),
+        api_secret=os.getenv('CLOUDINARY_API_SECRET')
+    )
 
-    with open(pdf_file_path, "wb") as f:
-        f.write(pdf_buffer.getvalue())
+    # Generate filename
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
 
-    # Update receipt with generated file path (in case it wasn't set)
-    receipt.generated_receipt_file = pdf_file_path
+    # Upload to Cloudinary
+    upload_result = cloudinary.uploader.upload(
+        pdf_buffer.getvalue(),
+        public_id=pdf_filename,
+        resource_type="raw",
+        folder="receipts"
+    )
+
+    cloudinary_url = upload_result['secure_url']
+
+    # Update receipt with new Cloudinary URL
+    receipt.generated_receipt_file = cloudinary_url
     await receipt.save()
 
     return {"message": "PDF regenerated successfully with updated treasurer information"}
@@ -422,16 +442,29 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
 
             pdf_buffer = generate_receipt_pdf(pdf_data)
 
-            # Overwrite the existing PDF file
-            pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-            pdf_file_path = f"static/receipts/{pdf_filename}"
-            os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
+            # Upload new PDF to Cloudinary
+            cloudinary.config(
+                cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+                api_key=os.getenv('CLOUDINARY_API_KEY'),
+                api_secret=os.getenv('CLOUDINARY_API_SECRET')
+            )
 
-            with open(pdf_file_path, "wb") as f:
-                f.write(pdf_buffer.getvalue())
+            # Generate filename
+            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
 
-            # Update receipt with generated file path
-            receipt.generated_receipt_file = pdf_file_path
+            # Upload to Cloudinary
+            upload_result = cloudinary.uploader.upload(
+                pdf_buffer.getvalue(),
+                public_id=pdf_filename,
+                resource_type="raw",
+                folder="receipts"
+            )
+
+            cloudinary_url = upload_result['secure_url']
+
+            # Update receipt with new Cloudinary URL
+            receipt.generated_receipt_file = cloudinary_url
             await receipt.save()
 
             updated_count += 1

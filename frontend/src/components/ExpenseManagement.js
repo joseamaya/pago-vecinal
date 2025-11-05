@@ -481,7 +481,7 @@ const ExpenseManagement = () => {
                       {['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][expense.month] || expense.month}
                     </TableCell>
                     <TableCell>
-                      {expense.generated_receipt_file ? (
+                      {expense.receipt_file ? (
                         <Button
                           size="small"
                           variant="outlined"
@@ -491,7 +491,7 @@ const ExpenseManagement = () => {
                           Descargar
                         </Button>
                       ) : (
-                        <span style={{ color: 'orange' }}>Generando...</span>
+                        "-"
                       )}
                     </TableCell>
                     <TableCell>
