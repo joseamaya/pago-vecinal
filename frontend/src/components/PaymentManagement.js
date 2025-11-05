@@ -93,8 +93,9 @@ const PaymentManagement = () => {
       setLoading(true);
       const response = await paymentsAPI.getPayments(page, pageSize, filters);
       console.log('Fetched payments:', response.data);
-      setPayments(response.data.data);
-      setFilteredPayments(response.data.data);
+      const sortedData = response.data.data.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
+      setPayments(sortedData);
+      setFilteredPayments(sortedData);
       setTotalPages(response.data.pagination.total_pages);
       setTotalCount(response.data.pagination.total_count);
       setCurrentPage(page);
