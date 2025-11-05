@@ -269,33 +269,28 @@ async def download_receipt_pdf(receipt_id: str, current_user: User = Depends(get
             detail="Not enough permissions"
         )
 
-    # Check if PDF URL exists in Cloudinary
-    if receipt.generated_receipt_file and receipt.generated_receipt_file.startswith('https://'):
-        # Redirect to Cloudinary URL
-        return RedirectResponse(url=receipt.generated_receipt_file)
-    else:
-        # Generate PDF on the fly and return it
-        pdf_data = {
-            "correlative_number": receipt.correlative_number,
-            "issue_date": receipt.issue_date,
-            "payment_date": receipt.payment.payment_date,
-            "total_amount": receipt.total_amount,
-            "property_details": receipt.property_details,
-            "reference": receipt.payment.fee_id,
-            "fee_period": receipt.fee_period,
-            "notes": receipt.notes,
-            "treasurer_details": receipt.treasurer_details
-        }
+    # Always generate PDF on the fly to avoid Cloudinary permission issues
+    pdf_data = {
+        "correlative_number": receipt.correlative_number,
+        "issue_date": receipt.issue_date,
+        "payment_date": receipt.payment.payment_date,
+        "total_amount": receipt.total_amount,
+        "property_details": receipt.property_details,
+        "reference": receipt.payment.fee_id,
+        "fee_period": receipt.fee_period,
+        "notes": receipt.notes,
+        "treasurer_details": receipt.treasurer_details
+    }
 
-        pdf_buffer = generate_receipt_pdf(pdf_data)
+    pdf_buffer = generate_receipt_pdf(pdf_data)
 
-        # Return PDF as streaming response
-        filename = f"recibo_{receipt.correlative_number}.pdf"
-        return StreamingResponse(
-            pdf_buffer,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
+    # Return PDF as streaming response
+    filename = f"recibo_{receipt.correlative_number}.pdf"
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 @router.post("/{receipt_id}/regenerate-pdf")
 async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(get_current_user)):
