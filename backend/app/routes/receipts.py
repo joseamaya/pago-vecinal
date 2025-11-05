@@ -57,7 +57,8 @@ async def get_receipts(current_user: User = Depends(get_current_user)):
         ReceiptResponse(
             id=str(receipt.id),
             correlative_number=receipt.correlative_number,
-            payment_id=str(receipt.payment.id),
+            payment_id=str(receipt.payment.id) if receipt.payment else None,
+            miscellaneous_payment_id=str(receipt.miscellaneous_payment.id) if receipt.miscellaneous_payment else None,
             issue_date=receipt.issue_date,
             total_amount=receipt.total_amount,
             property_details=receipt.property_details,
@@ -93,7 +94,8 @@ async def get_receipt(receipt_id: str, current_user: User = Depends(get_current_
     return ReceiptResponse(
         id=str(receipt.id),
         correlative_number=receipt.correlative_number,
-        payment_id=str(receipt.payment.id),
+        payment_id=str(receipt.payment.id) if receipt.payment else None,
+        miscellaneous_payment_id=str(receipt.miscellaneous_payment.id) if receipt.miscellaneous_payment else None,
         issue_date=receipt.issue_date,
         total_amount=receipt.total_amount,
         property_details=receipt.property_details,
@@ -235,7 +237,8 @@ async def create_receipt(
     return ReceiptResponse(
         id=str(receipt.id),
         correlative_number=receipt.correlative_number,
-        payment_id=str(receipt.payment.id),
+        payment_id=str(receipt.payment.id) if receipt.payment else None,
+        miscellaneous_payment_id=str(receipt.miscellaneous_payment.id) if receipt.miscellaneous_payment else None,
         issue_date=receipt.issue_date,
         total_amount=receipt.total_amount,
         property_details=receipt.property_details,

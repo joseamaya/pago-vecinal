@@ -144,48 +144,9 @@ async def create_expense(
     )
     await expense.insert()
 
-    # Generate receipt automatically on creation
-    try:
-        print(f"Creating receipt for expense {expense.id}")
-
-        # Generate correlative number
-        current_year = datetime.utcnow().year
-        last_receipt = await Receipt.find(
-            {"correlative_number": {"$regex": f"^REC-{current_year}"}}
-        ).sort([("correlative_number", -1)]).first_or_none()
-
-        if last_receipt:
-            parts = last_receipt.correlative_number.split("-")
-            if len(parts) == 3:
-                last_number = int(parts[2])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-        else:
-            new_number = 1
-
-        correlative_number = f"REC-{current_year}-{new_number:05d}"
-
-        # Create receipt record
-        receipt = Receipt(
-            correlative_number=correlative_number,
-            expense=expense,
-            issue_date=datetime.utcnow(),
-            total_amount=expense.amount,
-            property_details=None,  # No property for admin expenses
-            owner_details=None,  # No owner for admin expenses
-            fee_period=f"Gasto administrativo: {expense.description}",
-            notes=f"Recibo generado automáticamente al crear el gasto administrativo"
-        )
-
-        await receipt.insert()
-
-        print(f"Receipt created in database with ID: {receipt.id}")
-    except Exception as e:
-        # Log the error but don't fail the expense creation
-        print(f"Error creating receipt for expense {expense.id}: {e}")
-        import traceback
-        traceback.print_exc()
+    # Expenses should not generate receipts as they are outgoing payments
+    # We receive vouchers from suppliers, we don't issue receipts for expenses
+    pass
 
     # Fetch linked documents for the response
     await expense.fetch_link(Expense.user)
@@ -311,54 +272,8 @@ async def delete_expense(expense_id: str, current_user: User = Depends(get_curre
     await expense.delete()
     return {"message": "Expense deleted successfully"}
 
-@router.get("/{expense_id}/download-receipt")
-async def download_expense_receipt(expense_id: str, current_user: User = Depends(get_current_user)):
-    """Download the automatically generated receipt PDF for an expense"""
-    # Only admins can download expense receipts
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can access expense receipts"
-        )
-
-    expense = await Expense.get(expense_id)
-    if not expense:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found"
-        )
-
-    # Fetch linked documents
-    await expense.fetch_link(Expense.user)
-
-    # Check if receipt file exists
-    if not expense.generated_receipt_file:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No receipt file associated with this expense"
-        )
-
-    # Convert relative path to absolute path if needed
-    file_path = expense.generated_receipt_file
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(os.getcwd(), file_path)
-
-    print(f"Looking for receipt file at: {file_path}")
-    print(f"File exists: {os.path.exists(file_path)}")
-
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Receipt file not found at {file_path}"
-        )
-
-    # Return the PDF file
-    filename = f"recibo_gasto_administrativo_{expense_id}.pdf"
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type="application/pdf"
-    )
+# Expenses don't generate receipts - they receive vouchers from suppliers
+# This endpoint is no longer needed
 
 
 @router.post("/bulk-import", response_model=BulkImportResponse)
@@ -501,48 +416,9 @@ async def bulk_import_expenses(
                 )
                 await expense.insert()
 
-                # Generate receipt automatically on bulk import
-                try:
-                    print(f"Creating receipt for bulk imported expense {expense.id}")
-
-                    # Generate correlative number
-                    current_year = datetime.utcnow().year
-                    last_receipt = await Receipt.find(
-                        {"correlative_number": {"$regex": f"^REC-{current_year}"}}
-                    ).sort([("correlative_number", -1)]).first_or_none()
-
-                    if last_receipt:
-                        parts = last_receipt.correlative_number.split("-")
-                        if len(parts) == 3:
-                            last_number = int(parts[2])
-                            new_number = last_number + 1
-                        else:
-                            new_number = 1
-                    else:
-                        new_number = 1
-
-                    correlative_number = f"REC-{current_year}-{new_number:05d}"
-
-                    # Create receipt record
-                    receipt = Receipt(
-                        correlative_number=correlative_number,
-                        expense=expense,
-                        issue_date=datetime.utcnow(),
-                        total_amount=expense.amount,
-                        property_details=None,  # No property for admin expenses
-                        owner_details=None,  # No owner for admin expenses
-                        fee_period=f"Gasto administrativo: {expense.description}",
-                        notes=f"Recibo generado automáticamente al importar el gasto administrativo masivamente"
-                    )
-
-                    await receipt.insert()
-
-                    print(f"Receipt created in database with ID: {receipt.id}")
-                except Exception as e:
-                    # Log the error but don't fail the bulk import
-                    print(f"Error creating receipt for bulk imported expense {expense.id}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                # Expenses should not generate receipts as they are outgoing payments
+                # We receive vouchers from suppliers, we don't issue receipts for expenses
+                pass
 
                 results["successful_imports"] += 1
 
