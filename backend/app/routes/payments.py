@@ -241,6 +241,8 @@ async def get_payment(payment_id: str, current_user: User = Depends(get_current_
 async def create_payment(
     fee_id: str = Form(...),
     amount: float = Form(...),
+    payment_date: Optional[datetime] = Form(None),
+    status: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user)
 ):
@@ -265,9 +267,14 @@ async def create_payment(
         fee_id=str(fee.id),
         user=current_user,
         amount=amount,
-        payment_date=datetime.utcnow(),
+        payment_date=payment_date if payment_date is not None else datetime.utcnow(),
         notes=notes
     )
+
+    # Set status if provided, otherwise use default (PENDING)
+    if status is not None:
+        payment.status = PaymentStatus(status)
+
     await payment.insert()
 
     # Fetch linked documents for the response
