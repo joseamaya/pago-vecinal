@@ -277,6 +277,98 @@ async def create_payment(
 
     await payment.insert()
 
+    # Create receipt automatically if status changed to approved
+    if status == "approved":
+        try:
+            print(f"Creating receipt for payment {payment.id}")
+
+            # Fetch linked documents
+            await payment.fetch_link(Payment.fee)
+            if payment.fee:
+                await payment.fee.fetch_link('property')
+
+            # Generate correlative number
+            from ..routes.receipts import generate_correlative_number
+            correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
+
+            # Create property and owner details snapshot
+            property_details = {
+                "villa": payment.fee.property.villa,
+                "row_letter": payment.fee.property.row_letter,
+                "number": payment.fee.property.number,
+                "owner_name": payment.fee.property.owner_name,
+                "owner_phone": payment.fee.property.owner_phone
+            }
+
+            owner_details = {
+                "name": payment.fee.property.owner_name,
+                "phone": payment.fee.property.owner_phone
+            }
+
+            # Get treasurer data based on villa
+            villa = payment.fee.property.villa if payment.fee and payment.fee.property else None
+            treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+            treasurer_details = {
+                "name": treasurer.name if treasurer else "Tesorero no configurado",
+                "signature": treasurer.signature if treasurer else None,
+                "villa": treasurer.villa if treasurer else None
+            }
+
+            # Create receipt
+            receipt = Receipt(
+                correlative_number=correlative_number,
+                payment=payment,
+                issue_date=datetime.utcnow(),
+                total_amount=payment.amount,
+                property_details=property_details,
+                owner_details=owner_details,
+                fee_period=f"{payment.fee.month}/{payment.fee.year}",
+                notes=payment.notes,
+                treasurer_details=treasurer_details
+            )
+
+            await receipt.insert()
+
+            # Generate PDF
+            from ..utils.pdf_generator import generate_receipt_pdf
+            pdf_data = {
+                "correlative_number": receipt.correlative_number,
+                "issue_date": receipt.issue_date,
+                "payment_date": receipt.payment.payment_date,
+                "total_amount": receipt.total_amount,
+                "property_details": receipt.property_details,
+                "reference": receipt.payment.fee_id,
+                "fee_period": receipt.fee_period,
+                "notes": receipt.notes,
+                "treasurer_details": treasurer_details
+            }
+
+            pdf_buffer = generate_receipt_pdf(pdf_data)
+
+            # Save PDF to file
+            pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
+            pdf_file_path = f"static/receipts/{pdf_filename}"
+            os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
+
+            with open(pdf_file_path, "wb") as f:
+                f.write(pdf_buffer.getvalue())
+
+            # Update receipt with generated file path
+            receipt.generated_receipt_file = pdf_file_path
+            await receipt.save()
+
+            print(f"Receipt created and PDF generated: {pdf_file_path}")
+
+        except Exception as e:
+            # Log the error but don't fail the payment update
+            print(f"Error creating receipt for payment {payment.id}: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Update fee status based on total payments if payment was approved
+    if status == "approved" and payment.fee:
+        await update_fee_status_based_on_payments(payment.fee)
+
     # Fetch linked documents for the response
     await payment.fetch_link(Payment.fee)
     await payment.fetch_link(Payment.user)
