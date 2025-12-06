@@ -127,11 +127,24 @@ async def get_payments(
             "as": "user_data"
         }},
         {"$unwind": {"path": "$user_data", "preserveNullAndEmptyArrays": True}},
+        {"$addFields": {
+            "status_priority": {
+                "$switch": {
+                    "branches": [
+                        {"case": {"$eq": ["$status", "pending"]}, "then": 1},
+                        {"case": {"$eq": ["$status", "approved"]}, "then": 2},
+                        {"case": {"$eq": ["$status", "rejected"]}, "then": 3},
+                        {"case": {"$eq": ["$status", "completed"]}, "then": 4},
+                        {"case": {"$eq": ["$status", "failed"]}, "then": 5},
+                        {"case": {"$eq": ["$status", "cancelled"]}, "then": 6}
+                    ],
+                    "default": 7
+                }
+            }
+        }},
         {"$sort": {
-            "fee_data.year": -1,
-            "fee_data.month": -1,
-            "property_data.row_letter": 1,
-            "property_data.number": 1
+            "status_priority": 1,
+            "payment_date": -1
         }},
         {"$skip": skip},
         {"$limit": limit}
