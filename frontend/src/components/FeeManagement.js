@@ -113,7 +113,7 @@ const FeeManagement = () => {
 
   const fetchProperties = async () => {
     try {
-      const response = await propertiesAPI.getProperties();
+      const response = await propertiesAPI.getProperties(1, 10000); // Get all properties without pagination
       setProperties(response.data.data || []);
     } catch (err) {
       console.error('Error fetching properties:', err);
