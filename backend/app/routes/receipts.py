@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, RedirectResponse
 from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 import os
 import requests
 import cloudinary
@@ -14,6 +15,10 @@ from ..models.user import User, UserRole
 from ..routes.auth import get_current_user
 from ..utils.pdf_generator import generate_receipt_pdf
 from ..config.database import database
+
+class PaginatedReceiptResponse(BaseModel):
+    data: List[ReceiptResponse]
+    pagination: dict
 
 router = APIRouter()
 
@@ -39,26 +44,43 @@ async def generate_correlative_number(year: int, prefix: str = "REC") -> str:
     # Format: PREFIX-YYYY-XXXXX (padded to 5 digits)
     return f"{prefix}-{year}-{new_number:05d}"
 
-@router.get("/", response_model=List[ReceiptResponse])
-async def get_receipts(current_user: User = Depends(get_current_user)):
+@router.get("/", response_model=PaginatedReceiptResponse)
+async def get_receipts(
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user)
+):
+    # Build base query
     if current_user.role == UserRole.ADMIN:
-        receipts = await Receipt.find_all().to_list()
+        base_query = Receipt.find_all()
     else:
         # Owners can only see receipts for their payments
-        receipts = await Receipt.find(
-            Receipt.payment.user.id == current_user.id
-        ).to_list()
+        base_query = Receipt.find(Receipt.payment.user.id == current_user.id)
+
+    # Get total count
+    total_count = await base_query.count()
+
+    # Calculate skip
+    skip = (page - 1) * limit
+
+    # Get paginated results, sorted by issue date descending
+    receipts = await base_query.sort([("issue_date", -1)]).skip(skip).limit(limit).to_list()
 
     # Fetch links for each receipt
     for receipt in receipts:
         await receipt.fetch_link(Receipt.payment)
 
-    return [
+    # Calculate total pages
+    total_pages = (total_count + limit - 1) // limit
+
+    # Build receipt responses
+    receipt_responses = [
         ReceiptResponse(
             id=str(receipt.id),
             correlative_number=receipt.correlative_number,
             payment_id=str(receipt.payment.id) if receipt.payment else None,
             miscellaneous_payment_id=str(receipt.miscellaneous_payment.id) if receipt.miscellaneous_payment else None,
+            expense_id=str(receipt.expense.id) if receipt.expense else None,
             issue_date=receipt.issue_date,
             total_amount=receipt.total_amount,
             property_details=receipt.property_details,
@@ -70,6 +92,16 @@ async def get_receipts(current_user: User = Depends(get_current_user)):
         )
         for receipt in receipts
     ]
+
+    return PaginatedReceiptResponse(
+        data=receipt_responses,
+        pagination={
+            "page": page,
+            "limit": limit,
+            "total_count": total_count,
+            "total_pages": total_pages
+        }
+    )
 
 @router.get("/{receipt_id}", response_model=ReceiptResponse)
 async def get_receipt(receipt_id: str, current_user: User = Depends(get_current_user)):

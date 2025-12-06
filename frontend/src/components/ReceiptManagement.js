@@ -22,6 +22,7 @@ import {
   IconButton,
   Box,
   Alert,
+  TablePagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -42,6 +43,12 @@ const ReceiptManagement = () => {
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState(null);
+  const [pagination, setPagination] = useState({
+    page: 0,
+    limit: 20,
+    total_count: 0,
+    total_pages: 0,
+  });
   const [formData, setFormData] = useState({
     payment_id: '',
     fee_period: '',
@@ -53,11 +60,17 @@ const ReceiptManagement = () => {
     fetchPayments();
   }, []);
 
-  const fetchReceipts = async () => {
+  const fetchReceipts = async (page = 1, limit = 20) => {
     try {
       setLoading(true);
-      const response = await receiptsAPI.getReceipts();
-      setReceipts(response.data);
+      const response = await receiptsAPI.getReceipts(page, limit);
+      setReceipts(response.data.data);
+      setPagination({
+        page: response.data.pagination.page - 1, // Material-UI uses 0-based indexing
+        limit: response.data.pagination.limit,
+        total_count: response.data.pagination.total_count,
+        total_pages: response.data.pagination.total_pages,
+      });
       setError('');
     } catch (err) {
       setError('Error al cargar recibos');
@@ -75,6 +88,16 @@ const ReceiptManagement = () => {
       console.error('Error fetching payments:', err);
       setPayments([]);
     }
+  };
+
+  const handlePageChange = (event, newPage) => {
+    fetchReceipts(newPage + 1, pagination.limit); // Convert back to 1-based indexing
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    const newLimit = parseInt(event.target.value, 10);
+    setPagination(prev => ({ ...prev, limit: newLimit, page: 0 }));
+    fetchReceipts(1, newLimit);
   };
 
   const handleOpenDialog = (receipt = null) => {
@@ -295,6 +318,19 @@ const ReceiptManagement = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={pagination.total_count}
+          page={pagination.page}
+          onPageChange={handlePageChange}
+          rowsPerPage={pagination.limit}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          rowsPerPageOptions={[10, 20, 50]}
+          labelRowsPerPage="Filas por página"
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`
+          }
+        />
       </Paper>
 
       {/* Dialog for Add/Edit Receipt */}

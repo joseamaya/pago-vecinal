@@ -157,7 +157,7 @@ export const expensesAPI = {
 
 // Receipts API
 export const receiptsAPI = {
-  getReceipts: () => api.get('/receipts/'),
+  getReceipts: (page = 1, limit = 20) => api.get('/receipts/', { params: { page, limit } }),
   getReceipt: (id) => api.get(`/receipts/${id}`),
   createReceipt: (receiptData) => api.post('/receipts/', receiptData),
   updateReceipt: (id, receiptData) => api.put(`/receipts/${id}`, receiptData),
