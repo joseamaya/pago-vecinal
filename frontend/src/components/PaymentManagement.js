@@ -28,6 +28,7 @@ import {
   ListItemText,
   Checkbox,
   Pagination,
+  FormControlLabel,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -53,7 +54,9 @@ const PaymentManagement = () => {
     fee_id: '',
     amount: '',
     notes: '',
+    payment_date: '',
   });
+  const [approveDirectly, setApproveDirectly] = useState(false);
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkResults, setBulkResults] = useState(null);
@@ -131,6 +134,7 @@ const PaymentManagement = () => {
         fee_id: payment.fee_id,
         amount: payment.amount.toString(),
         notes: payment.notes || '',
+        payment_date: new Date(payment.payment_date).toISOString().split('T')[0],
       });
       setSelectedFeeAmount(payment.amount); // For editing, allow any amount
     } else {
@@ -139,8 +143,10 @@ const PaymentManagement = () => {
         fee_id: '',
         amount: '',
         notes: '',
+        payment_date: new Date().toISOString().split('T')[0],
       });
       setSelectedFeeAmount(0);
+      setApproveDirectly(false);
     }
     setOpen(true);
   };
@@ -152,6 +158,7 @@ const PaymentManagement = () => {
       fee_id: '',
       amount: '',
       notes: '',
+      payment_date: '',
     });
     setSelectedVilla('');
     setSelectedRow('');
@@ -170,6 +177,7 @@ const PaymentManagement = () => {
     setAvailableFees([]);
     setSelectedFeeId('');
     setSelectedFeeAmount(0);
+    setApproveDirectly(false);
   };
 
   const validateAmount = (amount) => {
@@ -199,10 +207,14 @@ const PaymentManagement = () => {
       formDataToSend.append('fee_id', formData.fee_id);
       formDataToSend.append('amount', parseFloat(formData.amount));
       formDataToSend.append('notes', formData.notes || '');
+      formDataToSend.append('payment_date', formData.payment_date);
 
       if (editingPayment) {
         await paymentsAPI.updatePayment(editingPayment.id, formDataToSend);
       } else {
+        if (isAdmin && approveDirectly) {
+          formDataToSend.append('status', 'approved');
+        }
         await paymentsAPI.createPayment(formDataToSend);
       }
       const currentFilters = {};
@@ -1102,6 +1114,18 @@ const PaymentManagement = () => {
             )}
             <TextField
               margin="dense"
+              label="Fecha de Pago"
+              type="date"
+              fullWidth
+              value={formData.payment_date}
+              onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              required
+            />
+            <TextField
+              margin="dense"
               label="Notas"
               fullWidth
               multiline
@@ -1109,6 +1133,18 @@ const PaymentManagement = () => {
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             />
+            {isAdmin && !editingPayment && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={approveDirectly}
+                    onChange={(e) => setApproveDirectly(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Marcar como Aprobado directamente"
+              />
+            )}
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Cancelar</Button>
