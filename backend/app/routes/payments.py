@@ -573,7 +573,31 @@ async def delete_payment(payment_id: str, current_user: User = Depends(get_curre
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Payment not found"
         )
+
+    # Fetch the associated fee to update it later
+    await payment.fetch_link(Payment.fee)
+    fee = payment.fee
+
+    # Find and delete the associated receipt
+    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    if receipt:
+        # Delete the generated PDF file if it exists
+        if receipt.generated_receipt_file and os.path.exists(receipt.generated_receipt_file):
+            try:
+                os.remove(receipt.generated_receipt_file)
+            except OSError as e:
+                # Log error, but continue with deletion
+                print(f"Error deleting receipt file: {e}")
+
+        await receipt.delete()
+
+    # Delete the payment itself
     await payment.delete()
+
+    # After payment is deleted, update the associated fee's status
+    if fee:
+        await update_fee_status_based_on_payments(fee)
+
     return {"message": "Payment deleted successfully"}
 
 @router.get("/{payment_id}/download-receipt")
