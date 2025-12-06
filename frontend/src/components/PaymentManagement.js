@@ -127,24 +127,107 @@ const PaymentManagement = () => {
     }
   };
 
-  const handleOpenDialog = (payment = null) => {
+  const handleOpenDialog = async (payment = null) => {
     if (payment) {
       setEditingPayment(payment);
+
+      // --- Pre-fill form for editing ---
+
+      // 1. Set basic form data
       setFormData({
         fee_id: payment.fee_id,
         amount: payment.amount.toString(),
         notes: payment.notes || '',
         payment_date: new Date(payment.payment_date).toISOString().split('T')[0],
       });
-      setSelectedFeeAmount(payment.amount); // For editing, allow any amount
+
+      try {
+        // 2. Fetch the associated fee to get all details
+        const feeResponse = await feesAPI.getFee(payment.fee_id);
+        const fee = feeResponse.data;
+
+        // 3. Find the property from the local properties list
+        const property = properties.find(p => p.id === fee.property_id);
+
+        if (property) {
+          // 4. Set Villa, Row, House selectors
+          const rows = [...new Set(properties.filter(p => p.villa === property.villa).map(p => p.row_letter))].sort();
+          const houses = properties
+            .filter(p => p.villa === property.villa && p.row_letter === property.row_letter)
+            .map(p => ({ number: p.number, id: p.id }))
+            .sort((a, b) => a.number - b.number);
+
+          setSelectedVilla(property.villa);
+          setAvailableRows(rows);
+          setSelectedRow(property.row_letter);
+          setAvailableHouses(houses);
+          setSelectedHouse(property.id);
+        }
+
+        // 5. Populate fee information for the form
+        // Since we are editing, the available fees list should include the fee being edited.
+        // We also fetch other pending fees for that property for completeness.
+        const availableFeesResponse = await feesAPI.getFees({
+          property_id: fee.property_id,
+          status: 'pending,partially_paid'
+        }, 1, 100);
+
+        const availableFeesData = availableFeesResponse.data.data;
+        // Ensure the current fee is in the list, even if its status changed
+        if (!availableFeesData.find(f => f.id === fee.id)) {
+            availableFeesData.unshift(fee);
+        }
+
+        setAvailableFees(availableFeesData);
+        setSelectedFeeId(fee.id);
+
+        // Populate the fee info box
+        setSelectedFeeInfo({
+          ownerName: fee.property_owner_name,
+          month: fee.month,
+          year: fee.year,
+          dueDate: fee.due_date,
+          paidAmount: fee.paid_amount,
+          totalAmount: fee.amount,
+          status: fee.status,
+        });
+
+        // For editing, the amount can be different from remaining amount
+        setSelectedFeeAmount(payment.amount);
+
+      } catch (err) {
+        setError('Error al cargar los detalles del pago para editar.');
+        console.error("Error fetching details for edit:", err);
+        // Don't open the dialog if data can't be loaded
+        return;
+      }
+
     } else {
+      // --- Reset for new payment ---
       setEditingPayment(null);
+      // Reset all relevant states for the 'new payment' form manually
       setFormData({
         fee_id: '',
         amount: '',
         notes: '',
         payment_date: new Date().toISOString().split('T')[0],
       });
+      setSelectedVilla('');
+      setSelectedRow('');
+      setSelectedHouse('');
+      setAvailableRows([]);
+      setAvailableHouses([]);
+      setSelectedFeeInfo({
+        ownerName: '',
+        month: 0,
+        year: 0,
+        dueDate: '',
+        paidAmount: 0,
+        totalAmount: 0,
+        status: 'pending',
+      });
+      setAvailableFees([]);
+      setSelectedFeeId('');
       setSelectedFeeAmount(0);
       setApproveDirectly(false);
     }
@@ -209,20 +292,33 @@ const PaymentManagement = () => {
       formDataToSend.append('notes', formData.notes || '');
       formDataToSend.append('payment_date', formData.payment_date);
 
+      const isDirectlyApproved = !editingPayment && isAdmin && approveDirectly;
+
       if (editingPayment) {
         await paymentsAPI.updatePayment(editingPayment.id, formDataToSend);
       } else {
-        if (isAdmin && approveDirectly) {
+        if (isDirectlyApproved) {
           formDataToSend.append('status', 'approved');
         }
         await paymentsAPI.createPayment(formDataToSend);
       }
-      const currentFilters = {};
-      if (filterYear) currentFilters.year = parseInt(filterYear);
-      if (filterMonth) currentFilters.month = parseInt(filterMonth);
-      if (filterStatus) currentFilters.status = filterStatus;
-      fetchPayments(currentPage, currentFilters);
-      handleCloseDialog();
+
+      const refreshAndClose = () => {
+        const currentFilters = {};
+        if (filterYear) currentFilters.year = parseInt(filterYear);
+        if (filterMonth) currentFilters.month = parseInt(filterMonth);
+        if (filterStatus) currentFilters.status = filterStatus;
+        fetchPayments(currentPage, currentFilters);
+        handleCloseDialog();
+      };
+
+      if (isDirectlyApproved) {
+        // Wait a bit for receipt generation to complete, similar to handleApprove
+        setTimeout(refreshAndClose, 2000);
+      } else {
+        refreshAndClose();
+      }
+
     } catch (err) {
       setError(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
       console.error('Error saving payment:', err);

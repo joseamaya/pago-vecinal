@@ -385,7 +385,6 @@ async def update_payment(
             }
 
             # Create receipt
-            from ..models.receipt import Receipt
             receipt = Receipt(
                 correlative_number=correlative_number,
                 payment=payment,
