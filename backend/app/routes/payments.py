@@ -311,6 +311,7 @@ async def update_payment(
     amount: Optional[float] = Form(None),
     status: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
+    payment_date: Optional[datetime] = Form(None),
     current_user: User = Depends(get_current_user)
 ):
     payment = await Payment.get(payment_id)
@@ -340,6 +341,8 @@ async def update_payment(
         payment.status = PaymentStatus(status)
     if notes is not None:
         payment.notes = notes
+    if payment_date is not None:
+        payment.payment_date = payment_date
 
 
     await payment.save()
