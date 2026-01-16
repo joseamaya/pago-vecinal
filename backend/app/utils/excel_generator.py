@@ -580,6 +580,77 @@ def generate_filtered_fees_excel(fees_data):
     return buffer
 
 
+def generate_expenses_by_period_range_excel(start_year, start_month, end_year, end_month, expenses_data):
+    """
+    Generate an Excel report of administrative expenses for a period range
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Gastos {start_year}-{start_month:02d} a {end_year}-{end_month:02d}"
+
+    month_names = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    start_month_name = month_names[start_month]
+    end_month_name = month_names[end_month]
+
+    # Title
+    ws['A1'] = f"PAGO VECINAL - Reporte de Gastos Administrativos - {start_month_name} {start_year} a {end_month_name} {end_year}"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:E1')
+
+    if expenses_data:
+        headers = ["Fecha Gasto", "Descripción", "Monto", "Año", "Mes"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+        for row, expense in enumerate(expenses_data, 4):
+            ws.cell(row=row, column=1).value = expense['expense_date'].strftime("%d/%m/%Y")
+            ws.cell(row=row, column=2).value = expense['description']
+            ws.cell(row=row, column=3).value = float(expense['amount'])
+            ws.cell(row=row, column=3).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=4).value = expense['year']
+            ws.cell(row=row, column=5).value = expense['month']
+
+        # Summary section
+        summary_row = len(expenses_data) + 6
+        ws[f'A{summary_row}'] = "Resumen del Período"
+        ws[f'A{summary_row}'].font = Font(size=12, bold=True)
+        ws.merge_cells(f'A{summary_row}:E{summary_row}')
+
+        # Calculate total amount
+        total_amount = sum(expense['amount'] for expense in expenses_data)
+
+        current_row = summary_row + 2
+        ws[f'A{current_row}'] = "Total Gastos:"
+        ws[f'A{current_row}'].font = Font(bold=True)
+        ws[f'B{current_row}'] = len(expenses_data)
+        ws[f'B{current_row}'].font = Font(bold=True)
+
+        ws[f'A{current_row+1}'] = "Monto Total:"
+        ws[f'A{current_row+1}'].font = Font(bold=True)
+        ws[f'B{current_row+1}'] = float(total_amount)
+        ws[f'B{current_row+1}'].number_format = '"S/ "#,##0.00'
+        ws[f'B{current_row+1}'].font = Font(bold=True)
+    else:
+        ws['A3'] = f"No hay gastos registrados para el período {start_month_name} {start_year} a {end_month_name} {end_year}."
+
+    # Footer
+    footer_row = len(expenses_data) + 10 if expenses_data else 5
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    for col in range(1, 6):
+        ws.column_dimensions[get_column_letter(col)].width = 18
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
 def generate_traffic_light_excel(traffic_light_data):
     """
     Generate an Excel report with traffic light system for condominium fees

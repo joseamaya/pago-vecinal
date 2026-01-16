@@ -36,6 +36,10 @@ const ReportsManagement = () => {
   const [startMonth, setStartMonth] = useState(1);
   const [endYear, setEndYear] = useState(new Date().getFullYear());
   const [endMonth, setEndMonth] = useState(new Date().getMonth() + 1);
+  const [expenseStartYear, setExpenseStartYear] = useState(new Date().getFullYear());
+  const [expenseStartMonth, setExpenseStartMonth] = useState(1);
+  const [expenseEndYear, setExpenseEndYear] = useState(new Date().getFullYear());
+  const [expenseEndMonth, setExpenseEndMonth] = useState(new Date().getMonth() + 1);
 
   useEffect(() => {
     if (isAdmin) {
@@ -89,6 +93,10 @@ const ReportsManagement = () => {
         case 'fee-contribution-summary':
           response = await reportsAPI.getFeeContributionSummary(startYear, startMonth, endYear, endMonth, selectedFormat);
           filename = `resumen_contribucion_cuotas_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          break;
+        case 'expenses-by-period':
+          response = await reportsAPI.getExpensesByPeriodRangeReport(expenseStartYear, expenseStartMonth, expenseEndYear, expenseEndMonth, selectedFormat);
+          filename = `reporte_gastos_${expenseStartYear}_${expenseStartMonth.toString().padStart(2, '0')}_a_${expenseEndYear}_${expenseEndMonth.toString().padStart(2, '0')}.xlsx`;
           break;
         default:
           throw new Error('Tipo de reporte desconocido');
@@ -161,6 +169,13 @@ const ReportsManagement = () => {
       title: 'Resumen de Contribución de Cuotas',
       description: 'Resumen de cuotas pagadas, no pagadas y aporte porcentual.',
       type: 'fee-contribution-summary',
+      requiresProperty: false,
+      adminOnly: true,
+    },
+    {
+      title: 'Detalle de Gastos por Rango de Períodos',
+      description: 'Lista detallada de gastos administrativos para un rango de períodos (mes/año inicial a mes/año final).',
+      type: 'expenses-by-period',
       requiresProperty: false,
       adminOnly: true,
     },
@@ -367,6 +382,123 @@ const ReportsManagement = () => {
           {reports.filter(r => ['monthly-fees', 'paid-fees-summary', 'fee-payment-matrix', 'fee-contribution-summary'].includes(r.type)).map((report) => {
             const canAccess = !report.adminOnly || isAdmin;
             const canGenerate = true; // No property required for fee reports
+
+            return (
+              <Grid item xs={12} md={6} key={report.type}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" component="h2" gutterBottom>
+                      {report.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {report.description}
+                    </Typography>
+                  </CardContent>
+                  <CardActions>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      onClick={() => downloadReport(report.type)}
+                      disabled={loading || !canAccess || !canGenerate}
+                    >
+                      {loading ? (
+                        <LoadingSpinner buttonVariant size={20} message="Generando..." showMessage />
+                      ) : (
+                        <>
+                          <TableChartIcon sx={{ mr: 1 }} />
+                          Descargar Excel
+                        </>
+                      )}
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Paper>
+
+      {/* Expense Reports Section */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Reportes de Gastos Administrativos
+        </Typography>
+        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+          Filtros
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Año Inicial"
+              type="number"
+              value={expenseStartYear}
+              onChange={(e) => setExpenseStartYear(parseInt(e.target.value))}
+              inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>Mes Inicial</InputLabel>
+              <Select
+                value={expenseStartMonth}
+                onChange={(e) => setExpenseStartMonth(e.target.value)}
+                label="Mes Inicial"
+              >
+                <MenuItem value={1}>Enero</MenuItem>
+                <MenuItem value={2}>Febrero</MenuItem>
+                <MenuItem value={3}>Marzo</MenuItem>
+                <MenuItem value={4}>Abril</MenuItem>
+                <MenuItem value={5}>Mayo</MenuItem>
+                <MenuItem value={6}>Junio</MenuItem>
+                <MenuItem value={7}>Julio</MenuItem>
+                <MenuItem value={8}>Agosto</MenuItem>
+                <MenuItem value={9}>Septiembre</MenuItem>
+                <MenuItem value={10}>Octubre</MenuItem>
+                <MenuItem value={11}>Noviembre</MenuItem>
+                <MenuItem value={12}>Diciembre</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Año Final"
+              type="number"
+              value={expenseEndYear}
+              onChange={(e) => setExpenseEndYear(parseInt(e.target.value))}
+              inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>Mes Final</InputLabel>
+              <Select
+                value={expenseEndMonth}
+                onChange={(e) => setExpenseEndMonth(e.target.value)}
+                label="Mes Final"
+              >
+                <MenuItem value={1}>Enero</MenuItem>
+                <MenuItem value={2}>Febrero</MenuItem>
+                <MenuItem value={3}>Marzo</MenuItem>
+                <MenuItem value={4}>Abril</MenuItem>
+                <MenuItem value={5}>Mayo</MenuItem>
+                <MenuItem value={6}>Junio</MenuItem>
+                <MenuItem value={7}>Julio</MenuItem>
+                <MenuItem value={8}>Agosto</MenuItem>
+                <MenuItem value={9}>Septiembre</MenuItem>
+                <MenuItem value={10}>Octubre</MenuItem>
+                <MenuItem value={11}>Noviembre</MenuItem>
+                <MenuItem value={12}>Diciembre</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          {reports.filter(r => r.type === 'expenses-by-period').map((report) => {
+            const canAccess = !report.adminOnly || isAdmin;
+            const canGenerate = true; // No property required for expense reports
 
             return (
               <Grid item xs={12} md={6} key={report.type}>
