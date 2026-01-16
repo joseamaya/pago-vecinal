@@ -25,7 +25,8 @@ from ..utils.excel_generator import (
     generate_filtered_fees_excel,
     generate_traffic_light_excel,
     generate_paid_fees_summary_excel,
-    generate_payments_summary_excel
+    generate_payments_summary_excel,
+    generate_fee_payment_matrix_excel
 )
 
 router = APIRouter()
@@ -341,6 +342,80 @@ async def download_payments_summary(
         date_suffix = f"_{now.year}_{now.month:02d}"
 
     filename = f"resumen_pagos{date_suffix}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@router.get("/fee-payment-matrix/{start_year}/{start_month}/{end_year}/{end_month}")
+async def download_fee_payment_matrix(
+    start_year: int,
+    start_month: int,
+    end_year: int,
+    end_month: int,
+    format: str = "excel",
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel matrix report of fee payments by property and month"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Validate months
+    if start_month < 1 or start_month > 12 or end_month < 1 or end_month > 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Months must be between 1 and 12"
+        )
+
+    # Validate period range
+    start_period = start_year * 12 + start_month
+    end_period = end_year * 12 + end_month
+    if start_period > end_period:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start period must be before or equal to end period"
+        )
+
+    # Get fees for the period range
+    fees = await Fee.find().to_list()
+
+    # Filter fees by period range in Python
+    filtered_fees = []
+    for fee in fees:
+        fee_period = fee.year * 12 + fee.month
+        start_period_num = start_year * 12 + start_month
+        end_period_num = end_year * 12 + end_month
+
+        if start_period_num <= fee_period <= end_period_num:
+            filtered_fees.append(fee)
+
+    # Fetch property details
+    for fee in filtered_fees:
+        await fee.fetch_link(Fee.property)
+
+    # Prepare matrix data
+    matrix_data = []
+    for fee in filtered_fees:
+        if fee.property:
+            property_str = f"{fee.property.villa}-{fee.property.row_letter}{fee.property.number}"
+            matrix_data.append({
+                'property': property_str,
+                'year': fee.year,
+                'month': fee.month,
+                'paid_amount': fee.paid_amount
+            })
+
+    # Generate Excel report
+    buffer = generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_month, matrix_data)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"matriz_pagos_cuotas_{start_year}_{start_month:02d}_a_{end_year}_{end_month:02d}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,

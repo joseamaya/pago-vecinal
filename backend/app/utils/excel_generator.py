@@ -806,6 +806,86 @@ def generate_payments_summary_excel(start_date, end_date, payments_data):
     return buffer
 
 
+def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_month, matrix_data):
+    """
+    Generate an Excel matrix report of fee payments by property and month
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Matriz Pagos {start_year}-{end_year}"
+
+    # Title
+    period_text = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
+    ws['A1'] = f"PAGO VECINAL - Matriz de Pagos de Cuotas - {period_text}"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:Z1')  # Wide merge for title
+
+    # Prepare data
+    properties = sorted(set(d['property'] for d in matrix_data))
+    months = []
+    current_year = start_year
+    current_month = start_month
+    while (current_year < end_year) or (current_year == end_year and current_month <= end_month):
+        months.append((current_year, current_month))
+        current_month += 1
+        if current_month > 12:
+            current_month = 1
+            current_year += 1
+
+    # Headers
+    ws['A3'] = "Casa"
+    ws['A3'].font = Font(bold=True)
+
+    col = 2
+    for year, month in months:
+        month_names = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+        cell = ws.cell(row=3, column=col)
+        cell.value = f"{month_names[month]} {year}"
+        cell.font = Font(bold=True)
+        col += 1
+
+    # Data rows
+    row = 4
+    for prop in properties:
+        ws.cell(row=row, column=1).value = prop
+        ws.cell(row=row, column=1).font = Font(bold=True)
+
+        col = 2
+        for year, month in months:
+            amount = 0
+            for d in matrix_data:
+                if d['property'] == prop and d['year'] == year and d['month'] == month:
+                    amount = d['paid_amount']
+                    break
+
+            cell = ws.cell(row=row, column=col)
+            cell.value = float(amount)
+            cell.number_format = '"S/ "#,##0.00'
+
+            # Color coding
+            if amount > 0:
+                cell.fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")  # Green
+            else:
+                cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")  # Red
+
+            col += 1
+        row += 1
+
+    # Footer
+    footer_row = row + 2
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    for col in range(1, len(months) + 2):
+        ws.column_dimensions[get_column_letter(col)].width = 15
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
 def generate_paid_fees_summary_excel(start_year, start_month, end_year, end_month, paid_fees_data):
     """
     Generate an Excel report of paid fees summary by month for period range
