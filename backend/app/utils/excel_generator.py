@@ -826,7 +826,7 @@ def generate_payments_summary_excel(start_date, end_date, payments_data):
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
-    for col in range(1, 6):
+    for col in range(1, 8):
         ws.column_dimensions[get_column_letter(col)].width = 15
 
     buffer = io.BytesIO()
@@ -1037,7 +1037,7 @@ def generate_paid_fees_summary_excel(start_year, start_month, end_year, end_mont
     ws.merge_cells('A1:E1')
 
     if paid_fees_data:
-        headers = ["AÑO", "MES", "CUOTA", "N° VECINOS", "INGRESO CUOTA"]
+        headers = ["AÑO", "MES", "CUOTA", "N° VECINOS", "INGRESO CUOTA", "GASTOS PERIODO", "INGRESO - GASTO"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=3, column=col)
             cell.value = header
@@ -1055,17 +1055,23 @@ def generate_paid_fees_summary_excel(start_year, start_month, end_year, end_mont
             ws.cell(row=row, column=4).value = data['count']
             ws.cell(row=row, column=5).value = float(data['total'])
             ws.cell(row=row, column=5).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=6).value = float(data['expenses'])
+            ws.cell(row=row, column=6).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=7).value = float(data['net'])
+            ws.cell(row=row, column=7).number_format = '"S/ "#,##0.00'
 
         # Summary
         total_neighbors = sum(d['count'] for d in paid_fees_data)
         total_income = sum(d['total'] for d in paid_fees_data)
+        total_expenses = sum(d['expenses'] for d in paid_fees_data)
+        total_net = total_income - total_expenses
 
         summary_row = len(paid_fees_data) + 6
         ws[f'A{summary_row}'] = "Total General:"
         ws[f'A{summary_row}'].font = Font(bold=True)
         ws[f'B{summary_row}'] = total_neighbors
         ws[f'B{summary_row}'].font = Font(bold=True)
-        ws[f'C{summary_row}'] = float(total_income)
+        ws[f'C{summary_row}'] = float(total_net)
         ws[f'C{summary_row}'].number_format = '"S/ "#,##0.00'
         ws[f'C{summary_row}'].font = Font(bold=True)
     else:

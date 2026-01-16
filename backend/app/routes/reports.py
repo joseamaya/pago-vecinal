@@ -578,6 +578,23 @@ async def download_paid_fees_summary(
         if start_period_num <= fee_period <= end_period_num:
             paid_fees.append(fee)
 
+    # Get expenses for the period range
+    expenses = await Expense.find_all().to_list()
+
+    # Group expenses by year, month
+    expenses_by_period = {}
+    for expense in expenses:
+        if expense.year is not None and expense.month is not None:
+            expense_period = expense.year * 12 + expense.month
+            start_period_num = start_year * 12 + start_month
+            end_period_num = end_year * 12 + end_month
+
+            if start_period_num <= expense_period <= end_period_num:
+                key = (expense.year, expense.month)
+                if key not in expenses_by_period:
+                    expenses_by_period[key] = 0
+                expenses_by_period[key] += expense.amount
+
     # Group by year, month and amount
     monthly_summary = {}
     for fee in paid_fees:
@@ -590,12 +607,16 @@ async def download_paid_fees_summary(
     # Prepare data for Excel
     summary_data = []
     for (year, month, amount), data in monthly_summary.items():
+        period_expenses = expenses_by_period.get((year, month), 0)
+        net = data['total'] - period_expenses
         summary_data.append({
             'year': year,
             'month': month,
             'amount': amount,
             'count': data['count'],
-            'total': data['total']
+            'total': data['total'],
+            'expenses': period_expenses,
+            'net': net
         })
 
     # Sort by year, month
