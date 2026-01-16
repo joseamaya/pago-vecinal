@@ -75,8 +75,8 @@ const ReportsManagement = () => {
           filename = `cuotas_mensuales_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
         case 'paid-fees-summary':
-          response = await reportsAPI.getPaidFeesSummary(startYear, selectedFormat);
-          filename = `resumen_cuotas_pagadas_${startYear}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          response = await reportsAPI.getPaidFeesSummary(startYear, startMonth, endYear, endMonth, selectedFormat);
+          filename = `resumen_cuotas_pagadas_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
         default:
           throw new Error('Tipo de reporte desconocido');

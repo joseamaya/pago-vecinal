@@ -269,29 +269,56 @@ async def download_monthly_payment_summary(
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-@router.get("/paid-fees-summary/{year}")
+@router.get("/paid-fees-summary/{start_year}/{start_month}/{end_year}/{end_month}")
 async def download_paid_fees_summary(
-    year: int,
+    start_year: int,
+    start_month: int,
+    end_year: int,
+    end_month: int,
     format: str = "excel",
     current_user: User = Depends(get_current_user)
 ):
-    """Generate Excel report of paid fees summary by month for a year"""
+    """Generate Excel report of paid fees summary by month for a period range"""
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
 
-    # Get paid fees for the year
-    paid_fees = await Fee.find(
-        Fee.status == FeeStatus.COMPLETED,
-        Fee.year == year
-    ).to_list()
+    # Validate months
+    if start_month < 1 or start_month > 12 or end_month < 1 or end_month > 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Months must be between 1 and 12"
+        )
 
-    # Group by month and amount
+    # Validate period range
+    start_period = start_year * 12 + start_month
+    end_period = end_year * 12 + end_month
+    if start_period > end_period:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start period must be before or equal to end period"
+        )
+
+    # Get paid fees for the period range
+    # Using a simpler approach to avoid complex query syntax issues
+    fees = await Fee.find(Fee.status == FeeStatus.COMPLETED).to_list()
+
+    # Filter fees by period range in Python
+    paid_fees = []
+    for fee in fees:
+        fee_period = fee.year * 12 + fee.month
+        start_period_num = start_year * 12 + start_month
+        end_period_num = end_year * 12 + end_month
+
+        if start_period_num <= fee_period <= end_period_num:
+            paid_fees.append(fee)
+
+    # Group by year, month and amount
     monthly_summary = {}
     for fee in paid_fees:
-        key = (fee.month, fee.amount)
+        key = (fee.year, fee.month, fee.amount)
         if key not in monthly_summary:
             monthly_summary[key] = {'count': 0, 'total': 0}
         monthly_summary[key]['count'] += 1
@@ -299,7 +326,7 @@ async def download_paid_fees_summary(
 
     # Prepare data for Excel
     summary_data = []
-    for (month, amount), data in monthly_summary.items():
+    for (year, month, amount), data in monthly_summary.items():
         summary_data.append({
             'year': year,
             'month': month,
@@ -308,15 +335,15 @@ async def download_paid_fees_summary(
             'total': data['total']
         })
 
-    # Sort by month
-    summary_data.sort(key=lambda x: x['month'])
+    # Sort by year, month
+    summary_data.sort(key=lambda x: (x['year'], x['month']))
 
     # Generate Excel report
-    buffer = generate_paid_fees_summary_excel(year, summary_data)
+    buffer = generate_paid_fees_summary_excel(start_year, start_month, end_year, end_month, summary_data)
     media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     extension = "xlsx"
 
-    filename = f"resumen_cuotas_pagadas_{year}.{extension}"
+    filename = f"resumen_cuotas_pagadas_{start_year}_{start_month:02d}_a_{end_year}_{end_month:02d}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,

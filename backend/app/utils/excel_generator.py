@@ -737,16 +737,17 @@ def generate_traffic_light_excel(traffic_light_data):
     return buffer
 
 
-def generate_paid_fees_summary_excel(year, paid_fees_data):
+def generate_paid_fees_summary_excel(start_year, start_month, end_year, end_month, paid_fees_data):
     """
-    Generate an Excel report of paid fees summary by month
+    Generate an Excel report of paid fees summary by month for period range
     """
     wb = Workbook()
     ws = wb.active
-    ws.title = f"Resumen Cuotas Pagadas {year}"
+    ws.title = f"Resumen Cuotas Pagadas {start_year}-{end_year}"
 
     # Title
-    ws['A1'] = f"PAGO VECINAL - Resumen de Cuotas Pagadas - {year}"
+    period_text = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
+    ws['A1'] = f"PAGO VECINAL - Resumen de Cuotas Pagadas - {period_text}"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:E1')
 
