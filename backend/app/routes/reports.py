@@ -852,21 +852,13 @@ async def download_expenses_report(
     # Get all expenses
     expenses = await Expense.find_all().to_list()
 
-    # Fetch user details for each expense
-    for expense in expenses:
-        await expense.fetch_link(Expense.user)
-
     expenses_data = [
         {
             "expense_date": expense.expense_date,
-            "expense_type": expense.expense_type,
-            "beneficiary": expense.beneficiary,
-            "beneficiary_details": expense.beneficiary_details,
-            "amount": expense.amount,
-            "status": expense.status,
             "description": expense.description,
-            "notes": expense.notes,
-            "created_by": expense.user.full_name if expense.user else "N/A"
+            "amount": expense.amount,
+            "year": expense.year,
+            "month": expense.month
         }
         for expense in expenses
     ]

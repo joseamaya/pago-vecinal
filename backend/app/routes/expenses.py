@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from ..models.expense import (
     Expense, ExpenseCreate, ExpenseUpdate,
-    ExpenseResponse, ExpenseType
+    ExpenseResponse
 )
 from ..models.receipt import Receipt
 from ..models.user import User, UserRole
@@ -34,25 +34,14 @@ async def get_expenses(current_user: User = Depends(get_current_user)):
 
     expenses = await Expense.find_all().to_list()
 
-    # Fetch links for each expense
-    for expense in expenses:
-        await expense.fetch_link(Expense.user)
-
     return [
         ExpenseResponse(
             id=str(expense.id),
-            user_id=str(expense.user.id),
-            expense_type=expense.expense_type,
-            amount=expense.amount,
             expense_date=expense.expense_date,
+            description=expense.description,
+            amount=expense.amount,
             year=expense.year,
             month=expense.month,
-            receipt_file=expense.receipt_file,
-            generated_receipt_file=expense.generated_receipt_file,
-            description=expense.description,
-            notes=expense.notes,
-            beneficiary=expense.beneficiary,
-            beneficiary_details=expense.beneficiary_details,
             created_at=expense.id.generation_time if hasattr(expense.id, 'generation_time') else datetime.utcnow()
         )
         for expense in expenses
@@ -74,38 +63,23 @@ async def get_expense(expense_id: str, current_user: User = Depends(get_current_
             detail="Expense not found"
         )
 
-    # Fetch linked documents
-    await expense.fetch_link(Expense.user)
-
     return ExpenseResponse(
         id=str(expense.id),
-        user_id=str(expense.user.id),
-        expense_type=expense.expense_type,
-        amount=expense.amount,
         expense_date=expense.expense_date,
+        description=expense.description,
+        amount=expense.amount,
         year=expense.year,
         month=expense.month,
-        receipt_file=expense.receipt_file,
-        generated_receipt_file=expense.generated_receipt_file,
-        description=expense.description,
-        notes=expense.notes,
-        beneficiary=expense.beneficiary,
-        beneficiary_details=expense.beneficiary_details,
         created_at=expense.id.generation_time if hasattr(expense.id, 'generation_time') else datetime.utcnow()
     )
 
 @router.post("/", response_model=ExpenseResponse)
 async def create_expense(
-    expense_type: ExpenseType = Form(...),
-    amount: float = Form(...),
     expense_date: datetime = Form(...),
-    year: int = Form(...),
-    month: int = Form(...),
     description: str = Form(...),
-    notes: Optional[str] = Form(None),
-    beneficiary: str = Form(...),
-    beneficiary_details: Optional[str] = Form(None),
-    receipt_file: Optional[UploadFile] = File(None),
+    amount: float = Form(...),
+    year: Optional[int] = Form(None),
+    month: Optional[int] = Form(None),
     current_user: User = Depends(get_current_user)
 ):
     # Only admins can create expenses
@@ -115,71 +89,39 @@ async def create_expense(
             detail="Only administrators can create expenses"
         )
 
-    # Handle file upload
-    receipt_file_path = None
-    if receipt_file:
-        # Create unique filename
-        file_extension = os.path.splitext(receipt_file.filename)[1]
-        unique_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user.id}{file_extension}"
-        file_path = os.path.join("static", "uploads", unique_filename)
-
-        # Save file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(receipt_file.file, buffer)
-
-        receipt_file_path = file_path
+    # Auto-calculate year and month from expense_date if not provided
+    if year is None:
+        year = expense_date.year
+    if month is None:
+        month = expense_date.month
 
     expense = Expense(
-        user=current_user,
-        expense_type=expense_type,
-        amount=amount,
         expense_date=expense_date,
-        year=year,
-        month=month,
-        receipt_file=receipt_file_path,
         description=description,
-        notes=notes,
-        beneficiary=beneficiary,
-        beneficiary_details=beneficiary_details
+        amount=amount,
+        year=year,
+        month=month
     )
     await expense.insert()
 
-    # Expenses should not generate receipts as they are outgoing payments
-    # We receive vouchers from suppliers, we don't issue receipts for expenses
-    pass
-
-    # Fetch linked documents for the response
-    await expense.fetch_link(Expense.user)
-
     return ExpenseResponse(
         id=str(expense.id),
-        user_id=str(expense.user.id),
-        expense_type=expense.expense_type,
-        amount=expense.amount,
         expense_date=expense.expense_date,
+        description=expense.description,
+        amount=expense.amount,
         year=expense.year,
         month=expense.month,
-        receipt_file=expense.receipt_file,
-        generated_receipt_file=expense.generated_receipt_file,
-        description=expense.description,
-        notes=expense.notes,
-        beneficiary=expense.beneficiary,
-        beneficiary_details=expense.beneficiary_details,
         created_at=expense.id.generation_time if hasattr(expense.id, 'generation_time') else datetime.utcnow()
     )
 
 @router.put("/{expense_id}", response_model=ExpenseResponse)
 async def update_expense(
     expense_id: str,
+    expense_date: Optional[datetime] = Form(None),
+    description: Optional[str] = Form(None),
     amount: Optional[float] = Form(None),
-    expense_type: Optional[str] = Form(None),
     year: Optional[int] = Form(None),
     month: Optional[int] = Form(None),
-    description: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    beneficiary: Optional[str] = Form(None),
-    beneficiary_details: Optional[str] = Form(None),
-    receipt_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user)
 ):
     # Only admins can update expenses
@@ -196,63 +138,34 @@ async def update_expense(
             detail="Expense not found"
         )
 
-    # Fetch linked documents
-    await expense.fetch_link(Expense.user)
-
-    # Handle file upload
-    if receipt_file:
-        # Create unique filename
-        file_extension = os.path.splitext(receipt_file.filename)[1]
-        unique_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user.id}{file_extension}"
-        file_path = os.path.join("static", "uploads", unique_filename)
-
-        # Save file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(receipt_file.file, buffer)
-
-        expense.receipt_file = file_path
-
     # Update fields
+    if expense_date is not None:
+        expense.expense_date = expense_date
+        # If expense_date is updated and year/month are not provided, recalculate them
+        if year is None:
+            expense.year = expense_date.year
+        if month is None:
+            expense.month = expense_date.month
+    if description is not None:
+        expense.description = description
     if amount is not None:
         expense.amount = amount
-    if expense_type is not None:
-        expense.expense_type = ExpenseType(expense_type)
     if year is not None:
         expense.year = year
     if month is not None:
         expense.month = month
-    if description is not None:
-        expense.description = description
-    if notes is not None:
-        expense.notes = notes
-    if beneficiary is not None:
-        expense.beneficiary = beneficiary
-    if beneficiary_details is not None:
-        expense.beneficiary_details = beneficiary_details
 
     await expense.save()
 
-    # Fetch links again after save
-    await expense.fetch_link(Expense.user)
-
-    response_data = ExpenseResponse(
+    return ExpenseResponse(
         id=str(expense.id),
-        user_id=str(expense.user.id),
-        expense_type=expense.expense_type,
-        amount=expense.amount,
         expense_date=expense.expense_date,
+        description=expense.description,
+        amount=expense.amount,
         year=expense.year,
         month=expense.month,
-        receipt_file=expense.receipt_file,
-        generated_receipt_file=expense.generated_receipt_file,
-        description=expense.description,
-        notes=expense.notes,
-        beneficiary=expense.beneficiary,
-        beneficiary_details=expense.beneficiary_details,
         created_at=expense.id.generation_time if hasattr(expense.id, 'generation_time') else datetime.utcnow()
     )
-    print(f"Returning response with generated_receipt_file: {response_data.generated_receipt_file}")
-    return response_data
 
 @router.delete("/{expense_id}")
 async def delete_expense(expense_id: str, current_user: User = Depends(get_current_user)):
@@ -299,22 +212,22 @@ async def bulk_import_expenses(
         wb = load_workbook(file.file)
         ws = wb.active
 
-        # Expected columns: Tipo de Gasto, Monto, Fecha de Gasto, Año, Mes, Beneficiario, Descripción, Detalles del Beneficiario, Notas
-        expected_headers = ['Tipo de Gasto', 'Monto', 'Fecha de Gasto', 'Año', 'Mes', 'Beneficiario', 'Descripción', 'Detalles del Beneficiario', 'Notas']
+        # Expected columns: Fecha de Gasto, Descripción, Monto, Año, Mes
+        expected_headers = ['Fecha de Gasto', 'Descripción', 'Monto', 'Año', 'Mes']
 
         # Check headers
         actual_headers = []
-        for col in range(1, 10):
+        for col in range(1, 6):
             cell_value = ws.cell(row=1, column=col).value
             if cell_value:
                 actual_headers.append(str(cell_value).strip())
             else:
                 actual_headers.append("")
 
-        if actual_headers[:7] != expected_headers[:7]:  # Required fields up to Descripción
+        if actual_headers != expected_headers:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid Excel format. Expected headers: {', '.join(expected_headers[:7])}"
+                detail=f"Invalid Excel format. Expected headers: {', '.join(expected_headers)}"
             )
 
         results = {
@@ -327,32 +240,17 @@ async def bulk_import_expenses(
         for row_idx in range(2, ws.max_row + 1):
             try:
                 # Extract data
-                expense_type_str = str(ws.cell(row=row_idx, column=1).value or "").strip()
-                amount = ws.cell(row=row_idx, column=2).value
-                expense_date_cell = ws.cell(row=row_idx, column=3).value
+                expense_date_cell = ws.cell(row=row_idx, column=1).value
+                description = str(ws.cell(row=row_idx, column=2).value or "").strip()
+                amount = ws.cell(row=row_idx, column=3).value
                 year = ws.cell(row=row_idx, column=4).value
                 month = ws.cell(row=row_idx, column=5).value
-                beneficiary = str(ws.cell(row=row_idx, column=6).value or "").strip()
-                description = str(ws.cell(row=row_idx, column=7).value or "").strip()
-                beneficiary_details = str(ws.cell(row=row_idx, column=8).value or "").strip()
-                notes = str(ws.cell(row=row_idx, column=9).value or "").strip()
 
                 # Validate required fields
-                if not all([expense_type_str, amount is not None, expense_date_cell is not None, year is not None, month is not None, beneficiary, description]):
+                if not all([expense_date_cell is not None, description, amount is not None]):
                     results["errors"].append({
                         "row": row_idx,
-                        "error": "Missing required fields"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Validate expense type
-                try:
-                    expense_type = ExpenseType(expense_type_str.lower())
-                except ValueError:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": f"Invalid expense type: {expense_type_str}. Must be one of: {', '.join([e.value for e in ExpenseType])}"
+                        "error": "Missing required fields: Fecha de Gasto, Descripción, Monto"
                     })
                     results["failed_imports"] += 1
                     continue
@@ -360,8 +258,10 @@ async def bulk_import_expenses(
                 # Convert types
                 try:
                     amount = float(amount)
-                    year = int(year)
-                    month = int(month)
+                    if year is not None:
+                        year = int(year)
+                    if month is not None:
+                        month = int(month)
 
                     if isinstance(expense_date_cell, datetime):
                         expense_date = expense_date_cell
@@ -375,6 +275,12 @@ async def bulk_import_expenses(
                     })
                     results["failed_imports"] += 1
                     continue
+
+                # Auto-calculate year and month from expense_date if not provided
+                if year is None:
+                    year = expense_date.year
+                if month is None:
+                    month = expense_date.month
 
                 # Validate data ranges
                 if month < 1 or month > 12:
@@ -403,22 +309,13 @@ async def bulk_import_expenses(
 
                 # Create expense
                 expense = Expense(
-                    user=current_user,
-                    expense_type=expense_type,
-                    amount=amount,
                     expense_date=expense_date,
-                    year=year,
-                    month=month,
                     description=description,
-                    notes=notes if notes else None,
-                    beneficiary=beneficiary,
-                    beneficiary_details=beneficiary_details if beneficiary_details else None
+                    amount=amount,
+                    year=year,
+                    month=month
                 )
                 await expense.insert()
-
-                # Expenses should not generate receipts as they are outgoing payments
-                # We receive vouchers from suppliers, we don't issue receipts for expenses
-                pass
 
                 results["successful_imports"] += 1
 

@@ -260,7 +260,7 @@ def generate_expenses_excel(expenses_data):
     ws.merge_cells('A1:I1')
 
     if expenses_data:
-        headers = ["Fecha Gasto", "Tipo", "Beneficiario", "Detalles Beneficiario", "Monto", "Estado", "Descripción", "Notas", "Creado Por"]
+        headers = ["Fecha Gasto", "Descripción", "Monto", "Año", "Mes"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=3, column=col)
             cell.value = header
@@ -269,65 +269,23 @@ def generate_expenses_excel(expenses_data):
 
         for row, expense in enumerate(expenses_data, 4):
             ws.cell(row=row, column=1).value = expense['expense_date'].strftime("%d/%m/%Y")
-            ws.cell(row=row, column=2).value = expense['expense_type']
-            ws.cell(row=row, column=3).value = expense['beneficiary']
-            ws.cell(row=row, column=4).value = expense.get('beneficiary_details', '')
-            ws.cell(row=row, column=5).value = float(expense['amount'])
-            ws.cell(row=row, column=5).number_format = '"S/ "#,##0.00'
-            ws.cell(row=row, column=6).value = expense['status']
-            ws.cell(row=row, column=7).value = expense['description']
-            ws.cell(row=row, column=8).value = expense.get('notes', '')
-            ws.cell(row=row, column=9).value = expense.get('created_by', 'N/A')
+            ws.cell(row=row, column=2).value = expense['description']
+            ws.cell(row=row, column=3).value = float(expense['amount'])
+            ws.cell(row=row, column=3).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=4).value = expense.get('year', 'N/A')
+            ws.cell(row=row, column=5).value = expense.get('month', 'N/A')
 
         # Summary section
         summary_row = len(expenses_data) + 6
         ws[f'A{summary_row}'] = "Resumen del Reporte"
         ws[f'A{summary_row}'].font = Font(size=12, bold=True)
-        ws.merge_cells(f'A{summary_row}:I{summary_row}')
+        ws.merge_cells(f'A{summary_row}:E{summary_row}')
 
-        # Calculate totals by status and type
-        status_counts = {}
-        type_totals = {}
-        total_amount = 0
-
-        for expense in expenses_data:
-            status = expense['status']
-            expense_type = expense['expense_type']
-            amount = expense['amount']
-
-            if status not in status_counts:
-                status_counts[status] = 0
-            status_counts[status] += 1
-
-            if expense_type not in type_totals:
-                type_totals[expense_type] = 0
-            type_totals[expense_type] += amount
-
-            total_amount += amount
-
-        # Display status summary
-        current_row = summary_row + 2
-        for status, count in status_counts.items():
-            ws[f'A{current_row}'] = f"Gastos {status.title()}:"
-            ws[f'A{current_row}'].font = Font(bold=True)
-            ws[f'B{current_row}'] = count
-            current_row += 1
-
-        # Display type totals
-        current_row += 1
-        ws[f'A{current_row}'] = "Totales por Tipo:"
-        ws[f'A{current_row}'].font = Font(size=11, bold=True)
-        ws.merge_cells(f'A{current_row}:B{current_row}')
-
-        current_row += 1
-        for expense_type, amount in type_totals.items():
-            ws[f'A{current_row}'] = f"{expense_type.title()}:"
-            ws[f'A{current_row}'].font = Font(bold=True)
-            ws[f'B{current_row}'] = float(amount)
-            ws[f'B{current_row}'].number_format = '"S/ "#,##0.00'
-            current_row += 1
+        # Calculate total amount
+        total_amount = sum(expense['amount'] for expense in expenses_data)
 
         # Total summary
+        current_row = summary_row + 2
         ws[f'A{current_row}'] = "Total Gastos:"
         ws[f'A{current_row}'].font = Font(bold=True)
         ws[f'B{current_row}'] = len(expenses_data)
@@ -346,7 +304,7 @@ def generate_expenses_excel(expenses_data):
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
-    for col in range(1, 10):
+    for col in range(1, 6):
         ws.column_dimensions[get_column_letter(col)].width = 18
 
     buffer = io.BytesIO()

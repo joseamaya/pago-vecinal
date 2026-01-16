@@ -36,18 +36,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { expensesAPI } from '../services/api';
 import LoadingSkeleton from './common/LoadingSkeleton';
 
-const EXPENSE_TYPES = {
-  maintenance: 'Mantenimiento',
-  cleaning: 'Limpieza',
-  repairs: 'Reparaciones',
-  services: 'Servicios',
-  utilities: 'Servicios Públicos',
-  supplies: 'Suministros',
-  insurance: 'Seguros',
-  legal: 'Servicios Legales',
-  administrative: 'Administrativos',
-  other: 'Otros'
-};
 
 
 const ExpenseManagement = () => {
@@ -58,21 +46,15 @@ const ExpenseManagement = () => {
   const [open, setOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [formData, setFormData] = useState({
-    expense_type: '',
-    amount: '',
     expense_date: '',
+    description: '',
+    amount: '',
     year: '',
     month: '',
-    description: '',
-    notes: '',
-    beneficiary: '',
-    beneficiary_details: '',
   });
-  const [receiptFile, setReceiptFile] = useState(null);
   const [bulkImportFile, setBulkImportFile] = useState(null);
   const [bulkImportResult, setBulkImportResult] = useState(null);
   const [filters, setFilters] = useState({
-    expense_type: '',
     year: '',
     month: '',
   });
@@ -101,31 +83,21 @@ const ExpenseManagement = () => {
     if (expense) {
       setEditingExpense(expense);
       setFormData({
-        expense_type: expense.expense_type,
-        amount: expense.amount.toString(),
         expense_date: new Date(expense.expense_date).toISOString().split('T')[0],
-        year: expense.year.toString(),
-        month: expense.month.toString(),
         description: expense.description,
-        notes: expense.notes || '',
-        beneficiary: expense.beneficiary,
-        beneficiary_details: expense.beneficiary_details || '',
+        amount: expense.amount.toString(),
+        year: expense.year ? expense.year.toString() : '',
+        month: expense.month ? expense.month.toString() : '',
       });
-      setReceiptFile(null);
     } else {
       setEditingExpense(null);
       setFormData({
-        expense_type: '',
-        amount: '',
         expense_date: '',
+        description: '',
+        amount: '',
         year: '',
         month: '',
-        description: '',
-        notes: '',
-        beneficiary: '',
-        beneficiary_details: '',
       });
-      setReceiptFile(null);
     }
     setOpen(true);
   };
@@ -134,35 +106,26 @@ const ExpenseManagement = () => {
     setOpen(false);
     setEditingExpense(null);
     setFormData({
-      expense_type: '',
-      amount: '',
       expense_date: '',
+      description: '',
+      amount: '',
       year: '',
       month: '',
-      description: '',
-      notes: '',
-      beneficiary: '',
-      beneficiary_details: '',
     });
-    setReceiptFile(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append('expense_type', formData.expense_type);
-      formDataToSend.append('amount', parseFloat(formData.amount));
       formDataToSend.append('expense_date', new Date(formData.expense_date).toISOString());
-      formDataToSend.append('year', parseInt(formData.year));
-      formDataToSend.append('month', parseInt(formData.month));
       formDataToSend.append('description', formData.description);
-      formDataToSend.append('notes', formData.notes || '');
-      formDataToSend.append('beneficiary', formData.beneficiary);
-      formDataToSend.append('beneficiary_details', formData.beneficiary_details || '');
-
-      if (receiptFile) {
-        formDataToSend.append('receipt_file', receiptFile);
+      formDataToSend.append('amount', parseFloat(formData.amount));
+      if (formData.year) {
+        formDataToSend.append('year', parseInt(formData.year));
+      }
+      if (formData.month) {
+        formDataToSend.append('month', parseInt(formData.month));
       }
 
       if (editingExpense) {
@@ -191,21 +154,6 @@ const ExpenseManagement = () => {
   };
 
 
-  const handleDownloadReceipt = async (expenseId) => {
-    try {
-      const response = await expensesAPI.downloadExpenseReceipt(expenseId);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `recibo_gasto_administrativo_${expenseId}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      setError('Error al descargar recibo');
-      console.error('Error downloading receipt:', err);
-    }
-  };
 
   const handleFilterChange = (field, value) => {
     setFilters({
@@ -220,7 +168,6 @@ const ExpenseManagement = () => {
 
   const handleClearFilters = () => {
     setFilters({
-      expense_type: '',
       year: '',
       month: '',
     });
@@ -247,11 +194,11 @@ const ExpenseManagement = () => {
 
   const handleDownloadTemplate = () => {
     // Create a sample Excel template
-    const headers = ['Tipo de Gasto', 'Monto', 'Fecha de Gasto', 'Año', 'Mes', 'Beneficiario', 'Descripción', 'Detalles del Beneficiario', 'Notas'];
+    const headers = ['Fecha de Gasto', 'Descripción', 'Monto', 'Año', 'Mes'];
     const sampleData = [
-      ['maintenance', '150.50', '2024-01-15', '2024', '1', 'Proveedor ABC', 'Mantenimiento de jardín', 'Detalles adicionales', 'Notas opcionales'],
-      ['utilities', '200.00', '2024-01-20', '2024', '1', 'Empresa Eléctrica', 'Pago de luz', '', ''],
-      ['supplies', '75.25', '2024-01-25', '2024', '1', 'Tienda XYZ', 'Compra de materiales', 'Factura #12345', 'Urgente']
+      ['2024-01-15', 'Mantenimiento de jardín', '150.50', '2024', '1'],
+      ['2024-01-20', 'Pago de luz', '200.00', '2024', '1'],
+      ['2024-01-25', 'Compra de materiales', '75.25', '2024', '1']
     ];
 
     // For now, just show an alert with instructions
@@ -260,9 +207,8 @@ const ExpenseManagement = () => {
 
 
   const filteredExpenses = expenses.filter(expense => {
-    if (filters.expense_type && expense.expense_type !== filters.expense_type) return false;
-    if (filters.year && expense.year.toString() !== filters.year) return false;
-    if (filters.month && expense.month.toString() !== filters.month) return false;
+    if (filters.year && expense.year && expense.year.toString() !== filters.year) return false;
+    if (filters.month && expense.month && expense.month.toString() !== filters.month) return false;
     return true;
   });
 
@@ -365,80 +311,61 @@ const ExpenseManagement = () => {
           Filtros
         </Typography>
         <Grid container spacing={2} alignItems="center">
-           <Grid item xs={12} sm={6}>
-             <FormControl fullWidth>
-               <InputLabel>Tipo de Gasto</InputLabel>
-               <Select
-                 value={filters.expense_type}
-                 onChange={(e) => handleFilterChange('expense_type', e.target.value)}
-                 label="Tipo de Gasto"
-               >
-                 <MenuItem value="">
-                   <em>Todos</em>
-                 </MenuItem>
-                 {Object.entries(EXPENSE_TYPES).map(([key, label]) => (
-                   <MenuItem key={key} value={key}>
-                     {label}
-                   </MenuItem>
-                 ))}
-               </Select>
-             </FormControl>
-           </Grid>
-           <Grid item xs={12} sm={6}>
-             <TextField
-               fullWidth
-               label="Año"
-               type="number"
-               value={filters.year}
-               onChange={(e) => handleFilterChange('year', e.target.value)}
-               inputProps={{ min: 2000, max: 2100 }}
-             />
-           </Grid>
-           <Grid item xs={12} sm={6}>
-             <FormControl fullWidth>
-               <InputLabel>Mes</InputLabel>
-               <Select
-                 value={filters.month}
-                 onChange={(e) => handleFilterChange('month', e.target.value)}
-                 label="Mes"
-               >
-                 <MenuItem value="">
-                   <em>Todos</em>
-                 </MenuItem>
-                 <MenuItem value="1">Enero</MenuItem>
-                 <MenuItem value="2">Febrero</MenuItem>
-                 <MenuItem value="3">Marzo</MenuItem>
-                 <MenuItem value="4">Abril</MenuItem>
-                 <MenuItem value="5">Mayo</MenuItem>
-                 <MenuItem value="6">Junio</MenuItem>
-                 <MenuItem value="7">Julio</MenuItem>
-                 <MenuItem value="8">Agosto</MenuItem>
-                 <MenuItem value="9">Septiembre</MenuItem>
-                 <MenuItem value="10">Octubre</MenuItem>
-                 <MenuItem value="11">Noviembre</MenuItem>
-                 <MenuItem value="12">Diciembre</MenuItem>
-               </Select>
-             </FormControl>
-           </Grid>
-           <Grid item xs={12} sm={6}>
-             <Button
-               variant="contained"
-               onClick={handleApplyFilters}
-               fullWidth
-             >
-               Aplicar Filtros
-             </Button>
-           </Grid>
-           <Grid item xs={12} sm={6}>
-             <Button
-               variant="outlined"
-               onClick={handleClearFilters}
-               fullWidth
-             >
-               Limpiar
-             </Button>
-           </Grid>
-         </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Año"
+                type="number"
+                value={filters.year}
+                onChange={(e) => handleFilterChange('year', e.target.value)}
+                inputProps={{ min: 2000, max: 2100 }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Mes</InputLabel>
+                <Select
+                  value={filters.month}
+                  onChange={(e) => handleFilterChange('month', e.target.value)}
+                  label="Mes"
+                >
+                  <MenuItem value="">
+                    <em>Todos</em>
+                  </MenuItem>
+                  <MenuItem value="1">Enero</MenuItem>
+                  <MenuItem value="2">Febrero</MenuItem>
+                  <MenuItem value="3">Marzo</MenuItem>
+                  <MenuItem value="4">Abril</MenuItem>
+                  <MenuItem value="5">Mayo</MenuItem>
+                  <MenuItem value="6">Junio</MenuItem>
+                  <MenuItem value="7">Julio</MenuItem>
+                  <MenuItem value="8">Agosto</MenuItem>
+                  <MenuItem value="9">Septiembre</MenuItem>
+                  <MenuItem value="10">Octubre</MenuItem>
+                  <MenuItem value="11">Noviembre</MenuItem>
+                  <MenuItem value="12">Diciembre</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Button
+                variant="contained"
+                onClick={handleApplyFilters}
+                fullWidth
+              >
+                Aplicar Filtros
+              </Button>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Button
+                variant="outlined"
+                onClick={handleClearFilters}
+                fullWidth
+              >
+                Limpiar
+              </Button>
+            </Grid>
+          </Grid>
       </Paper>
 
       <Paper>
@@ -446,53 +373,34 @@ const ExpenseManagement = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Tipo</TableCell>
-                <TableCell>Beneficiario</TableCell>
                 <TableCell>Descripción</TableCell>
                 <TableCell>Monto</TableCell>
                 <TableCell>Fecha de Gasto</TableCell>
                 <TableCell>Año</TableCell>
                 <TableCell>Mes</TableCell>
-                <TableCell>Recibo</TableCell>
                 <TableCell>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
-                <LoadingSkeleton type="table" rows={5} columns={10} />
+                <LoadingSkeleton type="table" rows={5} columns={6} />
               ) : filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={6} align="center">
                     No hay gastos administrativos registrados
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredExpenses.map((expense) => (
                   <TableRow key={expense.id}>
-                    <TableCell>{EXPENSE_TYPES[expense.expense_type] || expense.expense_type}</TableCell>
-                    <TableCell>{expense.beneficiary}</TableCell>
                     <TableCell>{expense.description}</TableCell>
                     <TableCell>S/ {expense.amount.toFixed(2)}</TableCell>
                     <TableCell>
                       {new Date(expense.expense_date).toLocaleDateString('es-ES')}
                     </TableCell>
-                    <TableCell>{expense.year}</TableCell>
+                    <TableCell>{expense.year || '-'}</TableCell>
                     <TableCell>
-                      {['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][expense.month] || expense.month}
-                    </TableCell>
-                    <TableCell>
-                      {expense.receipt_file ? (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<FileDownloadIcon />}
-                          onClick={() => handleDownloadReceipt(expense.id)}
-                        >
-                          Descargar
-                        </Button>
-                      ) : (
-                        "-"
-                      )}
+                      {expense.month ? ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][expense.month - 1] : '-'}
                     </TableCell>
                     <TableCell>
                       {isAdmin && (
@@ -530,35 +438,6 @@ const ExpenseManagement = () => {
           <DialogContent>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth margin="dense">
-                  <InputLabel>Tipo de Gasto</InputLabel>
-                  <Select
-                    value={formData.expense_type}
-                    onChange={(e) => setFormData({ ...formData, expense_type: e.target.value })}
-                    label="Tipo de Gasto"
-                    required
-                  >
-                    {Object.entries(EXPENSE_TYPES).map(([key, label]) => (
-                      <MenuItem key={key} value={key}>
-                        {label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  margin="dense"
-                  label="Monto"
-                  type="number"
-                  fullWidth
-                  required
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  inputProps={{ min: 0.01, step: 0.01 }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
                 <TextField
                   margin="dense"
                   label="Fecha de Gasto"
@@ -575,23 +454,45 @@ const ExpenseManagement = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   margin="dense"
-                  label="Año"
+                  label="Descripción"
+                  fullWidth
+                  required
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Describe el gasto administrativo"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  margin="dense"
+                  label="Monto"
                   type="number"
                   fullWidth
                   required
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  inputProps={{ min: 0.01, step: 0.01 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  margin="dense"
+                  label="Año (opcional)"
+                  type="number"
+                  fullWidth
                   value={formData.year}
                   onChange={(e) => setFormData({ ...formData, year: e.target.value })}
                   inputProps={{ min: 2000, max: 2100 }}
+                  helperText="Si no se especifica, se calculará automáticamente"
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth margin="dense">
-                  <InputLabel>Mes</InputLabel>
+                  <InputLabel>Mes (opcional)</InputLabel>
                   <Select
                     value={formData.month}
                     onChange={(e) => setFormData({ ...formData, month: e.target.value })}
-                    label="Mes"
-                    required
+                    label="Mes (opcional)"
                   >
                     <MenuItem value="">
                       <em>Seleccionar Mes</em>
@@ -609,63 +510,10 @@ const ExpenseManagement = () => {
                     <MenuItem value="11">Noviembre</MenuItem>
                     <MenuItem value="12">Diciembre</MenuItem>
                   </Select>
+                  <Typography variant="caption" color="textSecondary">
+                    Si no se especifica, se calculará automáticamente
+                  </Typography>
                 </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  margin="dense"
-                  label="Beneficiario"
-                  fullWidth
-                  required
-                  value={formData.beneficiary}
-                  onChange={(e) => setFormData({ ...formData, beneficiary: e.target.value })}
-                  placeholder="Nombre del tercero que recibe el pago"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  margin="dense"
-                  label="Descripción"
-                  fullWidth
-                  required
-                  multiline
-                  rows={2}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describe el gasto administrativo"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  margin="dense"
-                  label="Detalles del Beneficiario"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  value={formData.beneficiary_details}
-                  onChange={(e) => setFormData({ ...formData, beneficiary_details: e.target.value })}
-                  placeholder="Información adicional sobre el beneficiario (opcional)"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  margin="dense"
-                  label="Notas"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setReceiptFile(e.target.files[0])}
-                  style={{ marginTop: 16, marginBottom: 8 }}
-                />
-                {receiptFile && <Typography variant="body2">{receiptFile.name}</Typography>}
               </Grid>
             </Grid>
           </DialogContent>
