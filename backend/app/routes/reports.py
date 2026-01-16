@@ -31,8 +31,9 @@ router = APIRouter()
 @router.get("/property/{property_id}/payment-history")
 async def download_property_payment_history(
     property_id: str,
-    year: Optional[int] = None,
-    format: str = "pdf",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    format: str = "excel",
     current_user: User = Depends(get_current_user)
 ):
     """Generate PDF report of payment history for a specific property"""
@@ -70,10 +71,20 @@ async def download_property_payment_history(
         Fee.status == FeeStatus.PENDING
     ).to_list()
 
-    # Filter by year if specified
-    if year:
-        payments = [p for p in payments if p.payment_date.year == year]
-        fees = [f for f in fees if f.year == year]
+    # Filter by date range if specified
+    if start_date and end_date:
+        start_dt = datetime.fromisoformat(start_date)
+        end_dt = datetime.fromisoformat(end_date)
+        payments = [p for p in payments if start_dt <= p.payment_date <= end_dt]
+        fees = [f for f in fees if start_dt.date() <= f.due_date <= end_dt.date()]
+    elif start_date:
+        start_dt = datetime.fromisoformat(start_date)
+        payments = [p for p in payments if p.payment_date >= start_dt]
+        fees = [f for f in fees if f.due_date >= start_dt.date()]
+    elif end_date:
+        end_dt = datetime.fromisoformat(end_date)
+        payments = [p for p in payments if p.payment_date <= end_dt]
+        fees = [f for f in fees if f.due_date <= end_dt.date()]
 
     # Prepare data
     property_data = {
@@ -115,7 +126,17 @@ async def download_property_payment_history(
         media_type = "application/pdf"
         extension = "pdf"
 
-    filename = f"historial_pagos_{property_obj.villa}_{property_obj.row_letter}{property_obj.number}_{year or datetime.now().year}.{extension}"
+    date_suffix = ""
+    if start_date and end_date:
+        date_suffix = f"_{start_date.replace('-', '')}_a_{end_date.replace('-', '')}"
+    elif start_date:
+        date_suffix = f"_desde_{start_date.replace('-', '')}"
+    elif end_date:
+        date_suffix = f"_hasta_{end_date.replace('-', '')}"
+    else:
+        date_suffix = f"_{datetime.now().year}"
+
+    filename = f"historial_pagos_{property_obj.villa}_{property_obj.row_letter}{property_obj.number}{date_suffix}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,
@@ -172,11 +193,11 @@ async def download_outstanding_fees_report(
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-@router.get("/monthly-summary/{year}/{month}")
+@router.get("/monthly-summary")
 async def download_monthly_payment_summary(
-    year: int,
-    month: int,
-    format: str = "pdf",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    format: str = "excel",
     current_user: User = Depends(get_current_user)
 ):
     """Generate PDF summary of payments for a specific month"""
@@ -186,23 +207,22 @@ async def download_monthly_payment_summary(
             detail="Not enough permissions"
         )
 
-    # Validate month
-    if month < 1 or month > 12:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Month must be between 1 and 12"
-        )
-
-    # Get payments for the specified month
-    start_date = datetime(year, month, 1)
-    if month == 12:
-        end_date = datetime(year + 1, 1, 1)
+    # Get payments for the specified date range
+    if start_date and end_date:
+        start_dt = datetime.fromisoformat(start_date)
+        end_dt = datetime.fromisoformat(end_date)
     else:
-        end_date = datetime(year, month + 1, 1)
+        # Default to current month
+        now = datetime.now()
+        start_dt = datetime(now.year, now.month, 1)
+        if now.month == 12:
+            end_dt = datetime(now.year + 1, 1, 1)
+        else:
+            end_dt = datetime(now.year, now.month + 1, 1)
 
     payments = await Payment.find(
-        Payment.payment_date >= start_date,
-        Payment.payment_date < end_date
+        Payment.payment_date >= start_dt,
+        Payment.payment_date < end_dt
     ).to_list()
 
     # Fetch property details through fee
@@ -226,7 +246,7 @@ async def download_monthly_payment_summary(
 
     # Generate report based on format
     if format.lower() == "excel":
-        buffer = generate_monthly_payment_summary_excel(year, month, payments_data)
+        buffer = generate_monthly_payment_summary_excel(start_dt, end_dt, payments_data)
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         extension = "xlsx"
     else:
@@ -234,7 +254,14 @@ async def download_monthly_payment_summary(
         media_type = "application/pdf"
         extension = "pdf"
 
-    filename = f"resumen_mensual_{year}_{month:02d}.{extension}"
+    date_suffix = ""
+    if start_date and end_date:
+        date_suffix = f"_{start_date.replace('-', '')}_a_{end_date.replace('-', '')}"
+    else:
+        now = datetime.now()
+        date_suffix = f"_{now.year}_{now.month:02d}"
+
+    filename = f"resumen_pagos{date_suffix}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,

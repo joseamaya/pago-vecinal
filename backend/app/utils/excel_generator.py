@@ -172,16 +172,29 @@ def generate_outstanding_fees_excel(fees_data):
     return buffer
 
 
-def generate_monthly_payment_summary_excel(year, month, payments_data):
+def generate_monthly_payment_summary_excel(start_date, end_date, payments_data):
     """
-    Generate an Excel summary of payments for a specific month
+    Generate an Excel summary of payments for a date range
     """
     wb = Workbook()
     ws = wb.active
-    ws.title = f"Resumen {month:02d}-{year}"
+
+    # Format dates for title
+    if start_date and end_date:
+        title_date = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+        ws.title = f"Resumen {start_date.strftime('%m%Y')}-{end_date.strftime('%m%Y')}"
+    elif start_date:
+        title_date = f"Desde {start_date.strftime('%d/%m/%Y')}"
+        ws.title = f"Resumen desde {start_date.strftime('%m%Y')}"
+    elif end_date:
+        title_date = f"Hasta {end_date.strftime('%d/%m/%Y')}"
+        ws.title = f"Resumen hasta {end_date.strftime('%m%Y')}"
+    else:
+        title_date = "Período no especificado"
+        ws.title = "Resumen Pagos"
 
     # Title
-    ws['A1'] = f"PAGO VECINAL - Resumen de Pagos - {month:02d}/{year}"
+    ws['A1'] = f"PAGO VECINAL - Resumen de Pagos - {title_date}"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:F1')
 
