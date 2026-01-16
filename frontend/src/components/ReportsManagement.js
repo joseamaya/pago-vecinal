@@ -98,6 +98,10 @@ const ReportsManagement = () => {
           response = await reportsAPI.getExpensesByPeriodRangeReport(expenseStartYear, expenseStartMonth, expenseEndYear, expenseEndMonth, selectedFormat);
           filename = `reporte_gastos_${expenseStartYear}_${expenseStartMonth.toString().padStart(2, '0')}_a_${expenseEndYear}_${expenseEndMonth.toString().padStart(2, '0')}.xlsx`;
           break;
+        case 'detailed-expenses':
+          response = await reportsAPI.getDetailedExpensesReport(expenseStartYear, expenseStartMonth, expenseEndYear, expenseEndMonth, selectedFormat);
+          filename = `reporte_gastos_detallado_${expenseStartYear}_${expenseStartMonth.toString().padStart(2, '0')}_a_${expenseEndYear}_${expenseEndMonth.toString().padStart(2, '0')}.xlsx`;
+          break;
         default:
           throw new Error('Tipo de reporte desconocido');
       }
@@ -176,6 +180,13 @@ const ReportsManagement = () => {
       title: 'Detalle de Gastos por Rango de Períodos',
       description: 'Lista detallada de gastos administrativos para un rango de períodos (mes/año inicial a mes/año final).',
       type: 'expenses-by-period',
+      requiresProperty: false,
+      adminOnly: true,
+    },
+    {
+      title: 'Reporte Detallado de Gastos por Mes',
+      description: 'Resumen mensual con detalle individual de gastos administrativos para un rango de períodos.',
+      type: 'detailed-expenses',
       requiresProperty: false,
       adminOnly: true,
     },
@@ -496,7 +507,7 @@ const ReportsManagement = () => {
         </Grid>
 
         <Grid container spacing={3} sx={{ mt: 2 }}>
-          {reports.filter(r => r.type === 'expenses-by-period').map((report) => {
+          {reports.filter(r => r.type === 'expenses-by-period' || r.type === 'detailed-expenses').map((report) => {
             const canAccess = !report.adminOnly || isAdmin;
             const canGenerate = true; // No property required for expense reports
 

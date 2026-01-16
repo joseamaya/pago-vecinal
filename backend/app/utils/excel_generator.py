@@ -580,6 +580,123 @@ def generate_filtered_fees_excel(fees_data):
     return buffer
 
 
+def generate_detailed_expenses_excel(start_year, start_month, end_year, end_month, monthly_summary):
+    """
+    Generate a detailed Excel report of administrative expenses by month
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Gastos Detallados {start_year}-{end_year}"
+
+    month_names = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
+    # Title
+    ws['A1'] = "PAGO VECINAL - Reporte Detallado de Gastos por Mes"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:D1')
+
+    # Period information
+    period_text = f"Período: {month_names[start_month]} {start_year} - {month_names[end_month]} {end_year}"
+    ws['A3'] = period_text
+    ws['A3'].font = Font(size=12, bold=True)
+    ws.merge_cells('A3:D3')
+
+    row = 5
+
+    if monthly_summary:
+        # Monthly Summary Table
+        ws[f'A{row}'] = "RESUMEN MENSUAL"
+        ws[f'A{row}'].font = Font(size=12, bold=True)
+        ws.merge_cells(f'A{row}:D{row}')
+
+        # Summary headers
+        summary_headers = ["Mes/Año", "Total Gastos", "N° Gastos"]
+        for col, header in enumerate(summary_headers, 1):
+            cell = ws.cell(row=row+1, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+        # Summary data
+        total_overall = 0
+        total_count = 0
+        for summary in monthly_summary:
+            row += 1
+            month_year = f"{month_names[summary['month']]} {summary['year']}"
+            ws.cell(row=row, column=1).value = month_year
+            ws.cell(row=row, column=2).value = float(summary['total_amount'])
+            ws.cell(row=row, column=2).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=3).value = summary['count']
+
+            total_overall += summary['total_amount']
+            total_count += summary['count']
+
+        # Summary totals
+        row += 2
+        ws[f'A{row}'] = "TOTAL PERÍODO:"
+        ws[f'A{row}'].font = Font(bold=True)
+        ws[f'B{row}'] = float(total_overall)
+        ws[f'B{row}'].number_format = '"S/ "#,##0.00'
+        ws[f'B{row}'].font = Font(bold=True)
+        ws[f'C{row}'] = total_count
+        ws[f'C{row}'].font = Font(bold=True)
+
+        # Detailed sections for each month
+        row += 4
+
+        for summary in monthly_summary:
+            # Month header
+            month_year = f"{month_names[summary['month']]} {summary['year']}"
+            ws[f'A{row}'] = f"GASTOS DE {month_year.upper()}"
+            ws[f'A{row}'].font = Font(size=12, bold=True)
+            ws.merge_cells(f'A{row}:D{row}')
+
+            # Detailed headers
+            detail_headers = ["Fecha", "Descripción", "Monto"]
+            for col, header in enumerate(detail_headers, 1):
+                cell = ws.cell(row=row+1, column=col)
+                cell.value = header
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="E6E6E6", end_color="E6E6E6", fill_type="solid")
+
+            # Detailed expense data
+            month_total = 0
+            for expense in summary['expenses']:
+                row += 1
+                ws.cell(row=row, column=1).value = expense.expense_date.strftime("%d/%m/%Y")
+                ws.cell(row=row, column=2).value = expense.description
+                ws.cell(row=row, column=3).value = float(expense.amount)
+                ws.cell(row=row, column=3).number_format = '"S/ "#,##0.00'
+                month_total += expense.amount
+
+            # Month subtotal
+            row += 1
+            ws[f'A{row}'] = f"Subtotal {month_year}:"
+            ws[f'A{row}'].font = Font(bold=True)
+            ws[f'B{row}'] = float(month_total)
+            ws[f'B{row}'].number_format = '"S/ "#,##0.00'
+            ws[f'B{row}'].font = Font(bold=True)
+
+            row += 2  # Space between months
+
+    else:
+        ws['A5'] = "No hay gastos registrados para el período especificado."
+
+    # Footer
+    footer_row = row + 2
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    for col in range(1, 5):
+        ws.column_dimensions[get_column_letter(col)].width = 20
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
 def generate_expenses_by_period_range_excel(start_year, start_month, end_year, end_month, expenses_data):
     """
     Generate an Excel report of administrative expenses for a period range

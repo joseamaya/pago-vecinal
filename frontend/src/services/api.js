@@ -244,6 +244,7 @@ export const reportsAPI = {
   getAllPaymentsReport: () => api.get('/reports/all-payments', { params: { format: 'excel' }, responseType: 'blob' }),
   getExpensesReport: (format = 'excel') => api.get('/reports/expenses', { params: { format }, responseType: 'blob' }),
   getExpensesByPeriodRangeReport: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/expenses/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
+  getDetailedExpensesReport: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/detailed-expenses/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
   getFilteredFeesReport: (filters = {}) => {
     const params = {};
     if (filters.year) params.year = filters.year;

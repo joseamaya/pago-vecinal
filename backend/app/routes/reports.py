@@ -27,7 +27,8 @@ from ..utils.excel_generator import (
     generate_paid_fees_summary_excel,
     generate_payments_summary_excel,
     generate_fee_payment_matrix_excel,
-    generate_fee_contribution_summary_excel, generate_expenses_excel, generate_expenses_by_period_range_excel
+    generate_fee_contribution_summary_excel, generate_expenses_excel, generate_expenses_by_period_range_excel,
+    generate_detailed_expenses_excel
 )
 
 router = APIRouter()
@@ -1101,6 +1102,88 @@ async def download_expenses_by_period_range_report(
     extension = "xlsx"
 
     filename = f"reporte_gastos_{start_year}_{start_month:02d}_a_{end_year}_{end_month:02d}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@router.get("/detailed-expenses/{start_year}/{start_month}/{end_year}/{end_month}")
+async def download_detailed_expenses_report(
+    start_year: int,
+    start_month: int,
+    end_year: int,
+    end_month: int,
+    format: str = "excel",
+    current_user: User = Depends(get_current_user)
+):
+    """Generate detailed Excel report of administrative expenses by month for a period range"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Validate months
+    if start_month < 1 or start_month > 12 or end_month < 1 or end_month > 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Months must be between 1 and 12"
+        )
+
+    # Validate period range
+    start_period = start_year * 12 + start_month
+    end_period = end_year * 12 + end_month
+    if start_period > end_period:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start period must be before or equal to end period"
+        )
+
+    # Get all expenses and filter by period range in Python
+    expenses = await Expense.find_all().to_list()
+
+    # Filter expenses by period range
+    filtered_expenses = []
+    for expense in expenses:
+        if expense.year is not None and expense.month is not None:
+            expense_period = expense.year * 12 + expense.month
+            if start_period <= expense_period <= end_period:
+                filtered_expenses.append(expense)
+
+    # Sort expenses by year, month, date
+    filtered_expenses.sort(key=lambda x: (x.year or 0, x.month or 0, x.expense_date))
+
+    # Group expenses by year and month
+    monthly_expenses = {}
+    for expense in filtered_expenses:
+        key = (expense.year, expense.month)
+        if key not in monthly_expenses:
+            monthly_expenses[key] = []
+        monthly_expenses[key].append(expense)
+
+    # Prepare data for Excel
+    monthly_summary = []
+    for (year, month), expenses_list in monthly_expenses.items():
+        total_amount = sum(exp.amount for exp in expenses_list)
+        monthly_summary.append({
+            'year': year,
+            'month': month,
+            'total_amount': total_amount,
+            'count': len(expenses_list),
+            'expenses': expenses_list
+        })
+
+    # Sort monthly summary by year, month
+    monthly_summary.sort(key=lambda x: (x['year'], x['month']))
+
+    # Generate Excel report
+    buffer = generate_detailed_expenses_excel(start_year, start_month, end_year, end_month, monthly_summary)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"reporte_gastos_detallado_{start_year}_{start_month:02d}_a_{end_year}_{end_month:02d}.{extension}"
     return StreamingResponse(
         buffer,
         media_type=media_type,
