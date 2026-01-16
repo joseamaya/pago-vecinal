@@ -14,11 +14,12 @@ import {
   FormControl,
   InputLabel,
   Select,
+  Box,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { reportsAPI, propertiesAPI } from '../services/api';
 import LoadingSpinner from './common/LoadingSpinner';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import TableChartIcon from '@mui/icons-material/TableChart';
 
 const ReportsManagement = () => {
   const { isAdmin } = useAuth();
@@ -27,9 +28,9 @@ const ReportsManagement = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedProperty, setSelectedProperty] = useState('');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedFormat, setSelectedFormat] = useState('pdf');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [selectedFormat, setSelectedFormat] = useState('excel');
   const [startYear, setStartYear] = useState(new Date().getFullYear());
   const [startMonth, setStartMonth] = useState(1);
   const [endYear, setEndYear] = useState(new Date().getFullYear());
@@ -61,35 +62,23 @@ const ReportsManagement = () => {
 
       switch (reportType) {
         case 'property-history':
-          response = await reportsAPI.getPropertyPaymentHistory(propertyId, selectedYear, selectedFormat);
-          filename = `historial_pagos_${selectedYear}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
-          break;
-        case 'outstanding-fees':
-          response = await reportsAPI.getOutstandingFeesReport(selectedFormat);
-          filename = `cuotas_pendientes.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          response = await reportsAPI.getPropertyPaymentHistory(propertyId, startDate, endDate, selectedFormat);
+          filename = `historial_pagos.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
         case 'monthly-summary':
-          response = await reportsAPI.getMonthlyPaymentSummary(selectedYear, selectedMonth, selectedFormat);
-          filename = `resumen_mensual_${selectedYear}_${selectedMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          response = await reportsAPI.getMonthlyPaymentSummary(startDate, endDate, selectedFormat);
+          filename = `resumen_pagos.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
         case 'monthly-fees':
           response = await reportsAPI.getMonthlyFeesReport(startYear, startMonth, endYear, endMonth, selectedFormat);
           filename = `cuotas_mensuales_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
-          break;
-        case 'annual-statement':
-          response = await reportsAPI.getAnnualPropertyStatement(propertyId, selectedYear, selectedFormat);
-          filename = `estado_anual_${selectedYear}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
-          break;
-        case 'expenses':
-          response = await reportsAPI.getExpensesReport(selectedFormat);
-          filename = `reporte_gastos_administrativos.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
         default:
           throw new Error('Tipo de reporte desconocido');
       }
 
       // Create blob and download
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -117,13 +106,6 @@ const ReportsManagement = () => {
       adminOnly: true,
     },
     {
-      title: 'Cuotas Pendientes - Reporte General',
-      description: 'Lista todas las cuotas pendientes de todas las propiedades.',
-      type: 'outstanding-fees',
-      requiresProperty: false,
-      adminOnly: true,
-    },
-    {
       title: 'Resumen de Pagos Mensual',
       description: 'Resumen de todos los pagos realizados en un mes específico.',
       type: 'monthly-summary',
@@ -134,20 +116,6 @@ const ReportsManagement = () => {
       title: 'Reporte de Cuotas Mensuales',
       description: 'Lista todas las cuotas generadas en un rango de períodos específico.',
       type: 'monthly-fees',
-      requiresProperty: false,
-      adminOnly: true,
-    },
-    {
-      title: 'Estado Anual por Propiedad',
-      description: 'Estado anual detallado de cuotas y pagos para una propiedad.',
-      type: 'annual-statement',
-      requiresProperty: true,
-      adminOnly: false, // Owners can see their own statements
-    },
-    {
-      title: 'Reporte de Gastos Administrativos',
-      description: 'Lista completa de todos los gastos administrativos realizados.',
-      type: 'expenses',
       requiresProperty: false,
       adminOnly: true,
     },
@@ -174,43 +142,10 @@ const ReportsManagement = () => {
       {/* Filters */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Filtros de Reporte
+          Filtros Generales
         </Typography>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="Año"
-              type="number"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>Mes</InputLabel>
-              <Select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                label="Mes"
-              >
-                <MenuItem value={1}>Enero</MenuItem>
-                <MenuItem value={2}>Febrero</MenuItem>
-                <MenuItem value={3}>Marzo</MenuItem>
-                <MenuItem value={4}>Abril</MenuItem>
-                <MenuItem value={5}>Mayo</MenuItem>
-                <MenuItem value={6}>Junio</MenuItem>
-                <MenuItem value={7}>Julio</MenuItem>
-                <MenuItem value={8}>Agosto</MenuItem>
-                <MenuItem value={9}>Septiembre</MenuItem>
-                <MenuItem value={10}>Octubre</MenuItem>
-                <MenuItem value={11}>Noviembre</MenuItem>
-                <MenuItem value={12}>Diciembre</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <FormControl fullWidth>
               <InputLabel>Formato</InputLabel>
               <Select
@@ -218,10 +153,35 @@ const ReportsManagement = () => {
                 onChange={(e) => setSelectedFormat(e.target.value)}
                 label="Formato"
               >
-                <MenuItem value="pdf">PDF</MenuItem>
                 <MenuItem value="excel">Excel</MenuItem>
               </Select>
             </FormControl>
+          </Grid>
+        </Grid>
+
+        <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+          Filtros de Reportes de Pago
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              label="Fecha Inicio"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              label="Fecha Fin"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
           </Grid>
           {isAdmin && (
             <Grid item xs={12} md={4}>
@@ -246,9 +206,8 @@ const ReportsManagement = () => {
           )}
         </Grid>
 
-        {/* Period Range Filters for Monthly Fees Report */}
         <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-          Rango de Períodos (para Reporte de Cuotas Mensuales)
+          Filtros de Reporte de Cuotas Mensuales
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={3}>
@@ -348,8 +307,8 @@ const ReportsManagement = () => {
                       <LoadingSpinner buttonVariant size={20} message="Generando..." showMessage />
                     ) : (
                       <>
-                        <PictureAsPdfIcon sx={{ mr: 1 }} />
-                        Descargar PDF
+                        <TableChartIcon sx={{ mr: 1 }} />
+                        Descargar Excel
                       </>
                     )}
                   </Button>

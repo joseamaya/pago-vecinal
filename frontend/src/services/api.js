@@ -226,13 +226,19 @@ export const agreementsAPI = {
 
 // Reports API
 export const reportsAPI = {
-  getPropertyPaymentHistory: (propertyId, year = null, format = 'pdf') => {
+  getPropertyPaymentHistory: (propertyId, startDate = null, endDate = null, format = 'excel') => {
     const params = { format };
-    if (year) params.year = year;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
     return api.get(`/reports/property/${propertyId}/payment-history`, { params, responseType: 'blob' });
   },
   getOutstandingFeesReport: (format = 'pdf') => api.get('/reports/outstanding-fees', { params: { format }, responseType: 'blob' }),
-  getMonthlyPaymentSummary: (year, month, format = 'pdf') => api.get(`/reports/monthly-summary/${year}/${month}`, { params: { format }, responseType: 'blob' }),
+  getMonthlyPaymentSummary: (startDate = null, endDate = null, format = 'excel') => {
+    const params = { format };
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    return api.get('/reports/monthly-summary', { params, responseType: 'blob' });
+  },
   getMonthlyFeesReport: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/monthly-fees/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
   getAnnualPropertyStatement: (propertyId, year, format = 'pdf') => api.get(`/reports/property/${propertyId}/annual-statement/${year}`, { params: { format }, responseType: 'blob' }),
   getAllPaymentsReport: () => api.get('/reports/all-payments', { params: { format: 'excel' }, responseType: 'blob' }),
