@@ -111,12 +111,28 @@ const AgreementManagement = () => {
         // Fetch fees for this property
         const status = editingAgreement ? undefined : 'pending';
         const feesResponse = await feesAPI.getFees({ status, property_id: property.id });
-        setFormFees(feesResponse.data.data || []);
+        const fees = feesResponse.data.data || [];
+        setFormFees(fees);
+
         // If editing, set fee_ids to the agreement's fee_ids
         if (editingAgreement) {
           setFormData(prev => ({ ...prev, fee_ids: editingAgreement.fee_ids }));
           setTotalDebt(editingAgreement.total_debt);
           setCalculatedMonthlyAmount(editingAgreement.monthly_amount);
+        } else {
+          // Auto-select all pending fees for new agreements
+          const allFeeIds = fees.map(fee => fee.id);
+          setFormData(prev => {
+            const newFormData = { ...prev, fee_ids: allFeeIds };
+            const newTotalDebt = calculateTotalDebt(allFeeIds);
+            setTotalDebt(newTotalDebt);
+            // Calculate monthly amount if installments count is already set
+            if (newFormData.installments_count) {
+              const installmentsCount = parseInt(newFormData.installments_count);
+              setCalculatedMonthlyAmount(installmentsCount > 0 ? newTotalDebt / installmentsCount : 0);
+            }
+            return newFormData;
+          });
         }
       } catch (err) {
         console.error('Error fetching property:', err);
@@ -232,8 +248,18 @@ const AgreementManagement = () => {
     e.preventDefault();
 
     // Validation
+    if (!selectedProperty) {
+      setError('Debe seleccionar una propiedad válida');
+      return;
+    }
+
+    if (formData.fee_ids.length === 0) {
+      setError('Debe seleccionar al menos una cuota pendiente');
+      return;
+    }
+
     if (totalDebt === 0) {
-      setError('Debe seleccionar al menos una cuota');
+      setError('La deuda total debe ser mayor a 0');
       return;
     }
 
@@ -242,8 +268,27 @@ const AgreementManagement = () => {
       return;
     }
 
+    if (parseInt(formData.installments_count) > 60) {
+      setError('El número máximo de cuotas es 60');
+      return;
+    }
+
     if (calculatedMonthlyAmount <= 0) {
       setError('El monto mensual calculado debe ser mayor a 0');
+      return;
+    }
+
+    if (!formData.start_date) {
+      setError('Debe seleccionar una fecha de inicio');
+      return;
+    }
+
+    // Check if start date is not in the past
+    const startDate = new Date(formData.start_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (startDate < today) {
+      setError('La fecha de inicio no puede ser anterior a hoy');
       return;
     }
 
@@ -252,7 +297,7 @@ const AgreementManagement = () => {
         ...formData,
         monthly_amount: calculatedMonthlyAmount,
         installments_count: parseInt(formData.installments_count),
-        start_date: new Date(formData.start_date).toISOString(),
+        start_date: startDate.toISOString(),
       };
 
       if (editingAgreement) {
@@ -263,7 +308,9 @@ const AgreementManagement = () => {
       fetchAgreements();
       handleCloseDialog();
     } catch (err) {
-      setError(editingAgreement ? 'Error al actualizar convenio' : 'Error al crear convenio');
+      const errorMessage = err.response?.data?.detail ||
+                          (editingAgreement ? 'Error al actualizar convenio' : 'Error al crear convenio');
+      setError(errorMessage);
       console.error('Error saving agreement:', err);
     }
   };

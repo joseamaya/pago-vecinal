@@ -205,6 +205,12 @@ async def create_agreement(
     # Get and validate fees
     fees = []
     total_debt = 0
+    if not agreement_data.fee_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one fee must be selected for the agreement"
+        )
+
     for fee_id in agreement_data.fee_ids:
         fee = await Fee.get(fee_id)
         if not fee:
@@ -230,6 +236,20 @@ async def create_agreement(
 
         fees.append(fee)
         total_debt += fee.amount
+
+    # Validate total debt
+    if total_debt <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Total debt must be greater than 0"
+        )
+
+    # Validate installments count
+    if agreement_data.installments_count > 60:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum number of installments is 60"
+        )
 
     # Validate monthly amount and installments
     if agreement_data.monthly_amount <= 0:
@@ -754,8 +774,33 @@ async def pay_next_installment(
         import traceback
         traceback.print_exc()
 
-    # Check if all installments are paid to update agreement status
+    # Update fee statuses based on agreement payments
     if agreement:
+        await agreement.fetch_link(Agreement.fees)
+        total_paid_installments = await AgreementInstallment.find(
+            AgreementInstallment.agreement.id == agreement.id,
+            AgreementInstallment.status == AgreementInstallmentStatus.PAID
+        ).to_list()
+
+        total_paid_amount = sum(inst.amount for inst in total_paid_installments)
+
+        # Distribute the payment across the fees proportionally
+        for fee in agreement.fees:
+            # Calculate how much of this fee has been paid through the agreement
+            fee_portion = (fee.amount / agreement.total_debt) * total_paid_amount
+            fee.paid_amount = min(fee_portion, fee.amount)  # Don't exceed the fee amount
+
+            # Update fee status
+            if fee.paid_amount >= fee.amount:
+                fee.status = FeeStatus.COMPLETED
+            elif fee.paid_amount > 0:
+                fee.status = FeeStatus.PARTIALLY_PAID
+            else:
+                fee.status = FeeStatus.AGREEMENT  # Keep as agreement if no payment yet
+
+            await fee.save()
+
+        # Check if all installments are paid to update agreement status
         all_installments = await AgreementInstallment.find(
             AgreementInstallment.agreement.id == agreement.id
         ).to_list()
