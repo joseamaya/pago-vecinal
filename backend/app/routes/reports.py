@@ -26,7 +26,8 @@ from ..utils.excel_generator import (
     generate_traffic_light_excel,
     generate_paid_fees_summary_excel,
     generate_payments_summary_excel,
-    generate_fee_payment_matrix_excel
+    generate_fee_payment_matrix_excel,
+    generate_fee_contribution_summary_excel
 )
 
 router = APIRouter()
@@ -349,6 +350,103 @@ async def download_payments_summary(
     )
 
 
+@router.get("/fee-contribution-summary/{start_year}/{start_month}/{end_year}/{end_month}")
+async def download_fee_contribution_summary(
+    start_year: int,
+    start_month: int,
+    end_year: int,
+    end_month: int,
+    format: str = "excel",
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel report of fee contribution summary by property"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Validate months
+    if start_month < 1 or start_month > 12 or end_month < 1 or end_month > 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Months must be between 1 and 12"
+        )
+
+    # Validate period range
+    start_period = start_year * 12 + start_month
+    end_period = end_year * 12 + end_month
+    if start_period > end_period:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start period must be before or equal to end period"
+        )
+
+    # Get fees for the period range
+    fees = await Fee.find().to_list()
+
+    # Filter fees by period range in Python
+    filtered_fees = []
+    for fee in fees:
+        fee_period = fee.year * 12 + fee.month
+        start_period_num = start_year * 12 + start_month
+        end_period_num = end_year * 12 + end_month
+
+        if start_period_num <= fee_period <= end_period_num:
+            filtered_fees.append(fee)
+
+    # Fetch property details
+    for fee in filtered_fees:
+        await fee.fetch_link(Fee.property)
+
+    # Group by property
+    property_summary = {}
+    for fee in filtered_fees:
+        if fee.property:
+            prop_key = f"{fee.property.row_letter}{fee.property.number}"
+            if prop_key not in property_summary:
+                property_summary[prop_key] = {
+                    'row_letter': fee.property.row_letter,
+                    'number': fee.property.number,
+                    'paid_count': 0,
+                    'unpaid_count': 0
+                }
+
+            if fee.status == FeeStatus.COMPLETED:
+                property_summary[prop_key]['paid_count'] += 1
+            else:
+                property_summary[prop_key]['unpaid_count'] += 1
+
+    # Calculate total paid fees
+    total_paid_fees = sum(data['paid_count'] for data in property_summary.values())
+
+    # Prepare data for Excel
+    contribution_data = []
+    for prop, data in property_summary.items():
+        contribution_percentage = (data['paid_count'] / total_paid_fees * 100) if total_paid_fees > 0 else 0
+        contribution_data.append({
+            'property': prop,
+            'paid_count': data['paid_count'],
+            'unpaid_count': data['unpaid_count'],
+            'contribution_percentage': contribution_percentage
+        })
+
+    # Sort by property
+    contribution_data.sort(key=lambda x: (x['property'][0], int(x['property'][1:])))
+
+    # Generate Excel report
+    buffer = generate_fee_contribution_summary_excel(start_year, start_month, end_year, end_month, contribution_data)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"resumen_contribucion_cuotas_{start_year}_{start_month:02d}_a_{end_year}_{end_month:02d}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @router.get("/fee-payment-matrix/{start_year}/{start_month}/{end_year}/{end_month}")
 async def download_fee_payment_matrix(
     start_year: int,
@@ -402,9 +500,11 @@ async def download_fee_payment_matrix(
     matrix_data = []
     for fee in filtered_fees:
         if fee.property:
-            property_str = f"{fee.property.villa}-{fee.property.row_letter}{fee.property.number}"
+            property_str = f"{fee.property.row_letter}{fee.property.number}"
             matrix_data.append({
                 'property': property_str,
+                'row_letter': fee.property.row_letter,
+                'number': fee.property.number,
                 'year': fee.year,
                 'month': fee.month,
                 'paid_amount': fee.paid_amount

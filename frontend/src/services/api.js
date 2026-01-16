@@ -260,6 +260,7 @@ export const reportsAPI = {
   },
   getPaidFeesSummary: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/paid-fees-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
   getFeePaymentMatrix: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/fee-payment-matrix/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
+  getFeeContributionSummary: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/fee-contribution-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
   getPaymentsOverTime: () => api.get('/reports/payments-over-time'),
   getFeesByStatus: () => api.get('/reports/fees-by-status'),
   getPropertiesByVilla: () => api.get('/reports/properties-by-villa'),

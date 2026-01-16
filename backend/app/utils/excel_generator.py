@@ -821,7 +821,10 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
     ws.merge_cells('A1:Z1')  # Wide merge for title
 
     # Prepare data
-    properties = sorted(set(d['property'] for d in matrix_data))
+    # Sort properties by row_letter alphabetically, then by number numerically
+    properties = sorted(set((d['row_letter'], d['number'], d['property']) for d in matrix_data))
+    properties = [p[2] for p in properties]  # Get the property string
+
     months = []
     current_year = start_year
     current_month = start_month
@@ -845,14 +848,22 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
         cell.font = Font(bold=True)
         col += 1
 
+    # Add "Total" header
+    ws.cell(row=3, column=col).value = "Total"
+    ws.cell(row=3, column=col).font = Font(bold=True)
+
     # Data rows
     row = 4
+    month_totals = [0] * len(months)
+    grand_total = 0
+
     for prop in properties:
         ws.cell(row=row, column=1).value = prop
         ws.cell(row=row, column=1).font = Font(bold=True)
 
         col = 2
-        for year, month in months:
+        property_total = 0
+        for i, (year, month) in enumerate(months):
             amount = 0
             for d in matrix_data:
                 if d['property'] == prop and d['year'] == year and d['month'] == month:
@@ -869,16 +880,105 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
             else:
                 cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")  # Red
 
+            property_total += amount
+            month_totals[i] += amount
             col += 1
+
+        # Property total
+        cell = ws.cell(row=row, column=col)
+        cell.value = float(property_total)
+        cell.number_format = '"S/ "#,##0.00'
+        cell.font = Font(bold=True)
+        grand_total += property_total
+
         row += 1
 
+    # Month totals row
+    ws.cell(row=row, column=1).value = "Total por Mes"
+    ws.cell(row=row, column=1).font = Font(bold=True)
+
+    col = 2
+    for total in month_totals:
+        cell = ws.cell(row=row, column=col)
+        cell.value = float(total)
+        cell.number_format = '"S/ "#,##0.00'
+        cell.font = Font(bold=True)
+        col += 1
+
+    # Grand total
+    cell = ws.cell(row=row, column=col)
+    cell.value = float(grand_total)
+    cell.number_format = '"S/ "#,##0.00'
+    cell.font = Font(bold=True)
+
     # Footer
-    footer_row = row + 2
+    footer_row = row + 3
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
-    for col in range(1, len(months) + 2):
+    for col in range(1, len(months) + 3):
         ws.column_dimensions[get_column_letter(col)].width = 15
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_fee_contribution_summary_excel(start_year, start_month, end_year, end_month, contribution_data):
+    """
+    Generate an Excel report of fee contribution summary by property
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Resumen Contribucion {start_year}-{end_year}"
+
+    # Title
+    period_text = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
+    ws['A1'] = f"PAGO VECINAL - Resumen de Contribución de Cuotas - {period_text}"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:E1')
+
+    if contribution_data:
+        headers = ["Casa", "Cuotas Pagadas", "Cuotas No Pagadas", "% Aporte al Total"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+        for row, data in enumerate(contribution_data, 4):
+            ws.cell(row=row, column=1).value = data['property']
+            ws.cell(row=row, column=1).font = Font(bold=True)
+            ws.cell(row=row, column=2).value = data['paid_count']
+            ws.cell(row=row, column=3).value = data['unpaid_count']
+            ws.cell(row=row, column=4).value = data['contribution_percentage']
+            ws.cell(row=row, column=4).number_format = '0.00"%"'
+
+        # Summary
+        total_paid = sum(d['paid_count'] for d in contribution_data)
+        total_unpaid = sum(d['unpaid_count'] for d in contribution_data)
+
+        summary_row = len(contribution_data) + 6
+        ws[f'A{summary_row}'] = "Total General:"
+        ws[f'A{summary_row}'].font = Font(bold=True)
+        ws[f'B{summary_row}'] = total_paid
+        ws[f'B{summary_row}'].font = Font(bold=True)
+        ws[f'C{summary_row}'] = total_unpaid
+        ws[f'C{summary_row}'].font = Font(bold=True)
+        ws[f'D{summary_row}'] = 100.0
+        ws[f'D{summary_row}'].number_format = '0.00"%"'
+        ws[f'D{summary_row}'].font = Font(bold=True)
+    else:
+        ws['A3'] = "No hay datos de cuotas para el período."
+
+    # Footer
+    footer_row = len(contribution_data) + 9 if contribution_data else 5
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    for col in range(1, 5):
+        ws.column_dimensions[get_column_letter(col)].width = 20
 
     buffer = io.BytesIO()
     wb.save(buffer)

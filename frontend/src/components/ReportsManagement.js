@@ -86,6 +86,10 @@ const ReportsManagement = () => {
           response = await reportsAPI.getFeePaymentMatrix(startYear, startMonth, endYear, endMonth, selectedFormat);
           filename = `matriz_pagos_cuotas_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
+        case 'fee-contribution-summary':
+          response = await reportsAPI.getFeeContributionSummary(startYear, startMonth, endYear, endMonth, selectedFormat);
+          filename = `resumen_contribucion_cuotas_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          break;
         default:
           throw new Error('Tipo de reporte desconocido');
       }
@@ -150,6 +154,13 @@ const ReportsManagement = () => {
       title: 'Matriz de Pagos de Cuotas',
       description: 'Matriz de pagos por propiedad y mes con colores.',
       type: 'fee-payment-matrix',
+      requiresProperty: false,
+      adminOnly: true,
+    },
+    {
+      title: 'Resumen de Contribución de Cuotas',
+      description: 'Resumen de cuotas pagadas, no pagadas y aporte porcentual.',
+      type: 'fee-contribution-summary',
       requiresProperty: false,
       adminOnly: true,
     },
@@ -353,7 +364,7 @@ const ReportsManagement = () => {
         </Grid>
 
         <Grid container spacing={3} sx={{ mt: 2 }}>
-          {reports.filter(r => ['monthly-fees', 'paid-fees-summary', 'fee-payment-matrix'].includes(r.type)).map((report) => {
+          {reports.filter(r => ['monthly-fees', 'paid-fees-summary', 'fee-payment-matrix', 'fee-contribution-summary'].includes(r.type)).map((report) => {
             const canAccess = !report.adminOnly || isAdmin;
             const canGenerate = true; // No property required for fee reports
 
