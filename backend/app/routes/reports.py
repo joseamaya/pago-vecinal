@@ -23,7 +23,8 @@ from ..utils.excel_generator import (
     generate_annual_property_statement_excel,
     generate_all_payments_excel,
     generate_filtered_fees_excel,
-    generate_traffic_light_excel
+    generate_traffic_light_excel,
+    generate_paid_fees_summary_excel
 )
 
 router = APIRouter()
@@ -267,6 +268,61 @@ async def download_monthly_payment_summary(
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@router.get("/paid-fees-summary/{year}")
+async def download_paid_fees_summary(
+    year: int,
+    format: str = "excel",
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel report of paid fees summary by month for a year"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Get paid fees for the year
+    paid_fees = await Fee.find(
+        Fee.status == FeeStatus.COMPLETED,
+        Fee.year == year
+    ).to_list()
+
+    # Group by month and amount
+    monthly_summary = {}
+    for fee in paid_fees:
+        key = (fee.month, fee.amount)
+        if key not in monthly_summary:
+            monthly_summary[key] = {'count': 0, 'total': 0}
+        monthly_summary[key]['count'] += 1
+        monthly_summary[key]['total'] += fee.amount
+
+    # Prepare data for Excel
+    summary_data = []
+    for (month, amount), data in monthly_summary.items():
+        summary_data.append({
+            'year': year,
+            'month': month,
+            'amount': amount,
+            'count': data['count'],
+            'total': data['total']
+        })
+
+    # Sort by month
+    summary_data.sort(key=lambda x: x['month'])
+
+    # Generate Excel report
+    buffer = generate_paid_fees_summary_excel(year, summary_data)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    filename = f"resumen_cuotas_pagadas_{year}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 
 @router.get("/monthly-fees/{start_year}/{start_month}/{end_year}/{end_month}")
 async def download_monthly_fees_report(

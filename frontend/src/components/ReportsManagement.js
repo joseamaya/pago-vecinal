@@ -30,6 +30,7 @@ const ReportsManagement = () => {
   const [selectedProperty, setSelectedProperty] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedFormat, setSelectedFormat] = useState('excel');
   const [startYear, setStartYear] = useState(new Date().getFullYear());
   const [startMonth, setStartMonth] = useState(1);
@@ -72,6 +73,10 @@ const ReportsManagement = () => {
         case 'monthly-fees':
           response = await reportsAPI.getMonthlyFeesReport(startYear, startMonth, endYear, endMonth, selectedFormat);
           filename = `cuotas_mensuales_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          break;
+        case 'paid-fees-summary':
+          response = await reportsAPI.getPaidFeesSummary(startYear, selectedFormat);
+          filename = `resumen_cuotas_pagadas_${startYear}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
         default:
           throw new Error('Tipo de reporte desconocido');
@@ -119,6 +124,13 @@ const ReportsManagement = () => {
       requiresProperty: false,
       adminOnly: true,
     },
+    {
+      title: 'Resumen de Cuotas Pagadas',
+      description: 'Resumen mensual de cuotas pagadas por año.',
+      type: 'paid-fees-summary',
+      requiresProperty: false,
+      adminOnly: true,
+    },
   ];
 
   return (
@@ -139,31 +151,26 @@ const ReportsManagement = () => {
         </Alert>
       )}
 
-      {/* Filters */}
+      {/* Payment Reports Section */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Filtros Generales
+          Reportes de Pagos
+        </Typography>
+        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+          Filtros
         </Typography>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel>Formato</InputLabel>
-              <Select
-                value={selectedFormat}
-                onChange={(e) => setSelectedFormat(e.target.value)}
-                label="Formato"
-              >
-                <MenuItem value="excel">Excel</MenuItem>
-              </Select>
-            </FormControl>
+          <Grid item xs={12} md={3}>
+            <TextField
+              fullWidth
+              label="Año"
+              type="number"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
+            />
           </Grid>
-        </Grid>
-
-        <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-          Filtros de Reportes de Pago
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <TextField
               fullWidth
               label="Fecha Inicio"
@@ -173,7 +180,7 @@ const ReportsManagement = () => {
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <TextField
               fullWidth
               label="Fecha Fin"
@@ -184,7 +191,7 @@ const ReportsManagement = () => {
             />
           </Grid>
           {isAdmin && (
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <FormControl fullWidth>
                 <InputLabel>Propiedad</InputLabel>
                 <Select
@@ -206,8 +213,53 @@ const ReportsManagement = () => {
           )}
         </Grid>
 
-        <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-          Filtros de Reporte de Cuotas Mensuales
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          {reports.filter(r => ['property-history', 'monthly-summary'].includes(r.type)).map((report) => {
+            const canAccess = !report.adminOnly || isAdmin;
+            const canGenerate = !report.requiresProperty || selectedProperty || !isAdmin;
+
+            return (
+              <Grid item xs={12} md={6} key={report.type}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" component="h2" gutterBottom>
+                      {report.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {report.description}
+                    </Typography>
+                  </CardContent>
+                  <CardActions>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      onClick={() => downloadReport(report.type, selectedProperty)}
+                      disabled={loading || !canAccess || !canGenerate}
+                    >
+                      {loading ? (
+                        <LoadingSpinner buttonVariant size={20} message="Generando..." showMessage />
+                      ) : (
+                        <>
+                          <TableChartIcon sx={{ mr: 1 }} />
+                          Descargar Excel
+                        </>
+                      )}
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Paper>
+
+      {/* Fee Reports Section */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Reportes de Cuotas
+        </Typography>
+        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+          Filtros
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={3}>
@@ -277,47 +329,46 @@ const ReportsManagement = () => {
             </FormControl>
           </Grid>
         </Grid>
+
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          {reports.filter(r => ['monthly-fees', 'paid-fees-summary'].includes(r.type)).map((report) => {
+            const canAccess = !report.adminOnly || isAdmin;
+            const canGenerate = true; // No property required for fee reports
+
+            return (
+              <Grid item xs={12} md={6} key={report.type}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" component="h2" gutterBottom>
+                      {report.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {report.description}
+                    </Typography>
+                  </CardContent>
+                  <CardActions>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      onClick={() => downloadReport(report.type)}
+                      disabled={loading || !canAccess || !canGenerate}
+                    >
+                      {loading ? (
+                        <LoadingSpinner buttonVariant size={20} message="Generando..." showMessage />
+                      ) : (
+                        <>
+                          <TableChartIcon sx={{ mr: 1 }} />
+                          Descargar Excel
+                        </>
+                      )}
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
       </Paper>
-
-      {/* Reports Grid */}
-      <Grid container spacing={3}>
-        {reports.map((report) => {
-          const canAccess = !report.adminOnly || isAdmin;
-          const canGenerate = !report.requiresProperty || selectedProperty || !isAdmin;
-
-          return (
-            <Grid item xs={12} md={6} key={report.type}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" component="h2" gutterBottom>
-                    {report.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {report.description}
-                  </Typography>
-                </CardContent>
-                <CardActions>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    onClick={() => downloadReport(report.type, selectedProperty)}
-                    disabled={loading || !canAccess || !canGenerate}
-                  >
-                    {loading ? (
-                      <LoadingSpinner buttonVariant size={20} message="Generando..." showMessage />
-                    ) : (
-                      <>
-                        <TableChartIcon sx={{ mr: 1 }} />
-                        Descargar Excel
-                      </>
-                    )}
-                  </Button>
-                </CardActions>
-              </Card>
-            </Grid>
-          );
-        })}
-      </Grid>
     </Container>
   );
 };

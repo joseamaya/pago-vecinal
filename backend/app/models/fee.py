@@ -41,7 +41,7 @@ class FeeScheduleResponse(BaseModel):
     is_active: bool
     due_day: int
 
-class FeeStatus(str, Enum):
+class   FeeStatus(str, Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     FAILED = "failed"

@@ -252,6 +252,7 @@ export const reportsAPI = {
     return api.get('/reports/filtered-fees', { params, responseType: 'blob' });
   },
   getTrafficLightReport: () => api.get('/reports/traffic-light', { responseType: 'blob' }),
+  getPaidFeesSummary: (year, format = 'excel') => api.get(`/reports/paid-fees-summary/${year}`, { params: { format }, responseType: 'blob' }),
   getPaymentsOverTime: () => api.get('/reports/payments-over-time'),
   getFeesByStatus: () => api.get('/reports/fees-by-status'),
   getPropertiesByVilla: () => api.get('/reports/properties-by-villa'),
