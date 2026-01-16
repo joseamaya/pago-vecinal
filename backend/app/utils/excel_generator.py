@@ -940,7 +940,7 @@ def generate_fee_contribution_summary_excel(start_year, start_month, end_year, e
     ws.merge_cells('A1:E1')
 
     if contribution_data:
-        headers = ["Casa", "Cuotas Pagadas", "Cuotas No Pagadas", "% Aporte al Total"]
+        headers = ["Casa", "Cuotas Pagadas", "Cuotas No Pagadas", "Dinero Pagado", "% Aporte al Total", "Observación"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=3, column=col)
             cell.value = header
@@ -952,12 +952,16 @@ def generate_fee_contribution_summary_excel(start_year, start_month, end_year, e
             ws.cell(row=row, column=1).font = Font(bold=True)
             ws.cell(row=row, column=2).value = data['paid_count']
             ws.cell(row=row, column=3).value = data['unpaid_count']
-            ws.cell(row=row, column=4).value = data['contribution_percentage']
-            ws.cell(row=row, column=4).number_format = '0.00"%"'
+            ws.cell(row=row, column=4).value = float(data['total_paid_amount'])
+            ws.cell(row=row, column=4).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=5).value = data['contribution_percentage']
+            ws.cell(row=row, column=5).number_format = '0.00"%"'
+            ws.cell(row=row, column=6).value = data['observation']
 
         # Summary
         total_paid = sum(d['paid_count'] for d in contribution_data)
         total_unpaid = sum(d['unpaid_count'] for d in contribution_data)
+        total_amount = sum(d['total_paid_amount'] for d in contribution_data)
 
         summary_row = len(contribution_data) + 6
         ws[f'A{summary_row}'] = "Total General:"
@@ -966,9 +970,12 @@ def generate_fee_contribution_summary_excel(start_year, start_month, end_year, e
         ws[f'B{summary_row}'].font = Font(bold=True)
         ws[f'C{summary_row}'] = total_unpaid
         ws[f'C{summary_row}'].font = Font(bold=True)
-        ws[f'D{summary_row}'] = 100.0
-        ws[f'D{summary_row}'].number_format = '0.00"%"'
+        ws[f'D{summary_row}'] = float(total_amount)
+        ws[f'D{summary_row}'].number_format = '"S/ "#,##0.00'
         ws[f'D{summary_row}'].font = Font(bold=True)
+        ws[f'E{summary_row}'] = 100.0
+        ws[f'E{summary_row}'].number_format = '0.00"%"'
+        ws[f'E{summary_row}'].font = Font(bold=True)
     else:
         ws['A3'] = "No hay datos de cuotas para el período."
 
@@ -977,7 +984,7 @@ def generate_fee_contribution_summary_excel(start_year, start_month, end_year, e
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
-    for col in range(1, 5):
+    for col in range(1, 7):
         ws.column_dimensions[get_column_letter(col)].width = 20
 
     buffer = io.BytesIO()
