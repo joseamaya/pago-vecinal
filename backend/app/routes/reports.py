@@ -24,7 +24,8 @@ from ..utils.excel_generator import (
     generate_all_payments_excel,
     generate_filtered_fees_excel,
     generate_traffic_light_excel,
-    generate_paid_fees_summary_excel
+    generate_paid_fees_summary_excel,
+    generate_payments_summary_excel
 )
 
 router = APIRouter()
@@ -268,6 +269,84 @@ async def download_monthly_payment_summary(
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@router.get("/payments-summary")
+async def download_payments_summary(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    format: str = "excel",
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Excel report of payments summary by month"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Get payments for the date range
+    if start_date and end_date:
+        start_dt = datetime.fromisoformat(start_date)
+        end_dt = datetime.fromisoformat(end_date)
+    else:
+        # Default to current month
+        now = datetime.now()
+        start_dt = datetime(now.year, now.month, 1)
+        if now.month == 12:
+            end_dt = datetime(now.year + 1, 1, 1)
+        else:
+            end_dt = datetime(now.year, now.month + 1, 1)
+
+    payments = await Payment.find(
+        Payment.payment_date >= start_dt,
+        Payment.payment_date < end_dt
+    ).to_list()
+
+    # Group by year, month and amount
+    monthly_summary = {}
+    for payment in payments:
+        year = payment.payment_date.year
+        month = payment.payment_date.month
+        amount = payment.amount
+        key = (year, month, amount)
+        if key not in monthly_summary:
+            monthly_summary[key] = {'count': 0, 'total': 0}
+        monthly_summary[key]['count'] += 1
+        monthly_summary[key]['total'] += payment.amount
+
+    # Prepare data for Excel
+    summary_data = []
+    for (year, month, amount), data in monthly_summary.items():
+        summary_data.append({
+            'year': year,
+            'month': month,
+            'amount': amount,
+            'count': data['count'],
+            'total': data['total']
+        })
+
+    # Sort by year, month
+    summary_data.sort(key=lambda x: (x['year'], x['month']))
+
+    # Generate Excel report
+    buffer = generate_payments_summary_excel(start_dt, end_dt, summary_data)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    extension = "xlsx"
+
+    date_suffix = ""
+    if start_date and end_date:
+        date_suffix = f"_{start_date.replace('-', '')}_a_{end_date.replace('-', '')}"
+    else:
+        now = datetime.now()
+        date_suffix = f"_{now.year}_{now.month:02d}"
+
+    filename = f"resumen_pagos{date_suffix}.{extension}"
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 
 @router.get("/paid-fees-summary/{start_year}/{start_month}/{end_year}/{end_month}")
 async def download_paid_fees_summary(

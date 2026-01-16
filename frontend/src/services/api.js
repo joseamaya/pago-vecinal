@@ -252,6 +252,12 @@ export const reportsAPI = {
     return api.get('/reports/filtered-fees', { params, responseType: 'blob' });
   },
   getTrafficLightReport: () => api.get('/reports/traffic-light', { responseType: 'blob' }),
+  getPaymentsSummary: (startDate, endDate, format = 'excel') => {
+    const params = { format };
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    return api.get('/reports/payments-summary', { params, responseType: 'blob' });
+  },
   getPaidFeesSummary: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/paid-fees-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
   getPaymentsOverTime: () => api.get('/reports/payments-over-time'),
   getFeesByStatus: () => api.get('/reports/fees-by-status'),

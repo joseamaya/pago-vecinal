@@ -737,6 +737,75 @@ def generate_traffic_light_excel(traffic_light_data):
     return buffer
 
 
+def generate_payments_summary_excel(start_date, end_date, payments_data):
+    """
+    Generate an Excel report of payments summary by month
+    """
+    wb = Workbook()
+    ws = wb.active
+
+    # Format dates for title
+    if start_date and end_date:
+        title_date = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+        ws.title = f"Resumen Pagos {start_date.strftime('%m%Y')}-{end_date.strftime('%m%Y')}"
+    else:
+        title_date = "Período no especificado"
+        ws.title = "Resumen Pagos"
+
+    # Title
+    ws['A1'] = f"PAGO VECINAL - Resumen de Pagos - {title_date}"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:E1')
+
+    if payments_data:
+        headers = ["AÑO", "MES", "CUOTA", "N° VECINOS", "INGRESO CUOTA"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+        month_names = ["", "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+                      "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
+
+        for row, data in enumerate(payments_data, 4):
+            ws.cell(row=row, column=1).value = data['year']
+            ws.cell(row=row, column=2).value = month_names[data['month']]
+            ws.cell(row=row, column=3).value = float(data['amount'])
+            ws.cell(row=row, column=3).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=4).value = data['count']
+            ws.cell(row=row, column=5).value = float(data['total'])
+            ws.cell(row=row, column=5).number_format = '"S/ "#,##0.00'
+
+        # Summary
+        total_neighbors = sum(d['count'] for d in payments_data)
+        total_income = sum(d['total'] for d in payments_data)
+
+        summary_row = len(payments_data) + 6
+        ws[f'A{summary_row}'] = "Total General:"
+        ws[f'A{summary_row}'].font = Font(bold=True)
+        ws[f'B{summary_row}'] = total_neighbors
+        ws[f'B{summary_row}'].font = Font(bold=True)
+        ws[f'C{summary_row}'] = float(total_income)
+        ws[f'C{summary_row}'].number_format = '"S/ "#,##0.00'
+        ws[f'C{summary_row}'].font = Font(bold=True)
+    else:
+        ws['A3'] = "No hay pagos registrados para el período."
+
+    # Footer
+    footer_row = len(payments_data) + 9 if payments_data else 5
+    ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    # Auto-adjust column widths
+    for col in range(1, 6):
+        ws.column_dimensions[get_column_letter(col)].width = 15
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
 def generate_paid_fees_summary_excel(start_year, start_month, end_year, end_month, paid_fees_data):
     """
     Generate an Excel report of paid fees summary by month for period range

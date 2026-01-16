@@ -70,6 +70,10 @@ const ReportsManagement = () => {
           response = await reportsAPI.getMonthlyPaymentSummary(startDate, endDate, selectedFormat);
           filename = `resumen_pagos.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
           break;
+        case 'payments-summary':
+          response = await reportsAPI.getPaymentsSummary(startDate, endDate, selectedFormat);
+          filename = `resumen_pagos_fecha.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
+          break;
         case 'monthly-fees':
           response = await reportsAPI.getMonthlyFeesReport(startYear, startMonth, endYear, endMonth, selectedFormat);
           filename = `cuotas_mensuales_${startYear}_${startMonth.toString().padStart(2, '0')}_a_${endYear}_${endMonth.toString().padStart(2, '0')}.${selectedFormat === 'excel' ? 'xlsx' : 'pdf'}`;
@@ -118,6 +122,13 @@ const ReportsManagement = () => {
       adminOnly: true,
     },
     {
+      title: 'Resumen de Pagos',
+      description: 'Resumen de pagos por mes según fechas.',
+      type: 'payments-summary',
+      requiresProperty: false,
+      adminOnly: true,
+    },
+    {
       title: 'Reporte de Cuotas Mensuales',
       description: 'Lista todas las cuotas generadas en un rango de períodos específico.',
       type: 'monthly-fees',
@@ -126,7 +137,7 @@ const ReportsManagement = () => {
     },
     {
       title: 'Resumen de Cuotas Pagadas',
-      description: 'Resumen mensual de cuotas pagadas por año.',
+      description: 'Resumen mensual de cuotas pagadas por período.',
       type: 'paid-fees-summary',
       requiresProperty: false,
       adminOnly: true,
@@ -214,7 +225,7 @@ const ReportsManagement = () => {
         </Grid>
 
         <Grid container spacing={3} sx={{ mt: 2 }}>
-          {reports.filter(r => ['property-history', 'monthly-summary'].includes(r.type)).map((report) => {
+          {reports.filter(r => ['property-history', 'monthly-summary', 'payments-summary'].includes(r.type)).map((report) => {
             const canAccess = !report.adminOnly || isAdmin;
             const canGenerate = !report.requiresProperty || selectedProperty || !isAdmin;
 
