@@ -90,6 +90,8 @@ const PaymentManagement = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize] = useState(20);
+  const [availableYears, setAvailableYears] = useState([]);
+  const [initialLoad, setInitialLoad] = useState(true);
 
   const fetchPayments = useCallback(async (page = 1, filters = {}) => {
     try {
@@ -114,7 +116,23 @@ const PaymentManagement = () => {
   useEffect(() => {
     fetchPayments();
     fetchProperties();
+    // Generate available years from current year back to 2020
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear; year >= 2020; year--) {
+      years.push(year);
+    }
+    setAvailableYears(years);
   }, [fetchPayments]);
+
+  // Auto-apply filters when filter values change
+  useEffect(() => {
+    if (!initialLoad) {
+      applyFilters();
+    } else {
+      setInitialLoad(false);
+    }
+  }, [filterYear, filterMonth, filterStatus, filterProperty]);
 
 
   const fetchProperties = async () => {
@@ -815,13 +833,11 @@ const PaymentManagement = () => {
               <MenuItem value="">
                 <em>Todos</em>
               </MenuItem>
-              {[...new Set(payments.map(p => new Date(p.payment_date).getFullYear()))]
-                .sort((a, b) => b - a)
-                .map(year => (
-                  <MenuItem key={year} value={year.toString()}>
-                    {year}
-                  </MenuItem>
-                ))}
+              {availableYears.map(year => (
+                <MenuItem key={year} value={year.toString()}>
+                  {year}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
 
@@ -894,9 +910,6 @@ const PaymentManagement = () => {
             </Select>
           </FormControl>
 
-          <Button variant="contained" onClick={applyFilters}>
-            Aplicar Filtros
-          </Button>
           <Button variant="outlined" onClick={clearFilters}>
             Limpiar
           </Button>
