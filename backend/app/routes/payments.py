@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -15,6 +15,8 @@ from ..models.receipt import Receipt, ReceiptResponse
 from ..models.property import Property
 from ..routes.auth import get_current_user
 from ..config.database import database
+from ..utils.pdf_generator import generate_receipt_pdf
+
 
 async def update_fee_status_based_on_payments(fee: Fee):
     """Update fee status and paid_amount based on total approved payments"""
@@ -281,84 +283,9 @@ async def create_payment(
     if status == "approved":
         try:
             print(f"Creating receipt for payment {payment.id}")
-
-            # Fetch linked documents
-            await payment.fetch_link(Payment.fee)
-            if payment.fee:
-                await payment.fee.fetch_link('property')
-
-            # Generate correlative number
-            from ..routes.receipts import generate_correlative_number
-            correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
-
-            # Create property and owner details snapshot
-            property_details = {
-                "villa": payment.fee.property.villa,
-                "row_letter": payment.fee.property.row_letter,
-                "number": payment.fee.property.number,
-                "owner_name": payment.fee.property.owner_name,
-                "owner_phone": payment.fee.property.owner_phone
-            }
-
-            owner_details = {
-                "name": payment.fee.property.owner_name,
-                "phone": payment.fee.property.owner_phone
-            }
-
-            # Get treasurer data based on villa
-            villa = payment.fee.property.villa if payment.fee and payment.fee.property else None
-            treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
-            treasurer_details = {
-                "name": treasurer.name if treasurer else "Tesorero no configurado",
-                "signature": treasurer.signature if treasurer else None,
-                "villa": treasurer.villa if treasurer else None
-            }
-
-            # Create receipt
-            receipt = Receipt(
-                correlative_number=correlative_number,
-                payment=payment,
-                issue_date=datetime.utcnow(),
-                total_amount=payment.amount,
-                property_details=property_details,
-                owner_details=owner_details,
-                fee_period=f"{payment.fee.month}/{payment.fee.year}",
-                notes=payment.notes,
-                treasurer_details=treasurer_details
-            )
-
-            await receipt.insert()
-
-            # Generate PDF
-            from ..utils.pdf_generator import generate_receipt_pdf
-            pdf_data = {
-                "correlative_number": receipt.correlative_number,
-                "issue_date": receipt.issue_date,
-                "payment_date": receipt.payment.payment_date,
-                "total_amount": receipt.total_amount,
-                "property_details": receipt.property_details,
-                "reference": receipt.payment.fee_id,
-                "fee_period": receipt.fee_period,
-                "notes": receipt.notes,
-                "treasurer_details": treasurer_details
-            }
-
-            pdf_buffer = generate_receipt_pdf(pdf_data)
-
-            # Save PDF to file
-            pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-            pdf_file_path = f"static/receipts/{pdf_filename}"
-            os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
-
-            with open(pdf_file_path, "wb") as f:
-                f.write(pdf_buffer.getvalue())
-
-            # Update receipt with generated file path
-            receipt.generated_receipt_file = pdf_file_path
-            await receipt.save()
-
-            print(f"Receipt created and PDF generated: {pdf_file_path}")
-
+            from ..routes.receipts import create_receipt_for_payment
+            await create_receipt_for_payment(payment)
+            print(f"Receipt created successfully for payment {payment.id}")
         except Exception as e:
             # Log the error but don't fail the payment update
             print(f"Error creating receipt for payment {payment.id}: {e}")
@@ -443,84 +370,9 @@ async def update_payment(
     if status == "approved":
         try:
             print(f"Creating receipt for payment {payment_id}")
-
-            # Fetch linked documents
-            await payment.fetch_link(Payment.fee)
-            if payment.fee:
-                await payment.fee.fetch_link('property')
-
-            # Generate correlative number
-            from ..routes.receipts import generate_correlative_number
-            correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
-
-            # Create property and owner details snapshot
-            property_details = {
-                "villa": payment.fee.property.villa,
-                "row_letter": payment.fee.property.row_letter,
-                "number": payment.fee.property.number,
-                "owner_name": payment.fee.property.owner_name,
-                "owner_phone": payment.fee.property.owner_phone
-            }
-
-            owner_details = {
-                "name": payment.fee.property.owner_name,
-                "phone": payment.fee.property.owner_phone
-            }
-
-            # Get treasurer data based on villa
-            villa = payment.fee.property.villa if payment.fee and payment.fee.property else None
-            treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
-            treasurer_details = {
-                "name": treasurer.name if treasurer else "Tesorero no configurado",
-                "signature": treasurer.signature if treasurer else None,
-                "villa": treasurer.villa if treasurer else None
-            }
-
-            # Create receipt
-            receipt = Receipt(
-                correlative_number=correlative_number,
-                payment=payment,
-                issue_date=datetime.utcnow(),
-                total_amount=payment.amount,
-                property_details=property_details,
-                owner_details=owner_details,
-                fee_period=f"{payment.fee.month}/{payment.fee.year}",
-                notes=payment.notes,
-                treasurer_details=treasurer_details
-            )
-
-            await receipt.insert()
-
-            # Generate PDF
-            from ..utils.pdf_generator import generate_receipt_pdf
-            pdf_data = {
-                "correlative_number": receipt.correlative_number,
-                "issue_date": receipt.issue_date,
-                "payment_date": receipt.payment.payment_date,
-                "total_amount": receipt.total_amount,
-                "property_details": receipt.property_details,
-                "reference": receipt.payment.fee_id,
-                "fee_period": receipt.fee_period,
-                "notes": receipt.notes,
-                "treasurer_details": treasurer_details
-            }
-
-            pdf_buffer = generate_receipt_pdf(pdf_data)
-
-            # Save PDF to file
-            pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-            pdf_file_path = f"static/receipts/{pdf_filename}"
-            os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
-
-            with open(pdf_file_path, "wb") as f:
-                f.write(pdf_buffer.getvalue())
-
-            # Update receipt with generated file path
-            receipt.generated_receipt_file = pdf_file_path
-            await receipt.save()
-
-            print(f"Receipt created and PDF generated: {pdf_file_path}")
-
+            from ..routes.receipts import create_receipt_for_payment
+            await create_receipt_for_payment(payment)
+            print(f"Receipt created successfully for payment {payment_id}")
         except Exception as e:
             # Log the error but don't fail the payment update
             print(f"Error creating receipt for payment {payment_id}: {e}")
@@ -624,32 +476,58 @@ async def download_generated_receipt(payment_id: str, current_user: User = Depen
 
     # Find associated receipt
     receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
-    if not receipt or not receipt.generated_receipt_file:
+    if not receipt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No receipt file associated with this payment"
+            detail="No receipt associated with this payment"
         )
 
-    # Convert relative path to absolute path if needed
-    file_path = receipt.generated_receipt_file
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(os.getcwd(), file_path)
+    # Fetch the actual payment document
+    payment_doc = await receipt.payment.fetch()
 
-    print(f"Looking for receipt file at: {file_path}")
-    print(f"File exists: {os.path.exists(file_path)}")
+    # Always generate PDF on the fly to avoid Cloudinary permission issues
+    # Fetch current property and treasurer details
+    if payment.fee:
+        await payment.fee.fetch_link('property')
+        property_details = {
+            "villa": payment.fee.property.villa,
+            "row_letter": payment.fee.property.row_letter,
+            "number": payment.fee.property.number,
+            "owner_name": payment.fee.property.owner_name,
+            "owner_phone": payment.fee.property.owner_phone
+        }
+    else:
+        property_details = receipt.property_details or {}
 
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Receipt file not found at {file_path}"
-        )
+    # Get current treasurer data
+    villa = property_details.get('villa')
+    treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+    treasurer_details = {
+        "name": treasurer.name if treasurer else "Tesorero no configurado",
+        "signature": treasurer.signature if treasurer else None,
+        "villa": treasurer.villa if treasurer else None
+    }
 
-    # Return the PDF file
-    filename = f"recibo_pago_{payment_id}.pdf"
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type="application/pdf"
+    pdf_data = {
+        "correlative_number": receipt.correlative_number,
+        "issue_date": receipt.issue_date,
+        "payment_date": payment_doc.payment_date,
+        "total_amount": receipt.total_amount,
+        "property_details": property_details,
+        "reference": payment_doc.fee_id,
+        "fee_period": receipt.fee_period,
+        "notes": receipt.notes,
+        "treasurer_details": treasurer_details
+    }
+
+    pdf_buffer = generate_receipt_pdf(pdf_data)
+
+    # Return PDF as streaming response
+    filename = f"recibo_{receipt.correlative_number}.pdf"
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 @router.post("/bulk-import")
@@ -828,85 +706,9 @@ async def bulk_import_payments(
                 # Create receipt automatically
                 try:
                     print(f"Creating receipt for bulk import payment {payment.id}")
-
-                    # Fetch linked documents
-                    await payment.fetch_link(Payment.fee)
-                    if payment.fee:
-                        await payment.fee.fetch_link('property')
-
-                    # Generate correlative number
-                    from ..routes.receipts import generate_correlative_number
-                    correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
-
-                    # Create property and owner details snapshot
-                    property_details = {
-                        "villa": payment.fee.property.villa,
-                        "row_letter": payment.fee.property.row_letter,
-                        "number": payment.fee.property.number,
-                        "owner_name": payment.fee.property.owner_name,
-                        "owner_phone": payment.fee.property.owner_phone
-                    }
-
-                    owner_details = {
-                        "name": payment.fee.property.owner_name,
-                        "phone": payment.fee.property.owner_phone
-                    }
-
-                    # Get treasurer data based on villa
-                    villa = payment.fee.property.villa if payment.fee and payment.fee.property else None
-                    treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
-                    treasurer_details = {
-                        "name": treasurer.name if treasurer else "Tesorero no configurado",
-                        "signature": treasurer.signature if treasurer else None,
-                        "villa": treasurer.villa if treasurer else None
-                    }
-
-                    # Create receipt
-                    from ..models.receipt import Receipt
-                    receipt = Receipt(
-                        correlative_number=correlative_number,
-                        payment=payment,
-                        issue_date=datetime.utcnow(),
-                        total_amount=payment.amount,
-                        property_details=property_details,
-                        owner_details=owner_details,
-                        fee_period=f"{payment.fee.month}/{payment.fee.year}",
-                        notes=payment.notes,
-                        treasurer_details=treasurer_details
-                    )
-
-                    await receipt.insert()
-
-                    # Generate PDF
-                    from ..utils.pdf_generator import generate_receipt_pdf
-                    pdf_data = {
-                        "correlative_number": receipt.correlative_number,
-                        "issue_date": receipt.issue_date,
-                        "payment_date": receipt.payment.payment_date,
-                        "total_amount": receipt.total_amount,
-                        "property_details": receipt.property_details,
-                        "reference": receipt.payment.fee_id,
-                        "fee_period": receipt.fee_period,
-                        "notes": receipt.notes,
-                        "treasurer_details": treasurer_details
-                    }
-
-                    pdf_buffer = generate_receipt_pdf(pdf_data)
-
-                    # Save PDF to file
-                    pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-                    pdf_file_path = f"static/receipts/{pdf_filename}"
-                    os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
-
-                    with open(pdf_file_path, "wb") as f:
-                        f.write(pdf_buffer.getvalue())
-
-                    # Update receipt with generated file path
-                    receipt.generated_receipt_file = pdf_file_path
-                    await receipt.save()
-
-                    print(f"Receipt created and PDF generated for bulk import: {pdf_file_path}")
-
+                    from ..routes.receipts import create_receipt_for_payment
+                    await create_receipt_for_payment(payment)
+                    print(f"Receipt created successfully for bulk import payment {payment.id}")
                 except Exception as e:
                     # Log the error but don't fail the bulk import
                     print(f"Error creating receipt for bulk import payment {payment.id}: {e}")
@@ -984,85 +786,9 @@ async def bulk_approve_payments(
             # Create receipt automatically
             try:
                 print(f"Creating receipt for payment {payment_id}")
-
-                # Fetch linked documents
-                await payment.fetch_link(Payment.fee)
-                if payment.fee:
-                    await payment.fee.fetch_link('property')
-
-                # Generate correlative number
-                from ..routes.receipts import generate_correlative_number
-                correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
-
-                # Create property and owner details snapshot
-                property_details = {
-                    "villa": payment.fee.property.villa,
-                    "row_letter": payment.fee.property.row_letter,
-                    "number": payment.fee.property.number,
-                    "owner_name": payment.fee.property.owner_name,
-                    "owner_phone": payment.fee.property.owner_phone
-                }
-
-                owner_details = {
-                    "name": payment.fee.property.owner_name,
-                    "phone": payment.fee.property.owner_phone
-                }
-
-                # Get treasurer data based on villa
-                villa = payment.fee.property.villa if payment.fee and payment.fee.property else None
-                treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
-                treasurer_details = {
-                    "name": treasurer.name if treasurer else "Tesorero no configurado",
-                    "signature": treasurer.signature if treasurer else None,
-                    "villa": treasurer.villa if treasurer else None
-                }
-
-                # Create receipt
-                from ..models.receipt import Receipt
-                receipt = Receipt(
-                    correlative_number=correlative_number,
-                    payment=payment,
-                    issue_date=datetime.utcnow(),
-                    total_amount=payment.amount,
-                    property_details=property_details,
-                    owner_details=owner_details,
-                    fee_period=f"{payment.fee.month}/{payment.fee.year}",
-                    notes=payment.notes,
-                    treasurer_details=treasurer_details
-                )
-
-                await receipt.insert()
-
-                # Generate PDF
-                from ..utils.pdf_generator import generate_receipt_pdf
-                pdf_data = {
-                    "correlative_number": receipt.correlative_number,
-                    "issue_date": receipt.issue_date,
-                    "payment_date": receipt.payment.payment_date,
-                    "total_amount": receipt.total_amount,
-                    "property_details": receipt.property_details,
-                    "reference": receipt.payment.fee_id,
-                    "fee_period": receipt.fee_period,
-                    "notes": receipt.notes,
-                    "treasurer_details": treasurer_details
-                }
-
-                pdf_buffer = generate_receipt_pdf(pdf_data)
-
-                # Save PDF to file
-                pdf_filename = f"recibo_{receipt.correlative_number}.pdf"
-                pdf_file_path = f"static/receipts/{pdf_filename}"
-                os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
-
-                with open(pdf_file_path, "wb") as f:
-                    f.write(pdf_buffer.getvalue())
-
-                # Update receipt with generated file path
-                receipt.generated_receipt_file = pdf_file_path
-                await receipt.save()
-
-                print(f"Receipt created and PDF generated: {pdf_file_path}")
-
+                from ..routes.receipts import create_receipt_for_payment
+                await create_receipt_for_payment(payment)
+                print(f"Receipt created successfully for payment {payment_id}")
             except Exception as e:
                 # Log the error but don't fail the bulk operation
                 print(f"Error creating receipt for payment {payment_id}: {e}")

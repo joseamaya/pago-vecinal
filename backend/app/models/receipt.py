@@ -28,6 +28,10 @@ class ReceiptCreate(BaseModel):
     fee_period: Optional[str] = None
     notes: Optional[str] = None
 
+class ReceiptUpdate(BaseModel):
+    fee_period: Optional[str] = None
+    notes: Optional[str] = None
+
 class ReceiptResponse(BaseModel):
     id: str
     correlative_number: str
