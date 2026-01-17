@@ -326,6 +326,7 @@ const PaymentManagement = () => {
         if (filterYear) currentFilters.year = parseInt(filterYear);
         if (filterMonth) currentFilters.month = parseInt(filterMonth);
         if (filterStatus) currentFilters.status = filterStatus;
+        if (filterProperty) currentFilters.property_id = filterProperty;
         fetchPayments(currentPage, currentFilters);
         handleCloseDialog();
       };
@@ -351,6 +352,7 @@ const PaymentManagement = () => {
         if (filterYear) currentFilters.year = parseInt(filterYear);
         if (filterMonth) currentFilters.month = parseInt(filterMonth);
         if (filterStatus) currentFilters.status = filterStatus;
+        if (filterProperty) currentFilters.property_id = filterProperty;
         fetchPayments(currentPage, currentFilters);
       } catch (err) {
         setError('Error al eliminar pago');
@@ -373,6 +375,7 @@ const PaymentManagement = () => {
         if (filterYear) currentFilters.year = parseInt(filterYear);
         if (filterMonth) currentFilters.month = parseInt(filterMonth);
         if (filterStatus) currentFilters.status = filterStatus;
+        if (filterProperty) currentFilters.property_id = filterProperty;
         await fetchPayments(currentPage, currentFilters);
         console.log('Payments refreshed after approval');
       }, 2000); // 2 second delay
@@ -391,6 +394,7 @@ const PaymentManagement = () => {
       if (filterYear) currentFilters.year = parseInt(filterYear);
       if (filterMonth) currentFilters.month = parseInt(filterMonth);
       if (filterStatus) currentFilters.status = filterStatus;
+      if (filterProperty) currentFilters.property_id = filterProperty;
       fetchPayments(currentPage, currentFilters);
     } catch (err) {
       setError('Error al rechazar pago');
@@ -429,6 +433,7 @@ const PaymentManagement = () => {
       if (filterYear) currentFilters.year = parseInt(filterYear);
       if (filterMonth) currentFilters.month = parseInt(filterMonth);
       if (filterStatus) currentFilters.status = filterStatus;
+      if (filterProperty) currentFilters.property_id = filterProperty;
       fetchPayments(currentPage, currentFilters); // Refresh the payments list
     } catch (err) {
       setError('Error al subir archivo masivo');
@@ -685,6 +690,7 @@ const PaymentManagement = () => {
       if (filterYear) currentFilters.year = parseInt(filterYear);
       if (filterMonth) currentFilters.month = parseInt(filterMonth);
       if (filterStatus) currentFilters.status = filterStatus;
+      if (filterProperty) currentFilters.property_id = filterProperty;
       await fetchPayments(currentPage, currentFilters);
 
       // Reset selection
@@ -706,6 +712,7 @@ const PaymentManagement = () => {
       if (filterYear) currentFilters.year = parseInt(filterYear);
       if (filterMonth) currentFilters.month = parseInt(filterMonth);
       if (filterStatus) currentFilters.status = filterStatus;
+      if (filterProperty) currentFilters.property_id = filterProperty;
       fetchPayments(newPage, currentFilters);
     }
   };
@@ -1176,6 +1183,7 @@ const PaymentManagement = () => {
                   />
                   <TextField
                     sx={{ flex: 1 }}
+
                     label="Fecha de Vencimiento"
                     value={new Date(selectedFeeInfo.dueDate).toLocaleDateString('es-ES')}
                     InputProps={{

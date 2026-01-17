@@ -7,6 +7,7 @@ import os
 import shutil
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+from bson import ObjectId
 from ..models.payment import Payment, PaymentCreate, PaymentUpdate, PaymentResponse, PaymentStatus
 from ..models.fee import Fee, FeeStatus
 from ..models.treasurer import Treasurer
@@ -90,15 +91,32 @@ async def get_payments(
     if fee_id is not None:
         query_filters["fee_id"] = fee_id
 
-    if property_id is not None:
-        # Filter payments by property through the fee relationship
-        query_filters["fee.property.id"] = property_id
+    # Property filter will be handled in the aggregation pipeline
 
     # Get motor collection for aggregation
     payment_collection = database.payments
 
-    # Get total count using aggregation
-    count_pipeline = [{"$match": query_filters}, {"$count": "total"}]
+    # Get total count using aggregation with lookups for property filter
+    count_pipeline = [
+        {"$match": query_filters},
+        {"$lookup": {
+            "from": "fees",
+            "localField": "fee.$id",
+            "foreignField": "_id",
+            "as": "fee_data"
+        }},
+        {"$unwind": "$fee_data"},
+        {"$lookup": {
+            "from": "properties",
+            "localField": "fee_data.property.$id",
+            "foreignField": "_id",
+            "as": "property_data"
+        }},
+        {"$unwind": "$property_data"}
+    ]
+    if property_id is not None:
+        count_pipeline.append({"$match": {"property_data._id": ObjectId(property_id)}})
+    count_pipeline.append({"$count": "total"})
     count_result = await payment_collection.aggregate(count_pipeline).to_list(length=1)
     total_count = count_result[0]["total"] if count_result else 0
 
@@ -129,28 +147,30 @@ async def get_payments(
             "as": "user_data"
         }},
         {"$unwind": {"path": "$user_data", "preserveNullAndEmptyArrays": True}},
-        {"$addFields": {
-            "status_priority": {
-                "$switch": {
-                    "branches": [
-                        {"case": {"$eq": ["$status", "pending"]}, "then": 1},
-                        {"case": {"$eq": ["$status", "approved"]}, "then": 2},
-                        {"case": {"$eq": ["$status", "rejected"]}, "then": 3},
-                        {"case": {"$eq": ["$status", "completed"]}, "then": 4},
-                        {"case": {"$eq": ["$status", "failed"]}, "then": 5},
-                        {"case": {"$eq": ["$status", "cancelled"]}, "then": 6}
-                    ],
-                    "default": 7
-                }
-            }
-        }},
-        {"$sort": {
-            "status_priority": 1,
-            "payment_date": -1
-        }},
-        {"$skip": skip},
-        {"$limit": limit}
     ]
+    if property_id is not None:
+        pipeline.append({"$match": {"property_data._id": ObjectId(property_id)}})
+    pipeline.append({"$addFields": {
+        "status_priority": {
+            "$switch": {
+                "branches": [
+                    {"case": {"$eq": ["$status", "pending"]}, "then": 1},
+                    {"case": {"$eq": ["$status", "approved"]}, "then": 2},
+                    {"case": {"$eq": ["$status", "rejected"]}, "then": 3},
+                    {"case": {"$eq": ["$status", "completed"]}, "then": 4},
+                    {"case": {"$eq": ["$status", "failed"]}, "then": 5},
+                    {"case": {"$eq": ["$status", "cancelled"]}, "then": 6}
+                ],
+                "default": 7
+            }
+        }
+    }})
+    pipeline.append({"$sort": {
+        "status_priority": 1,
+        "payment_date": -1
+    }})
+    pipeline.append({"$skip": skip})
+    pipeline.append({"$limit": limit})
 
     # Execute aggregation
     results = await payment_collection.aggregate(pipeline).to_list(length=None)
