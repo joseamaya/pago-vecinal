@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -14,6 +14,7 @@ from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..models.property import Property
 from ..routes.auth import get_current_user
+from ..utils.pdf_generator import generate_receipt_pdf
 
 class BulkApproveRequest(BaseModel):
     payment_ids: List[str]
@@ -257,6 +258,7 @@ async def update_miscellaneous_payment(
 
             # Generate correlative number - miscellaneous payments use OTR
             from .receipts import generate_correlative_number
+            current_year = datetime.utcnow().year
             correlative_number = await generate_correlative_number(current_year, "OTR")
 
             # Use stored property and owner details or create defaults
@@ -297,6 +299,52 @@ async def update_miscellaneous_payment(
             await receipt.insert()
 
             print(f"Receipt created in database with ID: {receipt.id}")
+
+            # Generate PDF and upload to Cloudinary
+            pdf_data = {
+                "correlative_number": receipt.correlative_number,
+                "issue_date": receipt.issue_date,
+                "payment_date": payment.payment_date,
+                "total_amount": receipt.total_amount,
+                "property_details": receipt.property_details,
+                "reference": payment.id,  # Use payment ID as reference for miscellaneous payments
+                "fee_period": receipt.fee_period,
+                "notes": receipt.notes,
+                "treasurer_details": treasurer_details
+            }
+
+            pdf_buffer = generate_receipt_pdf(pdf_data)
+
+            # Upload PDF to Cloudinary
+            cloudinary.config(
+                cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+                api_key=os.getenv('CLOUDINARY_API_KEY'),
+                api_secret=os.getenv('CLOUDINARY_API_SECRET')
+            )
+
+            # Generate filename
+            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
+
+            # Upload to Cloudinary
+            upload_result = cloudinary.uploader.upload(
+                pdf_buffer.getvalue(),
+                public_id=pdf_filename,
+                resource_type="raw",
+                folder="receipts"
+            )
+
+            cloudinary_url = upload_result['secure_url']
+
+            # Update receipt with Cloudinary URL
+            receipt.generated_receipt_file = cloudinary_url
+            await receipt.save()
+
+            # Update payment with receipt file URL
+            payment.generated_receipt_file = cloudinary_url
+            await payment.save()
+
+            print(f"Receipt PDF generated and uploaded for miscellaneous payment {payment_id}")
         except Exception as e:
             # Log the error but don't fail the payment update
             print(f"Error creating receipt for miscellaneous payment {payment_id}: {e}")
@@ -371,33 +419,101 @@ async def download_miscellaneous_receipt(payment_id: str, current_user: User = D
             detail="Not enough permissions"
         )
 
-    # Check if receipt file exists
-    if not payment.generated_receipt_file:
+    # Check if payment is approved
+    if payment.status != MiscellaneousPaymentStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No receipt file associated with this payment"
+            detail="Receipt only available for approved payments"
         )
 
-    # Convert relative path to absolute path if needed
-    file_path = payment.generated_receipt_file
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(os.getcwd(), file_path)
+    # Get the associated receipt
+    receipt = await Receipt.find_one(Receipt.miscellaneous_payment.id == payment.id)
+    if not receipt:
+        # Create receipt on the fly for payments approved before the fix
+        print(f"Creating receipt on the fly for miscellaneous payment {payment_id}")
 
-    print(f"Looking for receipt file at: {file_path}")
-    print(f"File exists: {os.path.exists(file_path)}")
+        # Generate correlative number - miscellaneous payments use OTR
+        from .receipts import generate_correlative_number
+        current_year = datetime.utcnow().year
+        correlative_number = await generate_correlative_number(current_year, "OTR")
 
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Receipt file not found at {file_path}"
+        # Use stored property and owner details or create defaults
+        property_details = payment.property_details or {
+            "villa": "N/A",
+            "row_letter": "N/A",
+            "number": 0,
+            "owner_name": "Propietario no registrado",
+            "owner_phone": "N/A"
+        }
+        owner_details = payment.owner_details or {
+            "name": "Propietario no registrado",
+            "phone": "N/A"
+        }
+
+        # Get treasurer data based on villa
+        villa = property_details.get('villa') if property_details and property_details.get('villa') != 'N/A' else None
+        treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+        treasurer_details = {
+            "name": treasurer.name if treasurer else "Tesorero no configurado",
+            "signature": treasurer.signature if treasurer else None,
+            "villa": treasurer.villa if treasurer else None
+        }
+
+        # Create receipt record
+        receipt = Receipt(
+            correlative_number=correlative_number,
+            miscellaneous_payment=payment,
+            issue_date=datetime.utcnow(),
+            total_amount=payment.amount,
+            property_details=property_details,
+            owner_details=owner_details,
+            fee_period=f"Pago varios: {payment.description}",
+            notes=f"Recibo generado automáticamente al descargar",
+            treasurer_details=treasurer_details
         )
 
-    # Return the PDF file
-    filename = f"recibo_pago_varios_{payment_id}.pdf"
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type="application/pdf"
+        await receipt.insert()
+        print(f"Receipt created on the fly with ID: {receipt.id}")
+
+    # Fetch property and treasurer details
+    property_details = payment.property_details or {
+        "villa": "N/A",
+        "row_letter": "N/A",
+        "number": 0,
+        "owner_name": "Propietario no registrado",
+        "owner_phone": "N/A"
+    }
+
+    # Get treasurer data based on villa
+    villa = property_details.get('villa') if property_details and property_details.get('villa') != 'N/A' else None
+    treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
+    treasurer_details = {
+        "name": treasurer.name if treasurer else "Tesorero no configurado",
+        "signature": treasurer.signature if treasurer else None,
+        "villa": treasurer.villa if treasurer else None
+    }
+
+    # Generate PDF data
+    pdf_data = {
+        "correlative_number": receipt.correlative_number,
+        "issue_date": receipt.issue_date,
+        "payment_date": payment.payment_date,
+        "total_amount": receipt.total_amount,
+        "property_details": property_details,
+        "reference": payment.id,
+        "fee_period": receipt.fee_period,
+        "notes": receipt.notes,
+        "treasurer_details": treasurer_details
+    }
+
+    pdf_buffer = generate_receipt_pdf(pdf_data)
+
+    # Return PDF as streaming response
+    filename = f"recibo_pago_varios_{receipt.correlative_number}.pdf"
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 @router.post("/bulk-approve")
@@ -449,6 +565,7 @@ async def bulk_approve_miscellaneous_payments(
 
                 # Generate correlative number - miscellaneous payments use OTR
                 from .receipts import generate_correlative_number
+                current_year = datetime.utcnow().year
                 correlative_number = await generate_correlative_number(current_year, "OTR")
 
                 # Use stored property and owner details or create defaults
@@ -489,6 +606,52 @@ async def bulk_approve_miscellaneous_payments(
                 await receipt.insert()
 
                 print(f"Receipt created in database with ID: {receipt.id}")
+
+                # Generate PDF and upload to Cloudinary
+                pdf_data = {
+                    "correlative_number": receipt.correlative_number,
+                    "issue_date": receipt.issue_date,
+                    "payment_date": payment.payment_date,
+                    "total_amount": receipt.total_amount,
+                    "property_details": receipt.property_details,
+                    "reference": payment.id,  # Use payment ID as reference for miscellaneous payments
+                    "fee_period": receipt.fee_period,
+                    "notes": receipt.notes,
+                    "treasurer_details": treasurer_details
+                }
+
+                pdf_buffer = generate_receipt_pdf(pdf_data)
+
+                # Upload PDF to Cloudinary
+                cloudinary.config(
+                    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+                    api_key=os.getenv('CLOUDINARY_API_KEY'),
+                    api_secret=os.getenv('CLOUDINARY_API_SECRET')
+                )
+
+                # Generate filename
+                timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+                pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
+
+                # Upload to Cloudinary
+                upload_result = cloudinary.uploader.upload(
+                    pdf_buffer.getvalue(),
+                    public_id=pdf_filename,
+                    resource_type="raw",
+                    folder="receipts"
+                )
+
+                cloudinary_url = upload_result['secure_url']
+
+                # Update receipt with Cloudinary URL
+                receipt.generated_receipt_file = cloudinary_url
+                await receipt.save()
+
+                # Update payment with receipt file URL
+                payment.generated_receipt_file = cloudinary_url
+                await payment.save()
+
+                print(f"Receipt PDF generated and uploaded for miscellaneous payment {payment_id}")
             except Exception as e:
                 # Log the error but don't fail the bulk operation
                 print(f"Error creating receipt for miscellaneous payment {payment_id}: {e}")

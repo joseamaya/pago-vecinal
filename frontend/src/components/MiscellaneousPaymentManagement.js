@@ -428,7 +428,7 @@ const MiscellaneousPaymentManagement = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {payment.generated_receipt_file ? (
+                      {payment.status === 'approved' ? (
                         <Button
                           size="small"
                           variant="outlined"
@@ -437,8 +437,6 @@ const MiscellaneousPaymentManagement = () => {
                         >
                           Descargar
                         </Button>
-                      ) : payment.status === 'approved' ? (
-                        <span style={{ color: 'orange' }}>Generando...</span>
                       ) : '-'}
                     </TableCell>
                     <TableCell>
