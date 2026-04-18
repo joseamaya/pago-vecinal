@@ -565,19 +565,21 @@ async def download_paid_fees_summary(
             detail="Start period must be before or equal to end period"
         )
 
-    # Get paid fees for the period range
-    # Using a simpler approach to avoid complex query syntax issues
-    fees = await Fee.find(Fee.status == FeeStatus.COMPLETED).to_list()
-
-    # Filter fees by period range in Python
+    # Get paid and partially paid fees for the period range
+    # Fetch all fees and filter in Python
+    all_fees = await Fee.find().to_list()
+    
+    # Filter by status (COMPLETED or PARTIALLY_PAID) and period range
     paid_fees = []
-    for fee in fees:
-        fee_period = fee.year * 12 + fee.month
-        start_period_num = start_year * 12 + start_month
-        end_period_num = end_year * 12 + end_month
-
-        if start_period_num <= fee_period <= end_period_num:
-            paid_fees.append(fee)
+    for fee in all_fees:
+        if fee.status in [FeeStatus.COMPLETED, FeeStatus.PARTIALLY_PAID]:
+            # Also filter by period range
+            fee_period = fee.year * 12 + fee.month
+            start_period_num = start_year * 12 + start_month
+            end_period_num = end_year * 12 + end_month
+            
+            if start_period_num <= fee_period <= end_period_num:
+                paid_fees.append(fee)
 
     # Get expenses for the period range
     expenses = await Expense.find_all().to_list()
@@ -597,13 +599,21 @@ async def download_paid_fees_summary(
                 expenses_by_period[key] += expense.amount
 
     # Group by year, month and amount
+    # Use paid_amount to include partial payments
+    # Track separately fully paid vs partially paid
     monthly_summary = {}
     for fee in paid_fees:
         key = (fee.year, fee.month, fee.amount)
         if key not in monthly_summary:
-            monthly_summary[key] = {'count': 0, 'total': 0}
+            monthly_summary[key] = {'count': 0, 'total': 0, 'fully_paid_count': 0, 'partially_paid_count': 0}
+        
+        if fee.status == FeeStatus.COMPLETED:
+            monthly_summary[key]['fully_paid_count'] += 1
+        else:
+            monthly_summary[key]['partially_paid_count'] += 1
+            
         monthly_summary[key]['count'] += 1
-        monthly_summary[key]['total'] += fee.amount
+        monthly_summary[key]['total'] += fee.paid_amount  # Use paid_amount instead of amount
 
     # Prepare data for Excel
     summary_data = []
@@ -616,6 +626,8 @@ async def download_paid_fees_summary(
             'amount': amount,
             'count': data['count'],
             'total': data['total'],
+            'fully_paid_count': data['fully_paid_count'],
+            'partially_paid_count': data['partially_paid_count'],
             'expenses': period_expenses,
             'net': net
         })
