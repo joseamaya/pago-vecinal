@@ -25,8 +25,6 @@ import {
   MonetizationOn as FeeIcon,
   Schedule as ScheduleIcon,
   Assessment as ReportsIcon,
-  Assignment as AgreementIcon,
-  AccountBalance as InstallmentIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
   ChevronLeft as ChevronLeftIcon,
@@ -69,12 +67,6 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle, handleDrawerClose }) => {
       text: 'Cuotas',
       icon: <FeeIcon />,
       path: '/fees',
-      roles: ['admin', 'owner'],
-    },
-    {
-      text: 'Convenios',
-      icon: <AgreementIcon />,
-      path: '/agreements',
       roles: ['admin', 'owner'],
     },
     {

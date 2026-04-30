@@ -46,7 +46,6 @@ class   FeeStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
-    AGREEMENT = "agreement"
     PARTIALLY_PAID = "partially_paid"
 
 class Fee(Document):

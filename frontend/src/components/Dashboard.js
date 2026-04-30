@@ -62,7 +62,6 @@ const Dashboard = () => {
         total_debt: statsRes.data.total_debt || 0,
         pending_fees: statsRes.data.pending_fees || 0,
         agreements: statsRes.data.agreements || 0,
-        expenses: statsRes.data.expenses || 0,
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -179,17 +178,7 @@ const Dashboard = () => {
             />
           </Grid>
         )}
-        {isOwner && (
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Convenios"
-              value={stats.agreements}
-              icon={<ReceiptIcon color="info" fontSize="large" />}
-              color="info.main"
-              onClick={() => navigate('/agreements')}
-            />
-          </Grid>
-        )}
+        
       </Grid>
 
       {/* Quick Actions */}
@@ -299,20 +288,6 @@ const Dashboard = () => {
               {isOwner ? 'Mis Recibos' : 'Ver Recibos'}
             </Button>
           </Grid>
-          {isOwner && (
-            <Grid item xs={12} sm={6} md={2.4}>
-              <Button
-                variant="contained"
-                color="info"
-                fullWidth
-                startIcon={<ReceiptIcon />}
-                sx={{ height: 80, flexDirection: 'column' }}
-                onClick={() => navigate('/agreements')}
-              >
-                Mis Convenios
-              </Button>
-            </Grid>
-          )}
           <Grid item xs={12} sm={6} md={2.4}>
             <Button
               variant="contained"
@@ -387,7 +362,7 @@ const Dashboard = () => {
                       Total cuotas: {prop.fees_summary.total_fees} | Pagado: S/ {prop.fees_summary.paid_amount?.toFixed(2)} | Pendiente: S/ {prop.fees_summary.pending_amount?.toFixed(2)}
                     </Typography>
                     <Typography variant="body2">
-                      Pagos realizados: {prop.payments} | Convenios: {prop.agreements}
+                      Pagos realizados: {prop.payments}
                     </Typography>
                   </Box>
                 ))}

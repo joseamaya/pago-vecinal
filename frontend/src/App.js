@@ -14,7 +14,7 @@ import MiscellaneousPaymentManagement from './components/MiscellaneousPaymentMan
 import ExpenseManagement from './components/ExpenseManagement';
 import ReceiptManagement from './components/ReceiptManagement';
 import FeeManagement from './components/FeeManagement';
-import AgreementManagement from './components/AgreementManagement';
+
 import FeeScheduleManagement from './components/FeeScheduleManagement';
 import ReportsManagement from './components/ReportsManagement';
 import TreasurerConfiguration from './components/TreasurerConfiguration';
@@ -55,7 +55,7 @@ const AppRouter = () => {
                   <Route path="/expenses" element={<ExpenseManagement />} />
                   <Route path="/receipts" element={<ReceiptManagement />} />
                   <Route path="/fees" element={<FeeManagement />} />
-                  <Route path="/agreements" element={<AgreementManagement />} />
+                  
                   <Route path="/fee-schedules" element={<FeeScheduleManagement />} />
                   <Route path="/reports" element={<ReportsManagement />} />
                   <Route path="/configuration" element={<TreasurerConfiguration />} />

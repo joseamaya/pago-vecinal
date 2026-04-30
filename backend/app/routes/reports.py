@@ -412,7 +412,6 @@ async def download_fee_contribution_summary(
                     'paid_count': 0,
                     'unpaid_count': 0,
                     'total_paid_amount': 0,
-                    'has_agreement': False
                 }
 
             if fee.status == FeeStatus.COMPLETED:
@@ -421,9 +420,6 @@ async def download_fee_contribution_summary(
             else:
                 property_summary[prop_key]['unpaid_count'] += 1
 
-            if fee.status == FeeStatus.AGREEMENT:
-                property_summary[prop_key]['has_agreement'] = True
-
     # Calculate total paid fees
     total_paid_fees = sum(data['paid_count'] for data in property_summary.values())
 
@@ -431,14 +427,12 @@ async def download_fee_contribution_summary(
     contribution_data = []
     for prop, data in property_summary.items():
         contribution_percentage = (data['paid_count'] / total_paid_fees * 100) if total_paid_fees > 0 else 0
-        observation = "Tiene convenio" if data['has_agreement'] else ""
         contribution_data.append({
             'property': prop,
             'paid_count': data['paid_count'],
             'unpaid_count': data['unpaid_count'],
             'total_paid_amount': data['total_paid_amount'],
             'contribution_percentage': contribution_percentage,
-            'observation': observation
         })
 
     # Sort by property

@@ -200,31 +200,7 @@ export const feeSchedulesAPI = {
   deleteFeeSchedule: (id) => api.delete(`/fee-schedules/${id}`),
 };
 
-// Agreements API
-export const agreementsAPI = {
-  getAgreements: (filters = {}) => {
-    const params = {};
-    if (filters.property_id) params.property_id = filters.property_id;
-    if (filters.status) params.status = filters.status;
-    return api.get('/agreements/', { params });
-  },
-  getAgreement: (id) => api.get(`/agreements/${id}`),
-  createAgreement: (agreementData) => api.post('/agreements/', agreementData),
-  updateAgreement: (id, agreementData) => api.put(`/agreements/${id}`, agreementData),
-  deleteAgreement: (id) => api.delete(`/agreements/${id}`),
-  downloadAgreementPDF: (id) => api.get(`/agreements/${id}/download-pdf`, { responseType: 'blob' }),
-  createInstallmentPayment: (agreementId, installmentData) => api.post(`/agreements/${agreementId}/installments/`, installmentData),
-  updateInstallmentPayment: (agreementId, installmentId, installmentData) => api.put(`/agreements/${agreementId}/installments/${installmentId}`, installmentData),
-  getNextPendingInstallment: () => api.get('/agreements/installments/next-pending'),
-  payNextInstallment: (paymentData) => {
-    const config = paymentData instanceof FormData ? {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    } : {};
-    return api.post('/agreements/installments/pay-next', paymentData, config);
-  },
-};
 
-// Reports API
 export const reportsAPI = {
   getPropertyPaymentHistory: (propertyId, startDate = null, endDate = null, format = 'excel') => {
     const params = { format };

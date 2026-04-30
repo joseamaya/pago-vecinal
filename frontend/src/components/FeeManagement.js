@@ -241,8 +241,6 @@ const FeeManagement = () => {
         return 'error';
       case 'cancelled':
         return 'default';
-      case 'agreement':
-        return 'info';
       default:
         return 'default';
     }
@@ -260,8 +258,6 @@ const FeeManagement = () => {
         return 'Fallido';
       case 'cancelled':
         return 'Cancelado';
-      case 'agreement':
-        return 'Convenio';
       default:
         return status;
     }
@@ -476,7 +472,6 @@ const FeeManagement = () => {
                 <MenuItem value="completed">Completado</MenuItem>
                 <MenuItem value="failed">Fallido</MenuItem>
                 <MenuItem value="cancelled">Cancelado</MenuItem>
-                <MenuItem value="agreement">Convenio</MenuItem>
               </Select>
             </FormControl>
           </Grid>

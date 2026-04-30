@@ -5,7 +5,6 @@ from ..models.user import User, UserRole
 from ..models.property import Property
 from ..models.fee import Fee, FeeStatus
 from ..models.payment import Payment
-from ..models.agreement import Agreement
 from ..models.expense import Expense
 from ..routes.auth import get_current_user
 
@@ -19,14 +18,12 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
         properties = await Property.find_all().to_list()
         fees = await Fee.find_all().to_list()
         payments = await Payment.find_all().to_list()
-        agreements = await Agreement.find_all().to_list()
         expenses = await Expense.find_all().to_list()
 
         return {
             "properties": len(properties),
             "fees": len(fees),
             "payments": len(payments),
-            "agreements": len(agreements),
             "expenses": len(expenses),
         }
     else:
@@ -34,7 +31,6 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
         properties = await Property.find(Property.owner.id == current_user.id).to_list()
         fees = await Fee.find(Fee.user.id == current_user.id).to_list()
         payments = await Payment.find(Payment.user.id == current_user.id).to_list()
-        agreements = await Agreement.find(Agreement.user.id == current_user.id).to_list()
 
         # Calculate debt (pending fees)
         pending_fees = [fee for fee in fees if fee.status == FeeStatus.PENDING]
@@ -44,7 +40,6 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
             "properties": len(properties),
             "fees": len(fees),
             "payments": len(payments),
-            "agreements": len(agreements),
             "total_debt": total_debt,
             "pending_fees": len(pending_fees),
         }
@@ -117,9 +112,6 @@ async def get_owner_property_report(current_user: User = Depends(get_current_use
         fee_ids = [str(fee.id) for fee in fees]
         payments = await Payment.find(Payment.fee_id.in_(fee_ids)).to_list()
 
-        # Get agreements for this property
-        agreements = await Agreement.find(Agreement.property.id == prop.id).to_list()
-
         total_fees = sum(fee.amount for fee in fees)
         total_payments = sum(payment.amount for payment in payments)
         pending_fees = [fee for fee in fees if fee.status == FeeStatus.PENDING]
@@ -141,7 +133,6 @@ async def get_owner_property_report(current_user: User = Depends(get_current_use
                 "pending_amount": pending_amount,
                 "pending_fees": len(pending_fees),
             },
-            "agreements": len(agreements),
             "payments": len(payments),
         })
 
