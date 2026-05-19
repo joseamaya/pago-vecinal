@@ -11,38 +11,125 @@ export const useThemeContext = () => {
   return context;
 };
 
-// Light theme
+const sharedTypography = {
+  fontFamily: '"Outfit", sans-serif',
+  h1: { fontFamily: '"Fraunces", serif', fontWeight: 600 },
+  h2: { fontFamily: '"Fraunces", serif', fontWeight: 600 },
+  h3: { fontFamily: '"Fraunces", serif', fontWeight: 600 },
+  h4: { fontFamily: '"Fraunces", serif', fontWeight: 600 },
+  h5: { fontFamily: '"Fraunces", serif', fontWeight: 500 },
+  h6: { fontFamily: '"Fraunces", serif', fontWeight: 500 },
+  button: { textTransform: 'none', fontWeight: 500 },
+};
+
+const sharedComponents = {
+  MuiCard: {
+    styleOverrides: {
+      root: {
+        borderRadius: 12,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+      },
+    },
+  },
+  MuiButton: {
+    styleOverrides: {
+      root: { borderRadius: 8, padding: '8px 20px' },
+    },
+  },
+  MuiPaper: {
+    styleOverrides: {
+      root: { borderRadius: 12 },
+    },
+  },
+  MuiDialog: {
+    styleOverrides: {
+      paper: { borderRadius: 16 },
+    },
+  },
+};
+
+// Light theme — "Cálido Mediterráneo"
 const lightTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#1976d2',
+      main: '#C8684A',
+      light: '#E8997F',
+      dark: '#A34A30',
+      contrastText: '#FFFFFF',
     },
     secondary: {
-      main: '#dc004e',
+      main: '#E8D5B7',
+      dark: '#D4BFA0',
+      contrastText: '#3A2F2A',
+    },
+    error: {
+      main: '#C44545',
+    },
+    warning: {
+      main: '#D4A843',
+    },
+    info: {
+      main: '#5A8F9E',
+    },
+    success: {
+      main: '#7A8B5F',
     },
     background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
+      default: '#F9F6F0',
+      paper: '#FFFFFF',
     },
+    text: {
+      primary: '#2C2420',
+      secondary: '#6B5E56',
+    },
+    divider: '#E8E0D8',
   },
+  typography: sharedTypography,
+  shape: { borderRadius: 12 },
+  components: sharedComponents,
 });
 
-// Dark theme
+// Dark theme — warm charcoal
 const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#90caf9',
+      main: '#D98A70',
+      light: '#E8A890',
+      dark: '#C8684A',
+      contrastText: '#1A1410',
     },
     secondary: {
-      main: '#f48fb1',
+      main: '#C4B5A0',
+      dark: '#A89880',
+      contrastText: '#1A1410',
+    },
+    error: {
+      main: '#E06060',
+    },
+    warning: {
+      main: '#D4A843',
+    },
+    info: {
+      main: '#6DADBE',
+    },
+    success: {
+      main: '#8FA67A',
     },
     background: {
-      default: '#121212',
-      paper: '#1e1e1e',
+      default: '#1A1410',
+      paper: '#2C2420',
     },
+    text: {
+      primary: '#EDE6DE',
+      secondary: '#A89E94',
+    },
+    divider: '#3D342E',
   },
+  typography: sharedTypography,
+  shape: { borderRadius: 12 },
+  components: sharedComponents,
 });
 
 export const ThemeProvider = ({ children }) => {
