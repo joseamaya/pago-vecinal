@@ -12,7 +12,7 @@ class FeeSchedule(Document):
     effective_date: datetime
     end_date: Optional[datetime] = None
     is_active: bool = True
-    due_day: int = 1  # Day of month when fees are due (1-31)
+    due_day: int = 1
 
     class Settings:
         name = "fee_schedules"
@@ -41,7 +41,7 @@ class FeeScheduleResponse(BaseModel):
     is_active: bool
     due_day: int
 
-class   FeeStatus(str, Enum):
+class FeeStatus(str, Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -51,15 +51,15 @@ class   FeeStatus(str, Enum):
 class Fee(Document):
     property: Link[Property]
     fee_schedule: Link[FeeSchedule]
-    user: Optional[Link[User]] = None  # Who generated the fee
-    amount: float  # Derived from fee_schedule
-    paid_amount: float = 0.0  # Total amount already paid
+    user: Optional[Link[User]] = None
+    amount: float
+    paid_amount: float = 0.0
     generated_date: datetime
-    year: int  # Year when fee was generated
-    month: int  # Month when fee was generated
+    year: int
+    month: int
     due_date: datetime
     status: FeeStatus = FeeStatus.PENDING
-    reference: Optional[str] = None  # Fee reference number
+    reference: Optional[str] = None
     notes: Optional[str] = None
 
     class Settings:

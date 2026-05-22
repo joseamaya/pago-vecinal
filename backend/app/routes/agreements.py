@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import List, Optional
@@ -13,8 +14,10 @@ from ..models.fee import Fee, FeeStatus
 from ..models.property import Property
 from ..models.user import User, UserRole
 from ..models.treasurer import Treasurer
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 from ..utils.pdf_generator import generate_agreement_pdf
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -332,7 +335,7 @@ async def create_agreement(
         agreement.pdf_file = pdf_path
         await agreement.save()
     except Exception as e:
-        print(f"Error generating agreement PDF: {e}")
+        logger.error("Error generating agreement PDF: %s", e)
         # Don't fail the agreement creation if PDF generation fails
 
     # Fetch links for response
@@ -719,10 +722,9 @@ async def pay_next_installment(
 
     # Generate receipt for agreement installment payment
     try:
-        print(f"Creating receipt for agreement installment {installment_obj.id}")
+        logger.info("Creating receipt for agreement installment %s", installment_obj.id)
 
-        # Generate correlative number - agreement installments use CONV
-        from .receipts import generate_correlative_number
+        from ..services.receipt_service import generate_correlative_number
         current_year = datetime.utcnow().year
         correlative_number = await generate_correlative_number(current_year, "CONV")
 
@@ -767,12 +769,9 @@ async def pay_next_installment(
 
         await receipt.insert()
 
-        print(f"Receipt created in database with ID: {receipt.id}")
+        logger.info("Receipt created in database with ID: %s", receipt.id)
     except Exception as e:
-        # Log the error but don't fail the payment
-        print(f"Error creating receipt for agreement installment {installment_obj.id}: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error creating receipt for agreement installment %s", installment_obj.id)
 
     # Update fee statuses based on agreement payments
     if agreement:

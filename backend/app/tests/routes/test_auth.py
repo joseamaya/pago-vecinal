@@ -1,0 +1,80 @@
+import pytest
+from unittest.mock import patch, AsyncMock, MagicMock
+from httpx import AsyncClient, ASGITransport
+from app.main import app
+
+
+@pytest.fixture
+async def client():
+    with patch("app.main.init_db", new_callable=AsyncMock):
+        with patch("app.main.create_initial_admin", new_callable=AsyncMock):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                yield ac
+
+
+class TestLogin:
+    @pytest.mark.asyncio
+    async def test_login_valid_credentials(self, client):
+        with patch("app.routes.auth.authenticate_user", new_callable=AsyncMock) as mock_auth:
+            mock_user = MagicMock()
+            mock_user.email = "admin@test.com"
+            mock_auth.return_value = mock_user
+
+            response = await client.post("/auth/login", data={"username": "admin@test.com", "password": "test"})
+            assert response.status_code == 200
+            data = response.json()
+            assert "access_token" in data
+            assert data["token_type"] == "bearer"
+
+    @pytest.mark.asyncio
+    async def test_login_wrong_password(self, client):
+        with patch("app.routes.auth.authenticate_user", new_callable=AsyncMock, return_value=None):
+            response = await client.post("/auth/login", data={"username": "admin@test.com", "password": "wrong"})
+            assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_login_sends_form_data(self, client):
+        with patch("app.routes.auth.authenticate_user", new_callable=AsyncMock) as mock_auth:
+            mock_user = MagicMock()
+            mock_user.email = "admin@test.com"
+            mock_auth.return_value = mock_user
+
+            await client.post("/auth/login", data={"username": "admin@test.com", "password": "pass"})
+            mock_auth.assert_called_once_with("admin@test.com", "pass")
+
+
+class TestRegister:
+    @pytest.mark.asyncio
+    async def test_register_new_user(self, client):
+        with patch("app.routes.auth.User") as MockUser:
+            MockUser.find_one = AsyncMock(return_value=None)
+            new_user = MagicMock()
+            new_user.email = "new@test.com"
+            new_user.insert = AsyncMock()
+            MockUser.return_value = new_user
+
+            response = await client.post("/auth/register", json={
+                "email": "new@test.com",
+                "password": "StrongPass123!",
+                "role": "owner",
+                "full_name": "New Owner"
+            })
+            assert response.status_code == 200
+            assert "access_token" in response.json()
+
+    @pytest.mark.asyncio
+    async def test_register_existing_email(self, client):
+        with patch("app.routes.auth.User") as MockUser:
+            existing = MagicMock()
+            existing.email = "exists@test.com"
+            MockUser.find_one = AsyncMock(return_value=existing)
+
+            response = await client.post("/auth/register", json={
+                "email": "exists@test.com",
+                "password": "StrongPass123!",
+                "role": "owner",
+                "full_name": "Existing"
+            })
+            assert response.status_code == 400
+            assert "already registered" in response.json()["detail"].lower()

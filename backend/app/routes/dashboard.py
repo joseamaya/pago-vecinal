@@ -6,7 +6,7 @@ from ..models.property import Property
 from ..models.fee import Fee, FeeStatus
 from ..models.payment import Payment
 from ..models.expense import Expense
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 
 router = APIRouter()
 

@@ -57,16 +57,16 @@ class AgreementInstallmentResponse(BaseModel):
 
 class Agreement(Document):
     property: Link[Property]
-    fees: List[Link[Fee]]  # Fees covered by this agreement
-    user: Link[User]  # Who created the agreement
+    fees: List[Link[Fee]]
+    user: Link[User]
     total_debt: float
     monthly_amount: float
     installments_count: int
     start_date: datetime
     end_date: datetime
     status: AgreementStatus = AgreementStatus.ACTIVE
-    agreement_number: str  # Unique agreement reference
-    pdf_file: Optional[str] = None  # Path to generated PDF
+    agreement_number: str
+    pdf_file: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime = datetime.utcnow()
     updated_at: datetime = datetime.utcnow()
@@ -76,7 +76,7 @@ class Agreement(Document):
 
 class AgreementCreate(BaseModel):
     property_id: str
-    fee_ids: List[str]  # List of fee IDs to include in agreement
+    fee_ids: List[str]
     monthly_amount: float
     installments_count: int
     start_date: datetime

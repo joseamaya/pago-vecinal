@@ -13,7 +13,7 @@ from ..models.expense import (
 )
 from ..models.receipt import Receipt
 from ..models.user import User, UserRole
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 
 
 class BulkImportResponse(BaseModel):

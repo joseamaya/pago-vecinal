@@ -9,7 +9,7 @@ class Property(Document):
     villa: str
     owner_name: str
     owner_phone: Optional[str] = None
-    owner: Optional[Link[User]] = None  # Link to User if registered
+    owner: Optional[Link[User]] = None
 
     class Settings:
         name = "properties"

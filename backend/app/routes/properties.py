@@ -3,7 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from ..models.property import Property, PropertyCreate, PropertyUpdate, PropertyResponse
 from ..models.user import User, UserRole
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 import openpyxl
 
 class BulkImportResponse(BaseModel):

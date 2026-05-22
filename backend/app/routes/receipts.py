@@ -1,173 +1,27 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, RedirectResponse
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
-import os
-import requests
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
 from ..models.receipt import Receipt, ReceiptCreate, ReceiptUpdate, ReceiptResponse
 from ..models.payment import Payment
 from ..models.fee import Fee
 from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 from ..utils.pdf_generator import generate_receipt_pdf
 from ..config.database import database
+from ..services.receipt_service import generate_correlative_number, create_receipt_for_payment
+from ..services.cloudinary_service import upload_receipt_pdf
+
+logger = logging.getLogger(__name__)
 
 class PaginatedReceiptResponse(BaseModel):
     data: List[ReceiptResponse]
     pagination: dict
 
 router = APIRouter()
-
-async def generate_correlative_number(year: int, prefix: str = "REC") -> str:
-    """Generate a correlative receipt number with specified prefix"""
-
-    # Find the last receipt for this year and prefix
-    last_receipt = await Receipt.find(
-        {"correlative_number": {"$regex": f"^{prefix}-{year}"}}
-    ).sort([("correlative_number", -1)]).first_or_none()
-
-    if last_receipt:
-        # Extract the sequential number from the last receipt
-        parts = last_receipt.correlative_number.split("-")
-        if len(parts) == 3:
-            last_number = int(parts[2])
-            new_number = last_number + 1
-        else:
-            new_number = 1
-    else:
-        new_number = 1
-
-    # Format: PREFIX-YYYY-XXXXX (padded to 5 digits)
-    return f"{prefix}-{year}-{new_number:05d}"
-
-
-async def create_receipt_for_payment(payment: Payment, fee_period: Optional[str] = None, notes: Optional[str] = None) -> Receipt:
-    """
-    Centralized function to create a receipt for a payment.
-
-    Receipt Creation Flow:
-    1. Generate correlative number (CUOT-YYYY-XXXXX format)
-    2. Create snapshots of property, owner, and treasurer details
-    3. Create receipt record in database
-    4. Generate PDF with receipt data
-    5. Upload PDF to Cloudinary and store URL
-
-    Args:
-        payment: The approved payment to create receipt for
-        fee_period: Optional custom fee period (defaults to payment.fee.month/payment.fee.year)
-        notes: Optional custom notes (defaults to payment.notes)
-
-    Returns:
-        Receipt: The created receipt with generated PDF URL
-
-    Raises:
-        Exception: If PDF generation or upload fails
-    """
-    # Fetch linked documents
-    await payment.fetch_link(Payment.fee)
-    await payment.fetch_link(Payment.user)
-
-    # Generate correlative number - fee payments use CUOT
-    correlative_number = await generate_correlative_number(payment.payment_date.year, "CUOT")
-
-    # Create property and owner details snapshot
-    if payment.fee and payment.fee.property:
-        await payment.fee.fetch_link('property')
-        property_details = {
-            "villa": payment.fee.property.villa,
-            "row_letter": payment.fee.property.row_letter,
-            "number": payment.fee.property.number,
-            "owner_name": payment.fee.property.owner_name,
-            "owner_phone": payment.fee.property.owner_phone
-        }
-        owner_details = {
-            "name": payment.fee.property.owner_name,
-            "phone": payment.fee.property.owner_phone
-        }
-    else:
-        # Default details for payments without property
-        property_details = {
-            "villa": "N/A",
-            "row_letter": "N/A",
-            "number": 0,
-            "owner_name": "Propietario no registrado",
-            "owner_phone": "N/A"
-        }
-        owner_details = {
-            "name": "Propietario no registrado",
-            "phone": "N/A"
-        }
-
-    # Get treasurer data based on villa
-    villa = property_details.get('villa')
-    treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa and villa != "N/A" else None
-    treasurer_details = {
-        "name": treasurer.name if treasurer else "Tesorero no configurado",
-        "signature": treasurer.signature if treasurer else None,
-        "villa": treasurer.villa if treasurer else None
-    }
-
-    # Create receipt
-    receipt = Receipt(
-        correlative_number=correlative_number,
-        payment=payment,
-        issue_date=datetime.utcnow(),
-        total_amount=payment.amount,
-        property_details=property_details,
-        owner_details=owner_details,
-        fee_period=fee_period or f"{payment.fee.month}/{payment.fee.year}" if payment.fee else None,
-        notes=notes or payment.notes,
-        treasurer_details=treasurer_details
-    )
-
-    await receipt.insert()
-
-    # Generate PDF and upload to Cloudinary
-    pdf_data = {
-        "correlative_number": receipt.correlative_number,
-        "issue_date": receipt.issue_date,
-        "payment_date": receipt.payment.payment_date,
-        "total_amount": receipt.total_amount,
-        "property_details": receipt.property_details,
-        "reference": receipt.payment.fee_id,
-        "fee_period": receipt.fee_period,
-        "notes": receipt.notes,
-        "treasurer_details": treasurer_details
-    }
-
-    pdf_buffer = generate_receipt_pdf(pdf_data)
-
-    # Upload PDF to Cloudinary
-    cloudinary.config(
-        cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-        api_key=os.getenv('CLOUDINARY_API_KEY'),
-        api_secret=os.getenv('CLOUDINARY_API_SECRET')
-    )
-
-    # Generate filename
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
-
-    # Upload to Cloudinary
-    upload_result = cloudinary.uploader.upload(
-        pdf_buffer.getvalue(),
-        public_id=pdf_filename,
-        resource_type="raw",
-        folder="receipts"
-    )
-
-    cloudinary_url = upload_result['secure_url']
-
-    # Update receipt with Cloudinary URL
-    receipt.generated_receipt_file = cloudinary_url
-    await receipt.save()
-
-    return receipt
 
 @router.get("/", response_model=PaginatedReceiptResponse)
 async def get_receipts(
@@ -374,28 +228,8 @@ async def update_receipt(
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
-    # Upload new PDF to Cloudinary
-    cloudinary.config(
-        cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-        api_key=os.getenv('CLOUDINARY_API_KEY'),
-        api_secret=os.getenv('CLOUDINARY_API_SECRET')
-    )
+    cloudinary_url = upload_receipt_pdf(pdf_buffer, receipt.correlative_number)
 
-    # Generate filename
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
-
-    # Upload to Cloudinary
-    upload_result = cloudinary.uploader.upload(
-        pdf_buffer.getvalue(),
-        public_id=pdf_filename,
-        resource_type="raw",
-        folder="receipts"
-    )
-
-    cloudinary_url = upload_result['secure_url']
-
-    # Update receipt with new Cloudinary URL
     receipt.generated_receipt_file = cloudinary_url
     await receipt.save()
 
@@ -522,28 +356,8 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
-    # Upload new PDF to Cloudinary
-    cloudinary.config(
-        cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-        api_key=os.getenv('CLOUDINARY_API_KEY'),
-        api_secret=os.getenv('CLOUDINARY_API_SECRET')
-    )
+    cloudinary_url = upload_receipt_pdf(pdf_buffer, receipt.correlative_number)
 
-    # Generate filename
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
-
-    # Upload to Cloudinary
-    upload_result = cloudinary.uploader.upload(
-        pdf_buffer.getvalue(),
-        public_id=pdf_filename,
-        resource_type="raw",
-        folder="receipts"
-    )
-
-    cloudinary_url = upload_result['secure_url']
-
-    # Update receipt with new Cloudinary URL
     receipt.generated_receipt_file = cloudinary_url
     await receipt.save()
 
@@ -607,29 +421,7 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
             }
 
             pdf_buffer = generate_receipt_pdf(pdf_data)
-
-            # Upload new PDF to Cloudinary
-            cloudinary.config(
-                cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-                api_key=os.getenv('CLOUDINARY_API_KEY'),
-                api_secret=os.getenv('CLOUDINARY_API_SECRET')
-            )
-
-            # Generate filename
-            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
-
-            # Upload to Cloudinary
-            upload_result = cloudinary.uploader.upload(
-                pdf_buffer.getvalue(),
-                public_id=pdf_filename,
-                resource_type="raw",
-                folder="receipts"
-            )
-
-            cloudinary_url = upload_result['secure_url']
-
-            # Update receipt with new Cloudinary URL
+            cloudinary_url = upload_receipt_pdf(pdf_buffer, receipt.correlative_number)
             receipt.generated_receipt_file = cloudinary_url
             await receipt.save()
 
@@ -667,15 +459,13 @@ async def delete_receipt(receipt_id: str, current_user: User = Depends(get_curre
     # Delete the Cloudinary file if it exists
     if receipt.generated_receipt_file:
         try:
-            # Extract public_id from Cloudinary URL
-            # Cloudinary URLs typically look like: https://res.cloudinary.com/{cloud_name}/raw/upload/v{timestamp}/{folder}/{filename}
             url_parts = receipt.generated_receipt_file.split('/')
             if len(url_parts) >= 8:
-                public_id = '/'.join(url_parts[-2:])  # folder/filename
-                cloudinary.uploader.destroy(public_id, resource_type="raw")
+                public_id = '/'.join(url_parts[-2:])
+                from ..services.cloudinary_service import delete_cloudinary_file
+                delete_cloudinary_file(public_id)
         except Exception as e:
-            # Log error but continue with deletion
-            print(f"Error deleting Cloudinary file: {e}")
+            logger.error("Error deleting Cloudinary file: %s", e)
 
     await receipt.delete()
     return {"message": "Receipt deleted successfully"}

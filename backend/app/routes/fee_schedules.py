@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from ..models.fee import FeeSchedule, FeeScheduleCreate, FeeScheduleUpdate, FeeScheduleResponse
 from ..models.user import User, UserRole
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 
 router = APIRouter()
 

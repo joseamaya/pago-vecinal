@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
@@ -14,36 +15,13 @@ from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..models.receipt import Receipt, ReceiptResponse
 from ..models.property import Property
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
 from ..utils.pdf_generator import generate_receipt_pdf
+from ..services.payment_service import update_fee_status_based_on_payments, create_receipt_on_approval
+from ..schemas.common import BulkApproveRequest
 
-
-async def update_fee_status_based_on_payments(fee: Fee):
-    """Update fee status and paid_amount based on total approved payments"""
-    # Get all approved payments for this fee
-    approved_payments = await Payment.find(
-        Payment.fee_id == str(fee.id),
-        Payment.status == PaymentStatus.APPROVED
-    ).to_list()
-
-    # Calculate total approved payment amount
-    total_paid = sum(payment.amount for payment in approved_payments)
-
-    # Update paid_amount and status
-    fee.paid_amount = total_paid
-    if total_paid >= fee.amount:
-        fee.status = FeeStatus.COMPLETED
-    elif total_paid > 0:
-        fee.status = FeeStatus.PARTIALLY_PAID
-    else:
-        fee.status = FeeStatus.PENDING
-
-    await fee.save()
-
-class BulkApproveRequest(BaseModel):
-    payment_ids: List[str]
-
+logger = logging.getLogger(__name__)
 class PaginatedPaymentResponse(BaseModel):
     data: List[PaymentResponse]
     pagination: dict
@@ -302,15 +280,10 @@ async def create_payment(
     # Create receipt automatically if status changed to approved
     if status == "approved":
         try:
-            print(f"Creating receipt for payment {payment.id}")
-            from ..routes.receipts import create_receipt_for_payment
-            await create_receipt_for_payment(payment)
-            print(f"Receipt created successfully for payment {payment.id}")
+            logger.info("Creating receipt for payment %s", payment.id)
+            await create_receipt_on_approval(payment)
         except Exception as e:
-            # Log the error but don't fail the payment update
-            print(f"Error creating receipt for payment {payment.id}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error creating receipt for payment %s", payment.id)
 
     # Update fee status based on total payments if payment was approved
     if status == "approved" and payment.fee:
@@ -389,15 +362,10 @@ async def update_payment(
     # Create receipt automatically if status changed to approved
     if status == "approved":
         try:
-            print(f"Creating receipt for payment {payment_id}")
-            from ..routes.receipts import create_receipt_for_payment
-            await create_receipt_for_payment(payment)
-            print(f"Receipt created successfully for payment {payment_id}")
+            logger.info("Creating receipt for payment %s", payment_id)
+            await create_receipt_on_approval(payment)
         except Exception as e:
-            # Log the error but don't fail the payment update
-            print(f"Error creating receipt for payment {payment_id}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error creating receipt for payment %s", payment_id)
 
     # Update fee status based on total payments if payment was approved
     if status == "approved" and payment.fee:
@@ -459,7 +427,7 @@ async def delete_payment(payment_id: str, current_user: User = Depends(get_curre
                 os.remove(receipt.generated_receipt_file)
             except OSError as e:
                 # Log error, but continue with deletion
-                print(f"Error deleting receipt file: {e}")
+                logger.error("Error deleting receipt file: %s", e)
 
         await receipt.delete()
 
@@ -625,14 +593,14 @@ async def bulk_import_payments(
                     year = int(year)
                     month = int(month)
                     amount = float(amount)
-                    print(payment_date_cell)
+                    logger.debug("Payment date cell: %s", payment_date_cell)
 
                     if isinstance(payment_date_cell, datetime):
                         payment_date = payment_date_cell
                     else:
                         payment_date = datetime.strptime(str(payment_date_cell), '%Y-%m-%d')
 
-                    print(f"Parsed payment_date: {payment_date}")
+                    logger.debug("Parsed payment_date: %s", payment_date)
 
                 except (ValueError, TypeError) as e:
                     results["errors"].append({
@@ -725,15 +693,10 @@ async def bulk_import_payments(
 
                 # Create receipt automatically
                 try:
-                    print(f"Creating receipt for bulk import payment {payment.id}")
-                    from ..routes.receipts import create_receipt_for_payment
-                    await create_receipt_for_payment(payment)
-                    print(f"Receipt created successfully for bulk import payment {payment.id}")
+                    logger.info("Creating receipt for bulk import payment %s", payment.id)
+                    await create_receipt_on_approval(payment)
                 except Exception as e:
-                    # Log the error but don't fail the bulk import
-                    print(f"Error creating receipt for bulk import payment {payment.id}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    logger.exception("Error creating receipt for bulk import payment %s", payment.id)
 
                 # Update fee status based on total payments
                 await update_fee_status_based_on_payments(fee)
@@ -805,15 +768,10 @@ async def bulk_approve_payments(
 
             # Create receipt automatically
             try:
-                print(f"Creating receipt for payment {payment_id}")
-                from ..routes.receipts import create_receipt_for_payment
-                await create_receipt_for_payment(payment)
-                print(f"Receipt created successfully for payment {payment_id}")
+                logger.info("Creating receipt for payment %s", payment_id)
+                await create_receipt_on_approval(payment)
             except Exception as e:
-                # Log the error but don't fail the bulk operation
-                print(f"Error creating receipt for payment {payment_id}: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error creating receipt for payment %s", payment_id)
 
             # Update fee status based on total payments
             if payment.fee:

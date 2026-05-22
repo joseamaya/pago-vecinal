@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
@@ -13,11 +14,13 @@ from ..models.receipt import Receipt
 from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..models.property import Property
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 from ..utils.pdf_generator import generate_receipt_pdf
+from ..services.receipt_service import generate_correlative_number, create_receipt_for_payment
+from ..services.cloudinary_service import upload_receipt_pdf
+from ..schemas.common import BulkApproveRequest
 
-class BulkApproveRequest(BaseModel):
-    payment_ids: List[str]
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -254,10 +257,9 @@ async def update_miscellaneous_payment(
     # Create receipt in database if status changed to approved
     if status == "approved":
         try:
-            print(f"Creating receipt for miscellaneous payment {payment_id}")
+            logger.info("Creating receipt for miscellaneous payment %s", payment_id)
 
             # Generate correlative number - miscellaneous payments use OTR
-            from .receipts import generate_correlative_number
             current_year = datetime.utcnow().year
             correlative_number = await generate_correlative_number(current_year, "OTR")
 
@@ -298,7 +300,7 @@ async def update_miscellaneous_payment(
 
             await receipt.insert()
 
-            print(f"Receipt created in database with ID: {receipt.id}")
+            logger.info("Receipt created in database with ID: %s", receipt.id)
 
             # Generate PDF and upload to Cloudinary
             pdf_data = {
@@ -314,41 +316,17 @@ async def update_miscellaneous_payment(
             }
 
             pdf_buffer = generate_receipt_pdf(pdf_data)
+            cloudinary_url = upload_receipt_pdf(pdf_buffer, receipt.correlative_number)
 
-            # Upload PDF to Cloudinary
-            cloudinary.config(
-                cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-                api_key=os.getenv('CLOUDINARY_API_KEY'),
-                api_secret=os.getenv('CLOUDINARY_API_SECRET')
-            )
-
-            # Generate filename
-            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
-
-            # Upload to Cloudinary
-            upload_result = cloudinary.uploader.upload(
-                pdf_buffer.getvalue(),
-                public_id=pdf_filename,
-                resource_type="raw",
-                folder="receipts"
-            )
-
-            cloudinary_url = upload_result['secure_url']
-
-            # Update receipt with Cloudinary URL
             receipt.generated_receipt_file = cloudinary_url
             await receipt.save()
 
-            # Update payment with receipt file URL
             payment.generated_receipt_file = cloudinary_url
             await payment.save()
 
-            print(f"Receipt PDF generated and uploaded for miscellaneous payment {payment_id}")
+            logger.info("Receipt PDF generated and uploaded for miscellaneous payment %s", payment_id)
         except Exception as e:
-            # Log the error but don't fail the payment update
-            print(f"Error creating receipt for miscellaneous payment {payment_id}: {e}")
-            import traceback
+            logger.exception("Error creating receipt for miscellaneous payment %s", payment_id)
             traceback.print_exc()
 
     await payment.save()
@@ -376,7 +354,7 @@ async def update_miscellaneous_payment(
         notes=payment.notes,
         created_at=payment.id.generation_time if hasattr(payment.id, 'generation_time') else datetime.utcnow()
     )
-    print(f"Returning response with generated_receipt_file: {response_data.generated_receipt_file}")
+    logger.info("Returning response with generated_receipt_file: %s", response_data.generated_receipt_file)
     return response_data
 
 @router.delete("/{payment_id}")
@@ -430,10 +408,9 @@ async def download_miscellaneous_receipt(payment_id: str, current_user: User = D
     receipt = await Receipt.find_one(Receipt.miscellaneous_payment.id == payment.id)
     if not receipt:
         # Create receipt on the fly for payments approved before the fix
-        print(f"Creating receipt on the fly for miscellaneous payment {payment_id}")
+        logger.info("Creating receipt on the fly for miscellaneous payment %s", payment_id)
 
         # Generate correlative number - miscellaneous payments use OTR
-        from .receipts import generate_correlative_number
         current_year = datetime.utcnow().year
         correlative_number = await generate_correlative_number(current_year, "OTR")
 
@@ -473,7 +450,7 @@ async def download_miscellaneous_receipt(payment_id: str, current_user: User = D
         )
 
         await receipt.insert()
-        print(f"Receipt created on the fly with ID: {receipt.id}")
+        logger.info("Receipt created on the fly with ID: %s", receipt.id)
 
     # Fetch property and treasurer details
     property_details = payment.property_details or {
@@ -561,10 +538,9 @@ async def bulk_approve_miscellaneous_payments(
 
             # Generate receipt (similar to individual approval)
             try:
-                print(f"Creating receipt for miscellaneous payment {payment_id}")
+                logger.info("Creating receipt for miscellaneous payment %s", payment_id)
 
                 # Generate correlative number - miscellaneous payments use OTR
-                from .receipts import generate_correlative_number
                 current_year = datetime.utcnow().year
                 correlative_number = await generate_correlative_number(current_year, "OTR")
 
@@ -605,7 +581,7 @@ async def bulk_approve_miscellaneous_payments(
 
                 await receipt.insert()
 
-                print(f"Receipt created in database with ID: {receipt.id}")
+                logger.info("Receipt created in database with ID: %s", receipt.id)
 
                 # Generate PDF and upload to Cloudinary
                 pdf_data = {
@@ -651,12 +627,10 @@ async def bulk_approve_miscellaneous_payments(
                 payment.generated_receipt_file = cloudinary_url
                 await payment.save()
 
-                print(f"Receipt PDF generated and uploaded for miscellaneous payment {payment_id}")
+                logger.info("Receipt PDF generated and uploaded for miscellaneous payment %s", payment_id)
             except Exception as e:
                 # Log the error but don't fail the bulk operation
-                print(f"Error creating receipt for miscellaneous payment {payment_id}: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error creating receipt for miscellaneous payment %s", payment_id)
 
             approved_count += 1
 

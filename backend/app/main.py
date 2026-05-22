@@ -1,9 +1,14 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .config.database import init_db
+from .config.logging import setup_logging
 from .utils.init_admin import create_initial_admin
 from .routes import users, properties, fees, payments, auth, receipts, fee_schedules, reports, miscellaneous_payments, expenses, dashboard, treasurers
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Pago Vecinal API",
@@ -11,7 +16,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,10 +24,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Include routers
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(properties.router, prefix="/properties", tags=["Properties"])
@@ -40,8 +42,10 @@ app.include_router(treasurers.router, prefix="/treasurers", tags=["Treasurers"])
 
 @app.on_event("startup")
 async def startup_event():
+    logger.info("Starting Pago Vecinal API...")
     await init_db()
     await create_initial_admin()
+    logger.info("Pago Vecinal API startup complete")
 
 @app.get("/")
 async def root():
@@ -49,16 +53,15 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Railway"""
+    from datetime import datetime
     try:
-        # Test database connection
         from .config.database import client
         await client.admin.command('ping')
         return {
             "status": "healthy",
             "service": "Pago Vecinal API",
             "database": "connected",
-            "timestamp": "2025-01-19T02:46:25.944Z"
+            "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
         return {
@@ -66,11 +69,10 @@ async def health_check():
             "service": "Pago Vecinal API",
             "database": "disconnected",
             "error": str(e),
-            "timestamp": "2025-01-19T02:46:25.944Z"
+            "timestamp": datetime.utcnow().isoformat()
         }
 
 @app.get("/docs")
 async def api_docs():
-    """Redirect to API documentation"""
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")

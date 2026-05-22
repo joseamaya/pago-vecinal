@@ -16,8 +16,8 @@ class PaymentStatus(str, Enum):
 
 class Payment(Document):
     fee: Link[Fee]
-    fee_id: str  # Store the fee id for easy access
-    user: Link[User]  # Who made the payment
+    fee_id: str
+    user: Link[User]
     amount: float
     payment_date: datetime
     status: PaymentStatus = PaymentStatus.PENDING

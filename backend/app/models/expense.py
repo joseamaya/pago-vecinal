@@ -4,11 +4,11 @@ from datetime import datetime
 from typing import Optional
 
 class Expense(Document):
-    expense_date: datetime  # Date of the expense
-    description: str  # Concept/description of the expense
+    expense_date: datetime
+    description: str
     amount: float
-    year: Optional[int] = None  # Year of the expense (optional, calculated from expense_date if not provided)
-    month: Optional[int] = None  # Month of the expense (optional, calculated from expense_date if not provided)
+    year: Optional[int] = None
+    month: Optional[int] = None
 
     class Settings:
         name = "expenses"

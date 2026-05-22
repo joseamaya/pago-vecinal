@@ -1,10 +1,13 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List
 import os
 import shutil
 from ..models.treasurer import Treasurer, TreasurerCreate, TreasurerUpdate, TreasurerResponse
+
+logger = logging.getLogger(__name__)
 from ..models.user import User, UserRole
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 
 router = APIRouter()
 
@@ -141,7 +144,7 @@ async def delete_treasurer(
         try:
             os.remove(treasurer.signature)
         except Exception as e:
-            print(f"Error deleting signature file {treasurer.signature}: {e}")
+            logger.error("Error deleting signature file %s: %s", treasurer.signature, e)
 
     await treasurer.delete()
     return {"message": f"Treasurer for villa {villa} deleted successfully"}

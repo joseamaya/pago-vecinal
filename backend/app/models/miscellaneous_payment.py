@@ -22,18 +22,18 @@ class MiscellaneousPaymentStatus(str, Enum):
     CANCELLED = "cancelled"
 
 class MiscellaneousPayment(Document):
-    property: Optional[Link[Property]] = None  # Optional link to property
-    user: Link[User]  # Who created the payment
+    property: Optional[Link[Property]] = None
+    user: Link[User]
     payment_type: MiscellaneousPaymentType
     amount: float
     payment_date: datetime
-    receipt_file: Optional[str] = None  # Path to uploaded receipt image
-    generated_receipt_file: Optional[str] = None  # Path to auto-generated PDF receipt
+    receipt_file: Optional[str] = None
+    generated_receipt_file: Optional[str] = None
     status: MiscellaneousPaymentStatus = MiscellaneousPaymentStatus.PENDING
-    description: str  # Description of what the payment is for
+    description: str
     notes: Optional[str] = None
-    property_details: Optional[dict] = None  # Snapshot of property details for receipt
-    owner_details: Optional[dict] = None  # Snapshot of owner details for receipt
+    property_details: Optional[dict] = None
+    owner_details: Optional[dict] = None
 
     class Settings:
         name = "miscellaneous_payments"

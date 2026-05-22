@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from ..models.fee import Fee, FeeCreate, FeeUpdate, FeeResponse, FeeStatus, FeeSchedule
 from ..models.property import Property
 from ..models.user import User, UserRole
-from ..routes.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
 
 class GenerateFeesRequest(BaseModel):

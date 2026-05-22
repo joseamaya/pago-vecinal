@@ -7,18 +7,18 @@ from .miscellaneous_payment import MiscellaneousPayment
 from .expense import Expense
 
 class Receipt(Document):
-    correlative_number: str  # Format: REC-YYYY-XXXXX
+    correlative_number: str
     payment: Optional[Link[Payment]] = None
     miscellaneous_payment: Optional[Link[MiscellaneousPayment]] = None
     expense: Optional[Link[Expense]] = None
     issue_date: datetime
     total_amount: float
-    property_details: Optional[dict] = None  # Store property info at time of receipt generation (None for admin expenses)
-    owner_details: Optional[dict] = None     # Store owner info at time of receipt generation (None for admin expenses)
-    fee_period: Optional[str] = None  # e.g., "Enero 2024" or "Pago varios: description" or "Gasto administrativo: description"
+    property_details: Optional[dict] = None
+    owner_details: Optional[dict] = None
+    fee_period: Optional[str] = None
     notes: Optional[str] = None
-    treasurer_details: Optional[dict] = None  # Store treasurer info at time of receipt generation
-    generated_receipt_file: Optional[str] = None  # Cloudinary URL to auto-generated PDF receipt
+    treasurer_details: Optional[dict] = None
+    generated_receipt_file: Optional[str] = None
 
     class Settings:
         name = "receipts"
