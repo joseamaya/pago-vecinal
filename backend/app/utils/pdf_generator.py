@@ -232,7 +232,6 @@ def generate_property_payment_history_pdf(property_data, payments_data, fees_dat
     content = []
 
     # Header
-    content.append(Paragraph("PAGO VECINAL", title_style))
     content.append(Paragraph("Historial de Pagos por Propiedad", subtitle_style))
     content.append(Spacer(1, 20))
 
@@ -635,7 +634,6 @@ def generate_outstanding_fees_pdf(fees_data):
     content = []
 
     # Header
-    content.append(Paragraph("PAGO VECINAL", title_style))
     content.append(Paragraph("Cuotas Pendientes - Reporte General", subtitle_style))
     content.append(Spacer(1, 20))
 
@@ -713,7 +711,6 @@ def generate_monthly_payment_summary_pdf(year, month, payments_data):
     content = []
 
     # Header
-    content.append(Paragraph("PAGO VECINAL", title_style))
     content.append(Paragraph(f"Resumen de Pagos - {month:02d}/{year}", subtitle_style))
     content.append(Spacer(1, 20))
 
@@ -796,7 +793,6 @@ def generate_annual_property_statement_pdf(property_data, year, fees_data, payme
     content = []
 
     # Header
-    content.append(Paragraph("PAGO VECINAL", title_style))
     content.append(Paragraph(f"Estado Anual {year} - Propiedad", subtitle_style))
     content.append(Spacer(1, 20))
 

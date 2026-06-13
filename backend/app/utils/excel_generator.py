@@ -14,7 +14,7 @@ def generate_property_payment_history_excel(property_data, payments_data, fees_d
     ws.title = "Historial de Pagos"
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Historial de Pagos por Propiedad"
+    ws['A1'] = "Historial de Pagos por Propiedad"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:G1')
 
@@ -125,7 +125,7 @@ def generate_outstanding_fees_excel(fees_data):
     ws.title = "Cuotas Pendientes"
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Cuotas Pendientes - Reporte General"
+    ws['A1'] = "Cuotas Pendientes - Reporte General"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:F1')
 
@@ -198,7 +198,7 @@ def generate_monthly_payment_summary_excel(start_date, end_date, payments_data):
         ws.title = "Resumen Pagos"
 
     # Title
-    ws['A1'] = f"PAGO VECINAL - Resumen de Pagos - {title_date}"
+    ws['A1'] = f"Resumen de Pagos - {title_date}"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:G1')
 
@@ -262,7 +262,7 @@ def generate_expenses_excel(expenses_data):
     ws.title = "Gastos Administrativos"
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Reporte de Gastos Administrativos"
+    ws['A1'] = "Reporte de Gastos Administrativos"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:I1')
 
@@ -329,7 +329,7 @@ def generate_all_payments_excel(payments_data):
     ws.title = "Todos los Pagos"
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Reporte General de Pagos"
+    ws['A1'] = "Reporte General de Pagos"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:I1')
 
@@ -414,7 +414,7 @@ def generate_all_properties_payment_history_excel(all_payments_data, all_pending
     ws = wb.active
     ws.title = "Historial de Pagos"
 
-    ws['A1'] = "PAGO VECINAL - Historial de Pagos (Todas las Propiedades)"
+    ws['A1'] = "Historial de Pagos (Todas las Propiedades)"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:H1')
 
@@ -510,7 +510,7 @@ def generate_all_properties_annual_statement_excel(year, all_properties_data):
     ws = wb.active
     ws.title = f"Resumen Anual {year}"
 
-    ws['A1'] = "PAGO VECINAL - Estado Anual Consolidado"
+    ws['A1'] = "Estado Anual Consolidado"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:G1')
 
@@ -579,7 +579,7 @@ def generate_monthly_fees_excel(fees_data, start_year, start_month, end_year, en
     ws.title = "Cuotas Mensuales"
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Reporte de Cuotas Mensuales"
+    ws['A1'] = "Reporte de Cuotas Mensuales"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:F1')
 
@@ -673,7 +673,7 @@ def generate_filtered_fees_excel(fees_data):
     ws.title = "Cuotas Filtradas"
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Reporte de Cuotas Filtradas"
+    ws['A1'] = "Reporte de Cuotas Filtradas"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:J1')
 
@@ -764,7 +764,7 @@ def generate_detailed_expenses_excel(start_year, start_month, end_year, end_mont
                    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Reporte Detallado de Gastos por Mes"
+    ws['A1'] = "Reporte Detallado de Gastos por Mes"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:D1')
 
@@ -883,7 +883,7 @@ def generate_expenses_by_period_range_excel(start_year, start_month, end_year, e
     end_month_name = month_names[end_month]
 
     # Title
-    ws['A1'] = f"PAGO VECINAL - Reporte de Gastos Administrativos - {start_month_name} {start_year} a {end_month_name} {end_year}"
+    ws['A1'] = f"Reporte de Gastos Administrativos - {start_month_name} {start_year} a {end_month_name} {end_year}"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:E1')
 
@@ -1071,7 +1071,7 @@ def generate_payments_summary_excel(start_date, end_date, payments_data):
         ws.title = "Resumen Pagos"
 
     # Title
-    ws['A1'] = f"PAGO VECINAL - Resumen de Pagos - {title_date}"
+    ws['A1'] = f"Resumen de Pagos - {title_date}"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:E1')
 
@@ -1134,7 +1134,7 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
 
     # Title
     period_text = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
-    ws['A1'] = f"PAGO VECINAL - Matriz de Pagos de Cuotas - {period_text}"
+    ws['A1'] = f"Matriz de Pagos de Cuotas - {period_text}"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:Z1')  # Wide merge for title
 
@@ -1253,7 +1253,7 @@ def generate_fee_contribution_summary_excel(start_year, start_month, end_year, e
 
     # Title
     period_text = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
-    ws['A1'] = f"PAGO VECINAL - Resumen de Contribución de Cuotas - {period_text}"
+    ws['A1'] = f"Resumen de Contribución de Cuotas - {period_text}"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:E1')
 
@@ -1321,7 +1321,7 @@ def generate_paid_fees_summary_excel(start_year, start_month, end_year, end_mont
 
     # Title
     period_text = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
-    ws['A1'] = f"PAGO VECINAL - Resumen de Cuotas Pagadas - {period_text}"
+    ws['A1'] = f"Resumen de Cuotas Pagadas - {period_text}"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:E1')
 
@@ -1397,7 +1397,7 @@ def generate_annual_property_statement_excel(property_data, year, fees_data, pay
     ws.title = f"Estado Anual {year}"
 
     # Title
-    ws['A1'] = "PAGO VECINAL - Estado Anual por Propiedad"
+    ws['A1'] = "Estado Anual por Propiedad"
     ws['A1'].font = Font(size=16, bold=True)
     ws.merge_cells('A1:G1')
 
