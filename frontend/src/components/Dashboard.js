@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI } from '../services/api';
 import LoadingSpinner from './common/LoadingSpinner';
+import StatCard from './common/StatCard';
 
 const Dashboard = () => {
   const { user, isAdmin, isOwner } = useAuth();
@@ -91,28 +92,6 @@ const Dashboard = () => {
       setOwnerDataLoading(false);
     }
   };
-
-  const StatCard = ({ title, value, icon, color, onClick }) => (
-    <Card sx={{ height: '100%', cursor: onClick ? 'pointer' : 'default' }} onClick={onClick}>
-      <CardContent>
-        <Box display="flex" alignItems="center" mb={2}>
-          {icon}
-          <Typography variant="h6" component="div" sx={{ ml: 1 }}>
-            {title}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 36 }}>
-          {loading ? (
-            <LoadingSpinner size={24} showMessage={false} />
-          ) : (
-            <Typography variant="h4" component="div" color={color}>
-              {value}
-            </Typography>
-          )}
-        </Box>
-      </CardContent>
-    </Card>
-  );
 
   return (
     <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>

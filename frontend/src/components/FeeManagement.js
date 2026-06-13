@@ -42,6 +42,8 @@ import { feesAPI, propertiesAPI, feeSchedulesAPI, reportsAPI } from '../services
 import LoadingSkeleton from './common/LoadingSkeleton';
 import LoadingSpinner from './common/LoadingSpinner';
 import PaymentsModal from './PaymentsModal';
+import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
+import { MONTHS } from '../utils/months';
 
 const FeeManagement = () => {
   const { isAdmin } = useAuth();
@@ -229,61 +231,12 @@ const FeeManagement = () => {
     });
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'partially_paid':
-        return 'info';
-      case 'failed':
-        return 'error';
-      case 'cancelled':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'completed':
-        return 'Completado';
-      case 'pending':
-        return 'Pendiente';
-      case 'partially_paid':
-        return 'Pago Parcial';
-      case 'failed':
-        return 'Fallido';
-      case 'cancelled':
-        return 'Cancelado';
-      default:
-        return status;
-    }
-  };
-
   const getPropertyInfo = (propertyId) => {
     const property = properties.find(p => p.id === propertyId);
     return property ? `${property.villa} ${property.row_letter}${property.number}` : 'N/A';
   };
 
-  const monthsOptions = [
-    { value: 1, label: 'Enero' },
-    { value: 2, label: 'Febrero' },
-    { value: 3, label: 'Marzo' },
-    { value: 4, label: 'Abril' },
-    { value: 5, label: 'Mayo' },
-    { value: 6, label: 'Junio' },
-    { value: 7, label: 'Julio' },
-    { value: 8, label: 'Agosto' },
-    { value: 9, label: 'Septiembre' },
-    { value: 10, label: 'Octubre' },
-    { value: 11, label: 'Noviembre' },
-    { value: 12, label: 'Diciembre' },
-  ];
-
-  const handleMonthsChange = (event) => {
+const handleMonthsChange = (event) => {
     const { value } = event.target;
     setGenerateFormData({
       ...generateFormData,
@@ -448,7 +401,7 @@ const FeeManagement = () => {
                 <MenuItem value="">
                   <em>Todos</em>
                 </MenuItem>
-                {monthsOptions.map((month) => (
+                {MONTHS.map((month) => (
                   <MenuItem key={month.value} value={month.value}>
                     {month.label}
                   </MenuItem>
@@ -708,9 +661,9 @@ const FeeManagement = () => {
                 value={generateFormData.months}
                 onChange={handleMonthsChange}
                 input={<OutlinedInput label="Meses" />}
-                renderValue={(selected) => selected.map(month => monthsOptions.find(m => m.value === month)?.label).join(', ')}
+                renderValue={(selected) => selected.map(month => MONTHS.find(m => m.value === month)?.label).join(', ')}
               >
-                {monthsOptions.map((month) => (
+                {MONTHS.map((month) => (
                   <MenuItem key={month.value} value={month.value}>
                     <Checkbox checked={generateFormData.months.indexOf(month.value) > -1} />
                     <ListItemText primary={month.label} />

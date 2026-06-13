@@ -78,7 +78,7 @@ const FeeScheduleManagement = () => {
         description: '',
         effective_date: '',
         end_date: '',
-        generation_day: '1',
+        due_day: '1',
       });
     }
     setOpen(true);

@@ -389,8 +389,167 @@ def generate_all_payments_excel(payments_data):
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
+    for col in range(1, 8):
+        ws.column_dimensions[get_column_letter(col)].width = 15
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_all_properties_payment_history_excel(all_payments_data, all_pending_fees_data):
+    """Generate an Excel report of payment history for ALL properties"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Historial de Pagos"
+
+    ws['A1'] = "PAGO VECINAL - Historial de Pagos (Todas las Propiedades)"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:H1')
+
+    row = 3
+    # Payments section
+    if all_payments_data:
+        ws[f'A{row}'] = "Pagos Realizados"
+        ws[f'A{row}'].font = Font(size=12, bold=True)
+        ws.merge_cells(f'A{row}:H{row}')
+        row += 1
+
+        headers = ["Villa", "Fila", "Número", "Propietario", "Fecha", "Monto", "Estado"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=row, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        row += 1
+
+        for p in all_payments_data:
+            ws.cell(row=row, column=1).value = p.get('villa', '')
+            ws.cell(row=row, column=2).value = p.get('row_letter', '')
+            ws.cell(row=row, column=3).value = p.get('number', '')
+            ws.cell(row=row, column=4).value = p.get('owner_name', '')
+            ws.cell(row=row, column=5).value = p['payment_date'].strftime("%d/%m/%Y")
+            ws.cell(row=row, column=6).value = float(p['amount'])
+            ws.cell(row=row, column=6).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=7).value = p['status']
+            row += 1
+
+        row += 1
+        total_payments = sum(p['amount'] for p in all_payments_data)
+        ws[f'A{row}'] = "Total Pagado:"
+        ws[f'A{row}'].font = Font(bold=True)
+        ws[f'F{row}'] = float(total_payments)
+        ws[f'F{row}'].number_format = '"S/ "#,##0.00'
+        ws[f'F{row}'].font = Font(bold=True)
+
+    # Pending fees section
+    if all_pending_fees_data:
+        row += 3
+        ws[f'A{row}'] = "Cuotas Pendientes"
+        ws[f'A{row}'].font = Font(size=12, bold=True)
+        ws.merge_cells(f'A{row}:H{row}')
+        row += 1
+
+        headers = ["Villa", "Fila", "Número", "Propietario", "Período", "Monto", "Vencimiento", "Estado"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=row, column=col)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+        row += 1
+
+        for f in all_pending_fees_data:
+            ws.cell(row=row, column=1).value = f.get('villa', '')
+            ws.cell(row=row, column=2).value = f.get('row_letter', '')
+            ws.cell(row=row, column=3).value = f.get('number', '')
+            ws.cell(row=row, column=4).value = f.get('owner_name', '')
+            ws.cell(row=row, column=5).value = f"{f['month']}/{f['year']}"
+            ws.cell(row=row, column=6).value = float(f['amount'])
+            ws.cell(row=row, column=6).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=7).value = f['due_date'].strftime("%d/%m/%Y")
+            ws.cell(row=row, column=8).value = f['status']
+            row += 1
+
+        row += 1
+        total_outstanding = sum(f['amount'] for f in all_pending_fees_data)
+        ws[f'A{row}'] = "Total Pendiente:"
+        ws[f'A{row}'].font = Font(bold=True)
+        ws[f'F{row}'] = float(total_outstanding)
+        ws[f'F{row}'].number_format = '"S/ "#,##0.00'
+        ws[f'F{row}'].font = Font(bold=True)
+
+    row += 3
+    ws[f'A{row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
     for col in range(1, 9):
-        ws.column_dimensions[get_column_letter(col)].width = 18
+        ws.column_dimensions[get_column_letter(col)].width = 15
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_all_properties_annual_statement_excel(year, all_properties_data):
+    """Generate an annual Excel summary for ALL properties"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Resumen Anual {year}"
+
+    ws['A1'] = "PAGO VECINAL - Estado Anual Consolidado"
+    ws['A1'].font = Font(size=16, bold=True)
+    ws.merge_cells('A1:G1')
+
+    ws['A3'] = f"Año: {year}"
+    ws['A3'].font = Font(size=12, bold=True)
+    ws.merge_cells('A3:G3')
+
+    row = 5
+    headers = ["Villa", "Fila", "Número", "Propietario", "Total Cuotas", "Total Pagado", "Saldo"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=row, column=col)
+        cell.value = header
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+    row += 1
+
+    total_fees_all = 0
+    total_paid_all = 0
+    for prop in all_properties_data:
+        ws.cell(row=row, column=1).value = prop.get('villa', '')
+        ws.cell(row=row, column=2).value = prop.get('row_letter', '')
+        ws.cell(row=row, column=3).value = prop.get('number', '')
+        ws.cell(row=row, column=4).value = prop.get('owner_name', '')
+        ws.cell(row=row, column=5).value = float(prop['total_fees'])
+        ws.cell(row=row, column=5).number_format = '"S/ "#,##0.00'
+        ws.cell(row=row, column=6).value = float(prop['total_paid'])
+        ws.cell(row=row, column=6).number_format = '"S/ "#,##0.00'
+        balance = prop['total_fees'] - prop['total_paid']
+        ws.cell(row=row, column=7).value = float(balance)
+        ws.cell(row=row, column=7).number_format = '"S/ "#,##0.00'
+        total_fees_all += prop['total_fees']
+        total_paid_all += prop['total_paid']
+        row += 1
+
+    row += 1
+    ws[f'A{row}'] = "TOTALES"
+    ws[f'A{row}'].font = Font(bold=True)
+    ws[f'E{row}'] = float(total_fees_all)
+    ws[f'E{row}'].number_format = '"S/ "#,##0.00'
+    ws[f'E{row}'].font = Font(bold=True)
+    ws[f'F{row}'] = float(total_paid_all)
+    ws[f'F{row}'].number_format = '"S/ "#,##0.00'
+    ws[f'F{row}'].font = Font(bold=True)
+    ws[f'G{row}'] = float(total_fees_all - total_paid_all)
+    ws[f'G{row}'].number_format = '"S/ "#,##0.00'
+    ws[f'G{row}'].font = Font(bold=True)
+
+    row += 3
+    ws[f'A{row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+    for col in range(1, 8):
+        ws.column_dimensions[get_column_letter(col)].width = 15
 
     buffer = io.BytesIO()
     wb.save(buffer)

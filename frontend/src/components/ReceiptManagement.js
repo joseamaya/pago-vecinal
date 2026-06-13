@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { receiptsAPI, paymentsAPI } from '../services/api';
+import LoadingSkeleton from './common/LoadingSkeleton';
 
 const ReceiptManagement = () => {
   const { isAdmin } = useAuth();
@@ -258,11 +259,7 @@ const ReceiptManagement = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+                <LoadingSkeleton type="table" rows={5} columns={7} />
               ) : receipts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center">

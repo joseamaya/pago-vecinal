@@ -202,46 +202,52 @@ export const feeSchedulesAPI = {
 
 
 export const reportsAPI = {
-  getPropertyPaymentHistory: (propertyId, startDate = null, endDate = null, format = 'excel') => {
+  getPropertyPaymentHistory: (propertyId = null, startYear = null, startMonth = null, endYear = null, endMonth = null, format = 'excel') => {
     const params = { format };
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
-    return api.get(`/reports/property/${propertyId}/payment-history`, { params, responseType: 'blob' });
+    if (propertyId) params.property_id = propertyId;
+    if (startYear !== null) params.start_year = startYear;
+    if (startMonth !== null) params.start_month = startMonth;
+    if (endYear !== null) params.end_year = endYear;
+    if (endMonth !== null) params.end_month = endMonth;
+    return api.get('/reports/payment-history', { params, responseType: 'blob' });
   },
-  getOutstandingFeesReport: (format = 'pdf') => api.get('/reports/outstanding-fees', { params: { format }, responseType: 'blob' }),
-  getMonthlyPaymentSummary: (startDate = null, endDate = null, format = 'excel') => {
+  getOutstandingFeesReport: (format = 'excel') =>
+    api.get('/reports/outstanding-fees', { params: { format }, responseType: 'blob' }),
+  getMonthlyPaymentSummary: (startYear, startMonth, endYear, endMonth) =>
+    api.get(`/reports/monthly-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { responseType: 'blob' }),
+  getPaymentsSummary: (startYear, startMonth, endYear, endMonth) =>
+    api.get(`/reports/payments-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { responseType: 'blob' }),
+  getMonthlyFeesReport: (startYear, startMonth, endYear, endMonth) =>
+    api.get(`/reports/monthly-fees/${startYear}/${startMonth}/${endYear}/${endMonth}`, { responseType: 'blob' }),
+  getPaidFeesSummary: (startYear, startMonth, endYear, endMonth) =>
+    api.get(`/reports/paid-fees-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { responseType: 'blob' }),
+  getFeePaymentMatrix: (startYear, startMonth, endYear, endMonth) =>
+    api.get(`/reports/fee-payment-matrix/${startYear}/${startMonth}/${endYear}/${endMonth}`, { responseType: 'blob' }),
+  getFeeContributionSummary: (startYear, startMonth, endYear, endMonth) =>
+    api.get(`/reports/fee-contribution-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { responseType: 'blob' }),
+  getAnnualPropertyStatement: (year, propertyId = null, format = 'pdf') => {
     const params = { format };
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
-    return api.get('/reports/monthly-summary', { params, responseType: 'blob' });
+    if (propertyId) params.property_id = propertyId;
+    return api.get(`/reports/annual-statement/${year}`, { params, responseType: 'blob' });
   },
-  getMonthlyFeesReport: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/monthly-fees/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
-  getAnnualPropertyStatement: (propertyId, year, format = 'pdf') => api.get(`/reports/property/${propertyId}/annual-statement/${year}`, { params: { format }, responseType: 'blob' }),
-  getAllPaymentsReport: () => api.get('/reports/all-payments', { params: { format: 'excel' }, responseType: 'blob' }),
-  getExpensesReport: (format = 'excel') => api.get('/reports/expenses', { params: { format }, responseType: 'blob' }),
-  getExpensesByPeriodRangeReport: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/expenses/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
-  getDetailedExpensesReport: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/detailed-expenses/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
+  getAllPaymentsReport: () =>
+    api.get('/reports/all-payments', { responseType: 'blob' }),
+  getExpensesReport: () =>
+    api.get('/reports/expenses', { responseType: 'blob' }),
+  getExpensesByPeriodRangeReport: (startYear, startMonth, endYear, endMonth) =>
+    api.get(`/reports/expenses/${startYear}/${startMonth}/${endYear}/${endMonth}`, { responseType: 'blob' }),
+  getDetailedExpensesReport: (startYear, startMonth, endYear, endMonth) =>
+    api.get(`/reports/detailed-expenses/${startYear}/${startMonth}/${endYear}/${endMonth}`, { responseType: 'blob' }),
   getFilteredFeesReport: (filters = {}) => {
     const params = {};
     if (filters.year) params.year = filters.year;
     if (filters.month) params.month = filters.month;
     if (filters.status) params.status = filters.status;
-    if (filters.property) params.property_id = filters.property;
+    if (filters.property_id) params.property_id = filters.property_id;
     return api.get('/reports/filtered-fees', { params, responseType: 'blob' });
   },
-  getTrafficLightReport: () => api.get('/reports/traffic-light', { responseType: 'blob' }),
-  getPaymentsSummary: (startDate, endDate, format = 'excel') => {
-    const params = { format };
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
-    return api.get('/reports/payments-summary', { params, responseType: 'blob' });
-  },
-  getPaidFeesSummary: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/paid-fees-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
-  getFeePaymentMatrix: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/fee-payment-matrix/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
-  getFeeContributionSummary: (startYear, startMonth, endYear, endMonth, format = 'excel') => api.get(`/reports/fee-contribution-summary/${startYear}/${startMonth}/${endYear}/${endMonth}`, { params: { format }, responseType: 'blob' }),
-  getPaymentsOverTime: () => api.get('/reports/payments-over-time'),
-  getFeesByStatus: () => api.get('/reports/fees-by-status'),
-  getPropertiesByVilla: () => api.get('/reports/properties-by-villa'),
+  getTrafficLightReport: () =>
+    api.get('/reports/traffic-light', { responseType: 'blob' }),
 };
 
 // Treasurers API

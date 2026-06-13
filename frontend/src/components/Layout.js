@@ -20,7 +20,25 @@ const Layout = ({ children }) => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-      {/* App Bar for mobile */}
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          position: 'absolute',
+          left: '-9999px',
+          zIndex: 10000,
+          bgcolor: 'primary.main',
+          color: 'white',
+          p: 1,
+          '&:focus': {
+            left: 8,
+            top: 8,
+          },
+        }}
+      >
+        Saltar al contenido principal
+      </Box>
+
       {isMobile && (
         <AppBar
           position="fixed"
@@ -57,6 +75,8 @@ const Layout = ({ children }) => {
       {/* Main content */}
       <Box
         component="main"
+        id="main-content"
+        tabIndex={-1}
         sx={{
           flexGrow: 1,
           p: 3,

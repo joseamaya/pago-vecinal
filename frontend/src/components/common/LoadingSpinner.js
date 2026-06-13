@@ -13,16 +13,13 @@ const LoadingSpinner = ({
   fullScreen = false,
   buttonVariant = false,
   disabled = false,
-  ...props
+  sx,
+  buttonSx,
 }) => {
   const spinner = (
     <CircularProgress
       size={size}
-      sx={{
-        color: 'primary.main',
-        ...props.sx
-      }}
-      {...props}
+      sx={{ color: 'primary.main', ...sx }}
     />
   );
 
@@ -32,10 +29,7 @@ const LoadingSpinner = ({
         variant="contained"
         disabled={disabled || true}
         startIcon={spinner}
-        sx={{
-          minWidth: 120,
-          ...props.buttonSx
-        }}
+        sx={{ minWidth: 120, ...buttonSx }}
       >
         {message}
       </Button>
@@ -61,10 +55,7 @@ const LoadingSpinner = ({
       >
         {spinner}
         {showMessage && (
-          <Typography
-            variant="h6"
-            sx={{ mt: 2, color: 'text.secondary' }}
-          >
+          <Typography variant="h6" sx={{ mt: 2, color: 'text.secondary' }}>
             {message}
           </Typography>
         )}
@@ -80,15 +71,12 @@ const LoadingSpinner = ({
         alignItems: 'center',
         justifyContent: 'center',
         py: 4,
-        ...props.sx
+        ...sx,
       }}
     >
       {spinner}
       {showMessage && (
-        <Typography
-          variant="body1"
-          sx={{ mt: 2, color: 'text.secondary' }}
-        >
+        <Typography variant="body1" sx={{ mt: 2, color: 'text.secondary' }}>
           {message}
         </Typography>
       )}

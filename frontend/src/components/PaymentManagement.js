@@ -42,6 +42,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { paymentsAPI, feesAPI, propertiesAPI, reportsAPI } from '../services/api';
 import LoadingSkeleton from './common/LoadingSkeleton';
 import LoadingSpinner from './common/LoadingSpinner';
+import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
+import { MONTHS } from '../utils/months';
 
 const PaymentManagement = () => {
   const { isAdmin } = useAuth();
@@ -97,7 +99,7 @@ const PaymentManagement = () => {
     try {
       setLoading(true);
       const response = await paymentsAPI.getPayments(page, pageSize, filters);
-      console.log('Fetched payments:', response.data);
+
       const sortedData = response.data.data.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
       setPayments(sortedData);
       setFilteredPayments(sortedData);
@@ -363,11 +365,10 @@ const PaymentManagement = () => {
 
   const handleApprove = async (paymentId) => {
     try {
-      console.log('Approving payment:', paymentId);
+
       const formDataToSend = new FormData();
       formDataToSend.append('status', 'approved');
       const response = await paymentsAPI.updatePayment(paymentId, formDataToSend);
-      console.log('Approval response:', response.data);
 
       // Wait a bit for receipt generation to complete
       setTimeout(async () => {
@@ -377,7 +378,7 @@ const PaymentManagement = () => {
         if (filterStatus) currentFilters.status = filterStatus;
         if (filterProperty) currentFilters.property_id = filterProperty;
         await fetchPayments(currentPage, currentFilters);
-        console.log('Payments refreshed after approval');
+
       }, 2000); // 2 second delay
     } catch (err) {
       setError('Error al aprobar pago');
@@ -683,7 +684,6 @@ const PaymentManagement = () => {
     try {
       setError('');
       const response = await paymentsAPI.bulkApprovePayments(selectedPayments);
-      console.log('Bulk approval response:', response.data);
 
       // Refresh payments list
       const currentFilters = {};

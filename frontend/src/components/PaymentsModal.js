@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { paymentsAPI } from '../services/api';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
 
 const PaymentsModal = ({ open, onClose, fee }) => {
   const [payments, setPayments] = useState([]);
@@ -65,42 +66,6 @@ const PaymentsModal = ({ open, onClose, fee }) => {
     } catch (err) {
       setError('Error al descargar el recibo');
       console.error('Error downloading receipt:', err);
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-      case 'completed':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'rejected':
-      case 'failed':
-        return 'error';
-      case 'cancelled':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'approved':
-        return 'Aprobado';
-      case 'completed':
-        return 'Completado';
-      case 'pending':
-        return 'Pendiente';
-      case 'rejected':
-        return 'Rechazado';
-      case 'failed':
-        return 'Fallido';
-      case 'cancelled':
-        return 'Cancelado';
-      default:
-        return status;
     }
   };
 
