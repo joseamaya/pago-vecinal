@@ -89,8 +89,16 @@ async def download_property_payment_history(
         }
         prop_fees = [f for f in fees if f.property]
         pending_fees = [f for f in prop_fees if f.status == FeeStatus.PENDING]
+        fee_map = {str(f.id): f for f in fees}
         payments_data = [
-            {"payment_date": p.payment_date, "amount": p.amount, "status": p.status, "reference": p.fee_id}
+            {
+                "payment_date": p.payment_date,
+                "amount": p.amount,
+                "status": p.status,
+                "reference": p.fee_id,
+                "fee_month": fee_map[p.fee_id].month if p.fee_id in fee_map else None,
+                "fee_year": fee_map[p.fee_id].year if p.fee_id in fee_map else None,
+            }
             for p in payments
         ]
         fees_data = [
@@ -123,6 +131,8 @@ async def download_property_payment_history(
             "payment_date": p.payment_date,
             "amount": p.amount,
             "status": p.status,
+            "fee_month": fee.month,
+            "fee_year": fee.year,
         })
 
     all_pending_fees_data = []
@@ -209,7 +219,9 @@ async def download_monthly_payment_summary(
             "property_owner_name": fee_map[p.fee_id].property.owner_name,
             "payment_date": p.payment_date,
             "amount": p.amount,
-            "status": p.status
+            "status": p.status,
+            "fee_month": fee_map[p.fee_id].month,
+            "fee_year": fee_map[p.fee_id].year,
         }
         for p in payments if p.fee_id in fee_map and fee_map[p.fee_id].property
     ]
@@ -541,8 +553,17 @@ async def download_annual_property_statement(
         "owner_phone": property_obj.owner_phone
     }
 
+    fee_map = {str(f.id): f for f in fees}
     fees_data = [{"month": f.month, "year": f.year, "amount": f.amount} for f in fees]
-    payments_data = [{"payment_date": p.payment_date, "amount": p.amount} for p in payments]
+    payments_data = [
+        {
+            "payment_date": p.payment_date,
+            "amount": p.amount,
+            "fee_month": fee_map[p.fee_id].month if p.fee_id in fee_map else None,
+            "fee_year": fee_map[p.fee_id].year if p.fee_id in fee_map else None,
+        }
+        for p in payments
+    ]
 
     base = f"estado_anual_{property_obj.villa}_{property_obj.row_letter}{property_obj.number}_{year}"
 
@@ -578,6 +599,8 @@ async def download_all_payments_report(
                 "status": p.status,
                 "fee_reference": p.fee.reference if p.fee else "N/A",
                 "notes": p.notes,
+                "fee_month": p.fee.month if p.fee else None,
+                "fee_year": p.fee.year if p.fee else None,
             }
             for p in payments if p.fee
         ],

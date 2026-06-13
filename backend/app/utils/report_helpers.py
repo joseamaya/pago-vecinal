@@ -81,6 +81,27 @@ def get_pdf_media_type() -> str:
     return "application/pdf"
 
 
+STATUS_TRANSLATIONS = {
+    "pending": "Pendiente",
+    "completed": "Completado",
+    "failed": "Fallido",
+    "cancelled": "Cancelado",
+    "partially_paid": "Parcialmente pagado",
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
+    "active": "Activo",
+    "defaulted": "Incumplido",
+    "overdue": "Vencido",
+    "paid": "Pagado",
+}
+
+
+def translate_status(status: str) -> str:
+    if not status:
+        return status
+    return STATUS_TRANSLATIONS.get(status, status)
+
+
 def streaming_response(buffer, filename: str, media_type: str) -> StreamingResponse:
     return StreamingResponse(
         buffer,

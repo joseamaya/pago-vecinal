@@ -7,6 +7,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from .report_helpers import translate_status
 
 def generate_receipt_pdf(receipt_data):
     """
@@ -261,18 +262,22 @@ def generate_property_payment_history_pdf(property_data, payments_data, fees_dat
     # Payments table
     if payments_data:
         content.append(Paragraph("Pagos Realizados", styles['Heading3']))
-        payment_headers = ["Fecha", "Monto", "Estado", "Referencia"]
+        payment_headers = ["Fecha", "Período", "Monto", "Estado", "Referencia"]
         payment_rows = [payment_headers]
 
         for payment in payments_data:
+            fee_month = payment.get('fee_month')
+            fee_year = payment.get('fee_year')
+            period = f"{fee_month}/{fee_year}" if fee_month and fee_year else "N/A"
             payment_rows.append([
                 payment['payment_date'].strftime("%d/%m/%Y"),
+                period,
                 f"S/ {payment['amount']:.2f}",
-                payment['status'],
+                translate_status(payment['status']),
                 payment.get('reference', 'N/A')
             ])
 
-        payments_table = Table(payment_rows, colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 2*inch])
+        payments_table = Table(payment_rows, colWidths=[1.2*inch, 1*inch, 1.2*inch, 1.2*inch, 1.6*inch])
         payments_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -302,7 +307,7 @@ def generate_property_payment_history_pdf(property_data, payments_data, fees_dat
                 f"{fee['month']}/{fee['year']}",
                 f"S/ {fee['amount']:.2f}",
                 fee['due_date'].strftime("%d/%m/%Y"),
-                fee['status']
+                translate_status(fee['status'])
             ])
 
         fees_table = Table(fee_rows, colWidths=[1.5*inch, 1.5*inch, 2*inch, 1.5*inch])
@@ -714,20 +719,24 @@ def generate_monthly_payment_summary_pdf(year, month, payments_data):
 
     if payments_data:
         # Payments table
-        headers = ["Propiedad", "Propietario", "Fecha Pago", "Monto", "Estado"]
+        headers = ["Propiedad", "Propietario", "Período", "Fecha Pago", "Monto", "Estado"]
         rows = [headers]
 
         for payment in payments_data:
             property_str = f"{payment['property_villa']} - {payment['property_row_letter']}{payment['property_number']}"
+            fee_month = payment.get('fee_month')
+            fee_year = payment.get('fee_year')
+            period = f"{fee_month}/{fee_year}" if fee_month and fee_year else "N/A"
             rows.append([
                 property_str,
                 payment['property_owner_name'],
+                period,
                 payment['payment_date'].strftime("%d/%m/%Y"),
                 f"S/ {payment['amount']:.2f}",
-                payment['status']
+                translate_status(payment['status'])
             ])
 
-        table = Table(rows, colWidths=[2*inch, 2*inch, 1.5*inch, 1.5*inch, 1*inch])
+        table = Table(rows, colWidths=[1.5*inch, 1.5*inch, 0.8*inch, 1.2*inch, 1*inch, 0.8*inch])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -851,7 +860,7 @@ def generate_annual_property_statement_pdf(property_data, year, fees_data, payme
             monthly_data[fee['month']]['fees'] += fee['amount']
 
     for payment in payments_data:
-        payment_month = payment['payment_date'].month
+        payment_month = payment.get('fee_month') or payment['payment_date'].month
         if payment_month in monthly_data:
             monthly_data[payment_month]['payments'] += payment['amount']
 

@@ -3,6 +3,7 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from .report_helpers import translate_status
 
 def generate_property_payment_history_excel(property_data, payments_data, fees_data):
     """
@@ -42,7 +43,7 @@ def generate_property_payment_history_excel(property_data, payments_data, fees_d
         ws[f'A{row}'].font = Font(size=12, bold=True)
         ws.merge_cells(f'A{row}:G{row}')
 
-        headers = ["Fecha", "Monto", "Estado", "Referencia"]
+        headers = ["Fecha", "Período", "Monto", "Estado", "Referencia"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=row+1, column=col)
             cell.value = header
@@ -52,10 +53,13 @@ def generate_property_payment_history_excel(property_data, payments_data, fees_d
         for payment in payments_data:
             row += 1
             ws.cell(row=row, column=1).value = payment['payment_date'].strftime("%d/%m/%Y")
-            ws.cell(row=row, column=2).value = float(payment['amount'])
-            ws.cell(row=row, column=2).number_format = '"S/ "#,##0.00'
-            ws.cell(row=row, column=3).value = payment['status']
-            ws.cell(row=row, column=4).value = payment.get('reference', 'N/A')
+            fee_month = payment.get('fee_month')
+            fee_year = payment.get('fee_year')
+            ws.cell(row=row, column=2).value = f"{fee_month}/{fee_year}" if fee_month and fee_year else "N/A"
+            ws.cell(row=row, column=3).value = float(payment['amount'])
+            ws.cell(row=row, column=3).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=4).value = translate_status(payment['status'])
+            ws.cell(row=row, column=5).value = payment.get('reference', 'N/A')
 
         # Total payments
         row += 2
@@ -86,7 +90,7 @@ def generate_property_payment_history_excel(property_data, payments_data, fees_d
             ws.cell(row=row, column=2).value = float(fee['amount'])
             ws.cell(row=row, column=2).number_format = '"S/ "#,##0.00'
             ws.cell(row=row, column=3).value = fee['due_date'].strftime("%d/%m/%Y")
-            ws.cell(row=row, column=4).value = fee['status']
+            ws.cell(row=row, column=4).value = translate_status(fee['status'])
 
         # Total outstanding
         row += 2
@@ -102,7 +106,7 @@ def generate_property_payment_history_excel(property_data, payments_data, fees_d
     ws[f'A{row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
-    for col in range(1, 8):
+    for col in range(1, 9):
         ws.column_dimensions[get_column_letter(col)].width = 15
 
     # Save to buffer
@@ -196,10 +200,10 @@ def generate_monthly_payment_summary_excel(start_date, end_date, payments_data):
     # Title
     ws['A1'] = f"PAGO VECINAL - Resumen de Pagos - {title_date}"
     ws['A1'].font = Font(size=16, bold=True)
-    ws.merge_cells('A1:F1')
+    ws.merge_cells('A1:G1')
 
     if payments_data:
-        headers = ["Propiedad", "Propietario", "Fecha Pago", "Monto", "Estado"]
+        headers = ["Propiedad", "Propietario", "Período", "Fecha Pago", "Monto", "Estado"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=3, column=col)
             cell.value = header
@@ -210,10 +214,13 @@ def generate_monthly_payment_summary_excel(start_date, end_date, payments_data):
             property_str = f"{payment['property_villa']} - {payment['property_row_letter']}{payment['property_number']}"
             ws.cell(row=row, column=1).value = property_str
             ws.cell(row=row, column=2).value = payment['property_owner_name']
-            ws.cell(row=row, column=3).value = payment['payment_date'].strftime("%d/%m/%Y")
-            ws.cell(row=row, column=4).value = float(payment['amount'])
-            ws.cell(row=row, column=4).number_format = '"S/ "#,##0.00'
-            ws.cell(row=row, column=5).value = payment['status']
+            fee_month = payment.get('fee_month')
+            fee_year = payment.get('fee_year')
+            ws.cell(row=row, column=3).value = f"{fee_month}/{fee_year}" if fee_month and fee_year else "N/A"
+            ws.cell(row=row, column=4).value = payment['payment_date'].strftime("%d/%m/%Y")
+            ws.cell(row=row, column=5).value = float(payment['amount'])
+            ws.cell(row=row, column=5).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=6).value = translate_status(payment['status'])
 
         # Summary
         row = len(payments_data) + 6
@@ -237,7 +244,7 @@ def generate_monthly_payment_summary_excel(start_date, end_date, payments_data):
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
-    for col in range(1, 7):
+    for col in range(1, 8):
         ws.column_dimensions[get_column_letter(col)].width = 18
 
     buffer = io.BytesIO()
@@ -324,10 +331,10 @@ def generate_all_payments_excel(payments_data):
     # Title
     ws['A1'] = "PAGO VECINAL - Reporte General de Pagos"
     ws['A1'].font = Font(size=16, bold=True)
-    ws.merge_cells('A1:H1')
+    ws.merge_cells('A1:I1')
 
     if payments_data:
-        headers = ["Fecha Pago", "Propiedad", "Propietario", "Monto", "Estado", "Referencia", "Notas"]
+        headers = ["Fecha Pago", "Propiedad", "Propietario", "Período", "Monto", "Estado", "Referencia", "Notas"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=3, column=col)
             cell.value = header
@@ -339,11 +346,14 @@ def generate_all_payments_excel(payments_data):
             ws.cell(row=row, column=1).value = payment['payment_date'].strftime("%d/%m/%Y %H:%M")
             ws.cell(row=row, column=2).value = property_str
             ws.cell(row=row, column=3).value = payment['property_owner_name']
-            ws.cell(row=row, column=4).value = float(payment['amount'])
-            ws.cell(row=row, column=4).number_format = '"S/ "#,##0.00'
-            ws.cell(row=row, column=5).value = payment['status']
-            ws.cell(row=row, column=6).value = payment.get('fee_reference', 'N/A')
-            ws.cell(row=row, column=7).value = payment.get('notes', '')
+            fee_month = payment.get('fee_month')
+            fee_year = payment.get('fee_year')
+            ws.cell(row=row, column=4).value = f"{fee_month}/{fee_year}" if fee_month and fee_year else "N/A"
+            ws.cell(row=row, column=5).value = float(payment['amount'])
+            ws.cell(row=row, column=5).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=6).value = translate_status(payment['status'])
+            ws.cell(row=row, column=7).value = payment.get('fee_reference', 'N/A')
+            ws.cell(row=row, column=8).value = payment.get('notes', '')
 
         # Summary
         summary_row = len(payments_data) + 6
@@ -377,7 +387,7 @@ def generate_all_payments_excel(payments_data):
         # Status breakdown
         current_row += 3
         for status, count in status_counts.items():
-            ws[f'A{current_row}'] = f"Pagos {status.title()}:"
+            ws[f'A{current_row}'] = f"Pagos {translate_status(status)}:"
             ws[f'A{current_row}'].font = Font(bold=True)
             ws[f'B{current_row}'] = count
             current_row += 1
@@ -389,7 +399,7 @@ def generate_all_payments_excel(payments_data):
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
-    for col in range(1, 8):
+    for col in range(1, 9):
         ws.column_dimensions[get_column_letter(col)].width = 15
 
     buffer = io.BytesIO()
@@ -416,7 +426,7 @@ def generate_all_properties_payment_history_excel(all_payments_data, all_pending
         ws.merge_cells(f'A{row}:H{row}')
         row += 1
 
-        headers = ["Villa", "Fila", "Número", "Propietario", "Fecha", "Monto", "Estado"]
+        headers = ["Villa", "Fila", "Número", "Propietario", "Período", "Fecha", "Monto", "Estado"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=row, column=col)
             cell.value = header
@@ -429,19 +439,22 @@ def generate_all_properties_payment_history_excel(all_payments_data, all_pending
             ws.cell(row=row, column=2).value = p.get('row_letter', '')
             ws.cell(row=row, column=3).value = p.get('number', '')
             ws.cell(row=row, column=4).value = p.get('owner_name', '')
-            ws.cell(row=row, column=5).value = p['payment_date'].strftime("%d/%m/%Y")
-            ws.cell(row=row, column=6).value = float(p['amount'])
-            ws.cell(row=row, column=6).number_format = '"S/ "#,##0.00'
-            ws.cell(row=row, column=7).value = p['status']
+            fee_month = p.get('fee_month')
+            fee_year = p.get('fee_year')
+            ws.cell(row=row, column=5).value = f"{fee_month}/{fee_year}" if fee_month and fee_year else "N/A"
+            ws.cell(row=row, column=6).value = p['payment_date'].strftime("%d/%m/%Y")
+            ws.cell(row=row, column=7).value = float(p['amount'])
+            ws.cell(row=row, column=7).number_format = '"S/ "#,##0.00'
+            ws.cell(row=row, column=8).value = translate_status(p['status'])
             row += 1
 
         row += 1
         total_payments = sum(p['amount'] for p in all_payments_data)
         ws[f'A{row}'] = "Total Pagado:"
         ws[f'A{row}'].font = Font(bold=True)
-        ws[f'F{row}'] = float(total_payments)
-        ws[f'F{row}'].number_format = '"S/ "#,##0.00'
-        ws[f'F{row}'].font = Font(bold=True)
+        ws[f'G{row}'] = float(total_payments)
+        ws[f'G{row}'].number_format = '"S/ "#,##0.00'
+        ws[f'G{row}'].font = Font(bold=True)
 
     # Pending fees section
     if all_pending_fees_data:
@@ -468,7 +481,7 @@ def generate_all_properties_payment_history_excel(all_payments_data, all_pending
             ws.cell(row=row, column=6).value = float(f['amount'])
             ws.cell(row=row, column=6).number_format = '"S/ "#,##0.00'
             ws.cell(row=row, column=7).value = f['due_date'].strftime("%d/%m/%Y")
-            ws.cell(row=row, column=8).value = f['status']
+            ws.cell(row=row, column=8).value = translate_status(f['status'])
             row += 1
 
         row += 1
@@ -593,7 +606,7 @@ def generate_monthly_fees_excel(fees_data, start_year, start_month, end_year, en
             ws.cell(row=row, column=3).value = f"{fee['month']:02d}/{fee['year']}"
             ws.cell(row=row, column=4).value = float(fee['amount'])
             ws.cell(row=row, column=4).number_format = '"S/ "#,##0.00'
-            ws.cell(row=row, column=5).value = fee['status']
+            ws.cell(row=row, column=5).value = translate_status(fee['status'])
             ws.cell(row=row, column=6).value = fee['due_date'].strftime("%d/%m/%Y")
 
         # Summary section
@@ -616,7 +629,7 @@ def generate_monthly_fees_excel(fees_data, start_year, start_month, end_year, en
         # Display status summary
         current_row = summary_row + 2
         for status, data in status_counts.items():
-            ws[f'A{current_row}'] = f"Cuotas {status.title()}:"
+            ws[f'A{current_row}'] = f"Cuotas {translate_status(status)}:"
             ws[f'A{current_row}'].font = Font(bold=True)
             ws[f'B{current_row}'] = data['count']
             ws[f'C{current_row}'] = float(data['amount'])
@@ -685,7 +698,7 @@ def generate_filtered_fees_excel(fees_data):
             ws.cell(row=row, column=6).value = fee['year']
             ws.cell(row=row, column=7).value = fee['month']
             ws.cell(row=row, column=8).value = fee['due_date'].strftime("%d/%m/%Y")
-            ws.cell(row=row, column=9).value = fee['status']
+            ws.cell(row=row, column=9).value = translate_status(fee['status'])
             ws.cell(row=row, column=10).value = fee.get('notes', '')
 
         # Summary section
@@ -1451,7 +1464,7 @@ def generate_annual_property_statement_excel(property_data, year, fees_data, pay
             monthly_data[fee['month']]['fees'] += fee['amount']
 
     for payment in payments_data:
-        payment_month = payment['payment_date'].month
+        payment_month = payment.get('fee_month') or payment['payment_date'].month
         if payment_month in monthly_data:
             monthly_data[payment_month]['payments'] += payment['amount']
 
