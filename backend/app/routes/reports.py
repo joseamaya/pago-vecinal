@@ -356,6 +356,8 @@ async def download_fee_payment_matrix(
             'year': fee.year,
             'month': fee.month,
             'paid_amount': fee.paid_amount,
+            'amount': fee.amount,
+            'status': fee.status.value,
         }
         for fee in fees if fee.property
     ]

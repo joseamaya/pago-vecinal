@@ -1132,12 +1132,6 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
     ws = wb.active
     ws.title = f"Matriz Pagos {start_year}-{end_year}"
 
-    # Title
-    period_text = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
-    ws['A1'] = f"Matriz de Pagos de Cuotas - {period_text}"
-    ws['A1'].font = Font(size=16, bold=True)
-    ws.merge_cells('A1:Z1')  # Wide merge for title
-
     # Prepare data
     # Sort properties by row_letter alphabetically, then by number numerically
     properties = sorted(set((d['row_letter'], d['number'], d['property']) for d in matrix_data))
@@ -1153,6 +1147,13 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
             current_month = 1
             current_year += 1
 
+    # Title
+    period_text = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
+    ws['A1'] = f"Matriz de Pagos de Cuotas - {period_text}"
+    ws['A1'].font = Font(size=16, bold=True)
+    total_cols = len(months) + 5  # Casa + months + 3 summary + Total
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_cols)
+
     # Headers
     ws['A3'] = "Casa"
     ws['A3'].font = Font(bold=True)
@@ -1166,9 +1167,18 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
         cell.font = Font(bold=True)
         col += 1
 
+    # Summary column headers
+    summary_headers = ["Cuotas Pagadas", "Cuotas Pag. Parcialmente", "Cuotas Pendientes"]
+    summary_start_col = col
+    for i, header in enumerate(summary_headers):
+        cell = ws.cell(row=3, column=summary_start_col + i)
+        cell.value = header
+        cell.font = Font(bold=True)
+
     # Add "Total" header
-    ws.cell(row=3, column=col).value = "Total"
-    ws.cell(row=3, column=col).font = Font(bold=True)
+    total_col = summary_start_col + len(summary_headers)
+    ws.cell(row=3, column=total_col).value = "Total"
+    ws.cell(row=3, column=total_col).font = Font(bold=True)
 
     # Data rows
     row = 4
@@ -1181,29 +1191,45 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
 
         col = 2
         property_total = 0
+        status_counts = {'completed': 0, 'partially_paid': 0, 'pending': 0}
         for i, (year, month) in enumerate(months):
-            amount = 0
+            fee_entry = None
             for d in matrix_data:
                 if d['property'] == prop and d['year'] == year and d['month'] == month:
-                    amount = d['paid_amount']
+                    fee_entry = d
                     break
 
+            paid_amount = fee_entry['paid_amount'] if fee_entry else 0
+            total_amount = fee_entry['amount'] if fee_entry else 0
+            fee_status = fee_entry['status'] if fee_entry else 'pending'
+
+            if fee_status in status_counts:
+                status_counts[fee_status] += 1
+
             cell = ws.cell(row=row, column=col)
-            cell.value = float(amount)
+            cell.value = float(paid_amount)
             cell.number_format = '"S/ "#,##0.00'
 
-            # Color coding
-            if amount > 0:
+            # Color coding: green=completed, orange=partial, red=pending
+            if fee_status == 'completed' or (total_amount > 0 and paid_amount >= total_amount):
                 cell.fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")  # Green
+            elif fee_status == 'partially_paid' or (paid_amount > 0 and paid_amount < total_amount):
+                cell.fill = PatternFill(start_color="FFA500", end_color="FFA500", fill_type="solid")  # Orange
             else:
                 cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")  # Red
 
-            property_total += amount
-            month_totals[i] += amount
+            property_total += paid_amount
+            month_totals[i] += paid_amount
             col += 1
 
+        # Summary columns
+        for i, key in enumerate(['completed', 'partially_paid', 'pending']):
+            cell = ws.cell(row=row, column=summary_start_col + i)
+            cell.value = status_counts[key]
+            cell.font = Font(bold=True)
+
         # Property total
-        cell = ws.cell(row=row, column=col)
+        cell = ws.cell(row=row, column=total_col)
         cell.value = float(property_total)
         cell.number_format = '"S/ "#,##0.00'
         cell.font = Font(bold=True)
@@ -1211,7 +1237,7 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
 
         row += 1
 
-    # Month totals row
+    # Month totals row (month columns + empty summary columns + grand total)
     ws.cell(row=row, column=1).value = "Total por Mes"
     ws.cell(row=row, column=1).font = Font(bold=True)
 
@@ -1223,8 +1249,8 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
         cell.font = Font(bold=True)
         col += 1
 
-    # Grand total
-    cell = ws.cell(row=row, column=col)
+    # Grand total at the end
+    cell = ws.cell(row=row, column=total_col)
     cell.value = float(grand_total)
     cell.number_format = '"S/ "#,##0.00'
     cell.font = Font(bold=True)
@@ -1234,7 +1260,8 @@ def generate_fee_payment_matrix_excel(start_year, start_month, end_year, end_mon
     ws[f'A{footer_row}'] = f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     # Auto-adjust column widths
-    for col in range(1, len(months) + 3):
+    total_cols = len(months) + 5
+    for col in range(1, total_cols + 1):
         ws.column_dimensions[get_column_letter(col)].width = 15
 
     buffer = io.BytesIO()
