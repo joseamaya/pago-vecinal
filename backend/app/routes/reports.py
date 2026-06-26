@@ -236,7 +236,7 @@ async def download_monthly_payment_summary(
         )
         return streaming_response(buffer, f"{base}.xlsx", get_excel_media_type())
 
-    buffer = generate_monthly_payment_summary_pdf(start_year, start_month, payments_data)
+    buffer = generate_monthly_payment_summary_pdf(start_year, start_month, end_year, end_month, payments_data)
     return streaming_response(buffer, f"{base}.pdf", get_pdf_media_type())
 
 

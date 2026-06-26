@@ -598,36 +598,16 @@ async def bulk_approve_miscellaneous_payments(
 
                 pdf_buffer = generate_receipt_pdf(pdf_data)
 
-                # Upload PDF to Cloudinary
-                cloudinary.config(
-                    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-                    api_key=os.getenv('CLOUDINARY_API_KEY'),
-                    api_secret=os.getenv('CLOUDINARY_API_SECRET')
-                )
+                cloudinary_url = upload_receipt_pdf(pdf_buffer, receipt.correlative_number)
 
-                # Generate filename
-                timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-                pdf_filename = f"recibo_{receipt.correlative_number}_{timestamp}.pdf"
+                if cloudinary_url:
+                    receipt.generated_receipt_file = cloudinary_url
+                    payment.generated_receipt_file = cloudinary_url
 
-                # Upload to Cloudinary
-                upload_result = cloudinary.uploader.upload(
-                    pdf_buffer.getvalue(),
-                    public_id=pdf_filename,
-                    resource_type="raw",
-                    folder="receipts"
-                )
-
-                cloudinary_url = upload_result['secure_url']
-
-                # Update receipt with Cloudinary URL
-                receipt.generated_receipt_file = cloudinary_url
                 await receipt.save()
-
-                # Update payment with receipt file URL
-                payment.generated_receipt_file = cloudinary_url
                 await payment.save()
 
-                logger.info("Receipt PDF generated and uploaded for miscellaneous payment %s", payment_id)
+                logger.info("Receipt PDF generated for miscellaneous payment %s", payment_id)
             except Exception as e:
                 # Log the error but don't fail the bulk operation
                 logger.exception("Error creating receipt for miscellaneous payment %s", payment_id)

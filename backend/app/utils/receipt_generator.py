@@ -1,7 +1,5 @@
 from datetime import datetime
 import os
-import cloudinary
-import cloudinary.uploader
 from ..models.receipt import Receipt
 from ..models.payment import Payment
 from ..models.treasurer import Treasurer

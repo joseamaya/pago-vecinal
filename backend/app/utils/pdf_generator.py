@@ -683,9 +683,9 @@ def generate_outstanding_fees_pdf(fees_data):
     return buffer
 
 
-def generate_monthly_payment_summary_pdf(year, month, payments_data):
+def generate_monthly_payment_summary_pdf(start_year, start_month, end_year, end_month, payments_data):
     """
-    Generate a PDF summary of payments for a specific month
+    Generate a PDF summary of payments for a month range
     """
     buffer = io.BytesIO()
 
@@ -710,8 +710,13 @@ def generate_monthly_payment_summary_pdf(year, month, payments_data):
 
     content = []
 
+    if start_year == end_year and start_month == end_month:
+        period_label = f"{start_month:02d}/{start_year}"
+    else:
+        period_label = f"{start_month:02d}/{start_year} - {end_month:02d}/{end_year}"
+
     # Header
-    content.append(Paragraph(f"Resumen de Pagos - {month:02d}/{year}", subtitle_style))
+    content.append(Paragraph(f"Resumen de Pagos - {period_label}", subtitle_style))
     content.append(Spacer(1, 20))
 
     if payments_data:
