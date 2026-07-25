@@ -90,3 +90,79 @@ class TestDownloadReceipt:
                 )
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
+
+
+class TestCreateReceipt:
+    @pytest.mark.asyncio
+    async def test_creates_receipt(
+        self, client, mongomock_db, test_approved_payment, test_fee, test_user, auth_headers_admin
+    ):
+        from app.models.payment import Payment
+        from app.models.receipt import Receipt
+
+        async def mock_fetch_link(self, field):
+            if field is Payment.fee or field == "fee":
+                self.fee = test_fee
+
+        with patch.object(Payment, "fetch_link", mock_fetch_link):
+            with patch("app.routes.receipts.create_receipt_for_payment", new_callable=AsyncMock) as mock_create:
+                mock_create.return_value = Receipt(
+                    correlative_number="CUOT-2025-NEW",
+                    payment=test_approved_payment,
+                    issue_date=datetime.utcnow(),
+                    total_amount=150.0,
+                )
+                response = await client.post(
+                    "/receipts/",
+                    json={"payment_id": str(test_approved_payment.id)},
+                    headers=auth_headers_admin,
+                )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_amount"] == 150.0
+
+    @pytest.mark.asyncio
+    async def test_create_unapproved_payment_fails(
+        self, client, mongomock_db, test_payment, test_fee, auth_headers_admin
+    ):
+        from app.models.payment import Payment
+
+        async def mock_fetch_link(self, field):
+            if field is Payment.fee or field == "fee":
+                self.fee = test_fee
+
+        with patch.object(Payment, "fetch_link", mock_fetch_link):
+            response = await client.post(
+                "/receipts/",
+                json={"payment_id": str(test_payment.id)},
+                headers=auth_headers_admin,
+            )
+        assert response.status_code == 400
+
+
+class TestDeleteReceipt:
+    @pytest.mark.asyncio
+    async def test_deletes_receipt(
+        self, client, mongomock_db, test_receipt, test_payment, auth_headers_admin
+    ):
+        from beanie.odm.fields import Link
+        from app.models.receipt import Receipt
+
+        receipt_id = str(test_receipt.id)
+
+        async def mock_link_fetch(self, fetch_links=False):
+            return test_payment
+
+        with patch.object(Link, "fetch", mock_link_fetch):
+            response = await client.delete(f"/receipts/{receipt_id}", headers=auth_headers_admin)
+        assert response.status_code == 200
+
+        remaining = await Receipt.find_all().to_list()
+        assert len(remaining) == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_not_found(self, client, mongomock_db, auth_headers_admin):
+        response = await client.delete(
+            "/receipts/507f1f77bcf86cd799439999", headers=auth_headers_admin
+        )
+        assert response.status_code == 404
