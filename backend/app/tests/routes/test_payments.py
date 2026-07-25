@@ -44,24 +44,90 @@ class TestListPayments:
 
 class TestCreatePayment:
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires full Beanie model initialization for class-level field access")
-    async def test_creates_payment(self, client, override_auth_as_admin, mock_fee, mock_user):
-        ...
+    async def test_creates_payment(
+        self, client, mongomock_db, test_fee, auth_headers_admin
+    ):
+        from app.models.payment import Payment
+
+        response = await client.post(
+            "/payments/",
+            data={"fee_id": str(test_fee.id), "amount": "150.00"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["amount"] == 150.0
+        assert data["fee_id"] == str(test_fee.id)
+
+        payments = await Payment.find_all().to_list()
+        assert len(payments) == 1
+
+    @pytest.mark.asyncio
+    async def test_create_payment_fee_not_found(self, client, mongomock_db, auth_headers_admin):
+        response = await client.post(
+            "/payments/",
+            data={"fee_id": "507f1f77bcf86cd799439999", "amount": "150.00"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_create_approved_payment_updates_fee(
+        self, client, mongomock_db, test_fee, auth_headers_admin
+    ):
+        from app.models.fee import Fee, FeeStatus
+
+        response = await client.post(
+            "/payments/",
+            data={"fee_id": str(test_fee.id), "amount": "150.00", "payment_status": "approved"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+
+        fee = await Fee.get(test_fee.id)
+        assert fee.paid_amount == 150.0
+        assert fee.status == FeeStatus.COMPLETED
 
 
 class TestDeletePayment:
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires full Beanie model initialization for class-level field access")
-    async def test_admin_can_delete(self, client, override_auth_as_admin, mock_fee):
-        ...
+    async def test_admin_can_delete(
+        self, client, mongomock_db, test_fee, test_approved_payment, auth_headers_admin
+    ):
+        from app.models.fee import Fee, FeeStatus
+        from app.models.payment import Payment, PaymentStatus
+        from unittest.mock import patch, AsyncMock
+
+        test_fee.paid_amount = 150.00
+        test_fee.status = FeeStatus.COMPLETED
+        await test_fee.save()
+
+        payment_id = str(test_approved_payment.id)
+
+        async def mock_fetch_link(self, field):
+            if field is Payment.fee or field == "fee":
+                self.fee = test_fee
+
+        with patch.object(Payment, "fetch_link", mock_fetch_link):
+            response = await client.delete(f"/payments/{payment_id}", headers=auth_headers_admin)
+        assert response.status_code == 200
+
+        remaining = await Payment.find_all().to_list()
+        assert len(remaining) == 0
+
+        fee = await Fee.get(test_fee.id)
+        assert fee.paid_amount == 0.0
+        assert fee.status == FeeStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_owner_cannot_delete(self, client, mock_owner_user):
-        async def override():
-            return mock_owner_user
-        app.dependency_overrides[get_current_user] = override
+    async def test_delete_payment_not_found(self, client, mongomock_db, auth_headers_admin):
+        response = await client.delete(
+            "/payments/507f1f77bcf86cd799439999",
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 404
 
-        response = await client.delete("/payments/pay-1")
+    @pytest.mark.asyncio
+    async def test_owner_cannot_delete(self, client, mongomock_db, auth_headers_owner):
+        response = await client.delete("/payments/pay-1", headers=auth_headers_owner)
         assert response.status_code == 403
-
-        app.dependency_overrides.clear()

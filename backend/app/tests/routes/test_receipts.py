@@ -41,9 +41,23 @@ class TestListReceipts:
 
 class TestGetReceipt:
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires full Beanie model initialization for class-level field access")
-    async def test_returns_single_receipt(self, client, override_auth_as_admin, mock_receipt):
-        ...
+    async def test_returns_single_receipt(
+        self, client, mongomock_db, test_receipt, test_payment, auth_headers_admin
+    ):
+        from beanie.odm.fields import Link
+
+        receipt_id = str(test_receipt.id)
+
+        async def mock_link_fetch(self, fetch_links=False):
+            return test_payment
+
+        with patch.object(Link, "fetch", mock_link_fetch):
+            response = await client.get(f"/receipts/{receipt_id}", headers=auth_headers_admin)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["correlative_number"] == "CUOT-2025-00001"
+        assert data["total_amount"] == 150.0
+        assert data["payment_id"] == str(test_payment.id)
 
     @pytest.mark.asyncio
     async def test_not_found_returns_404(self, client, override_auth_as_admin):
@@ -56,6 +70,23 @@ class TestGetReceipt:
 
 class TestDownloadReceipt:
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires full Beanie model initialization for class-level field access")
-    async def test_returns_pdf_stream(self, client, override_auth_as_admin, mock_receipt):
-        ...
+    async def test_returns_pdf_stream(
+        self, client, mongomock_db, test_receipt, test_payment, auth_headers_admin
+    ):
+        from io import BytesIO
+        from beanie.odm.fields import Link
+
+        async def mock_link_fetch(self, fetch_links=False):
+            return test_payment
+
+        with patch("app.routes.receipts.generate_receipt_pdf") as mock_generate:
+            mock_pdf = BytesIO(b"%PDF-1.4 mock pdf content")
+            mock_generate.return_value = mock_pdf
+
+            with patch.object(Link, "fetch", mock_link_fetch):
+                receipt_id = str(test_receipt.id)
+                response = await client.get(
+                    f"/receipts/{receipt_id}/download", headers=auth_headers_admin
+                )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"

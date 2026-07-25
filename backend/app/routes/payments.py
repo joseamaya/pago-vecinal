@@ -242,7 +242,7 @@ async def create_payment(
     fee_id: str = Form(...),
     amount: float = Form(...),
     payment_date: Optional[datetime] = Form(None),
-    status: Optional[str] = Form(None),
+    payment_status: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user)
 ):
@@ -272,13 +272,13 @@ async def create_payment(
     )
 
     # Set status if provided, otherwise use default (PENDING)
-    if status is not None:
-        payment.status = PaymentStatus(status)
+    if payment_status is not None:
+        payment.status = PaymentStatus(payment_status)
 
     await payment.insert()
 
     # Create receipt and update fee status if approved
-    if status == "approved":
+    if payment_status == "approved":
         await payment.fetch_link(Payment.fee)
         await create_receipt_on_approval(payment)
         if payment.fee:
@@ -316,7 +316,7 @@ async def create_payment(
 async def update_payment(
     payment_id: str,
     amount: Optional[float] = Form(None),
-    status: Optional[str] = Form(None),
+    payment_status: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     payment_date: Optional[datetime] = Form(None),
     current_user: User = Depends(get_current_user)
@@ -344,8 +344,8 @@ async def update_payment(
     # Update fields
     if amount is not None:
         payment.amount = amount
-    if status is not None:
-        payment.status = PaymentStatus(status)
+    if payment_status is not None:
+        payment.status = PaymentStatus(payment_status)
     if notes is not None:
         payment.notes = notes
     if payment_date is not None:
@@ -355,7 +355,7 @@ async def update_payment(
     await payment.save()
 
     # Create receipt automatically if status changed to approved
-    if status == "approved":
+    if payment_status == "approved":
         try:
             logger.info("Creating receipt for payment %s", payment_id)
             await create_receipt_on_approval(payment)
@@ -363,7 +363,7 @@ async def update_payment(
             logger.exception("Error creating receipt for payment %s", payment_id)
 
     # Update fee status based on total payments if payment was approved
-    if status == "approved" and payment.fee:
+    if payment_status == "approved" and payment.fee:
         await update_fee_status_based_on_payments(payment.fee)
 
     # Fetch links again after save

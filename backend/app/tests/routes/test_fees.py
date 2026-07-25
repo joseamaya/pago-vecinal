@@ -72,6 +72,21 @@ class TestListFees:
 
 class TestGenerateFees:
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires full Beanie model initialization for class-level field access")
-    async def test_admin_can_generate(self, client, override_auth_as_admin):
-        ...
+    async def test_admin_can_generate(
+        self, client, override_auth_as_admin, mongomock_db, test_property, test_fee_schedule
+    ):
+        from app.models.fee import Fee
+
+        response = await client.post("/fees/generate", json={"manual": True})
+        assert response.status_code == 200
+        data = response.json()
+        assert "Generated" in data["message"]
+
+        fees = await Fee.find_all().to_list()
+        assert len(fees) == 1
+        assert fees[0].amount == 150.00
+        fee = fees[0]
+        await fee.fetch_link(Fee.property)
+        await fee.fetch_link(Fee.fee_schedule)
+        assert fee.property.id == test_property.id
+        assert fee.fee_schedule.id == test_fee_schedule.id
