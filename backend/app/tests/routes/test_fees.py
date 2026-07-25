@@ -90,3 +90,161 @@ class TestGenerateFees:
         await fee.fetch_link(Fee.fee_schedule)
         assert fee.property.id == test_property.id
         assert fee.fee_schedule.id == test_fee_schedule.id
+
+
+class TestGetFee:
+    @pytest.mark.asyncio
+    async def test_returns_single_fee(
+        self, client, mongomock_db, test_fee, test_property, test_fee_schedule, auth_headers_admin
+    ):
+        from beanie.odm.fields import Link
+
+        fee_id = str(test_fee.id)
+
+        async def mock_fetch(self, fetch_links=False):
+            if hasattr(self, "document_class") and self.document_class.__name__ == "Property":
+                return test_property
+            return test_fee_schedule
+
+        with patch.object(Link, "fetch", mock_fetch):
+            response = await client.get(f"/fees/{fee_id}", headers=auth_headers_admin)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == fee_id
+        assert data["amount"] == 150.0
+
+    @pytest.mark.asyncio
+    async def test_get_fee_not_found(self, client, mongomock_db, auth_headers_admin):
+        response = await client.get(
+            "/fees/507f1f77bcf86cd799439999", headers=auth_headers_admin
+        )
+        assert response.status_code == 404
+
+
+class TestCreateFee:
+    @pytest.mark.asyncio
+    async def test_creates_fee(
+        self,
+        client,
+        mongomock_db,
+        test_property,
+        test_fee_schedule,
+        test_user,
+        auth_headers_admin,
+    ):
+        from app.models.fee import Fee
+        from datetime import datetime, timedelta
+
+        due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        response = await client.post(
+            "/fees/",
+            json={
+                "property_id": str(test_property.id),
+                "fee_schedule_id": str(test_fee_schedule.id),
+                "due_date": due_date,
+            },
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["amount"] == 150.0
+
+        fees = await Fee.find_all().to_list()
+        assert len(fees) >= 1
+
+    @pytest.mark.asyncio
+    async def test_create_fee_property_not_found(
+        self, client, mongomock_db, test_fee_schedule, auth_headers_admin
+    ):
+        from datetime import datetime, timedelta
+
+        due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        response = await client.post(
+            "/fees/",
+            json={
+                "property_id": "507f1f77bcf86cd799439999",
+                "fee_schedule_id": str(test_fee_schedule.id),
+                "due_date": due_date,
+            },
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_create_fee_schedule_not_found(
+        self, client, mongomock_db, test_property, auth_headers_admin
+    ):
+        from datetime import datetime, timedelta
+
+        due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        response = await client.post(
+            "/fees/",
+            json={
+                "property_id": str(test_property.id),
+                "fee_schedule_id": "507f1f77bcf86cd799439999",
+                "due_date": due_date,
+            },
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 404
+
+
+class TestUpdateFee:
+    @pytest.mark.asyncio
+    async def test_updates_fee_status(
+        self, client, mongomock_db, test_fee, test_property, test_fee_schedule, auth_headers_admin
+    ):
+        from beanie.odm.fields import Link
+
+        fee_id = str(test_fee.id)
+
+        async def mock_fetch(self, fetch_links=False):
+            if hasattr(self, "document_class") and self.document_class.__name__ == "Property":
+                return test_property
+            return test_fee_schedule
+
+        with patch.object(Link, "fetch", mock_fetch):
+            response = await client.put(
+                f"/fees/{fee_id}",
+                json={"status": "cancelled"},
+                headers=auth_headers_admin,
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "cancelled"
+
+    @pytest.mark.asyncio
+    async def test_update_fee_not_found(self, client, mongomock_db, auth_headers_admin):
+        response = await client.put(
+            "/fees/507f1f77bcf86cd799439999",
+            json={"status": "cancelled"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 404
+
+
+class TestDeleteFee:
+    @pytest.mark.asyncio
+    async def test_admin_can_delete(
+        self, client, mongomock_db, test_fee, auth_headers_admin
+    ):
+        from app.models.fee import Fee
+
+        fee_id = str(test_fee.id)
+        response = await client.delete(f"/fees/{fee_id}", headers=auth_headers_admin)
+        assert response.status_code == 200
+
+        remaining = await Fee.find_all().to_list()
+        assert len(remaining) == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_fee_not_found(self, client, mongomock_db, auth_headers_admin):
+        response = await client.delete(
+            "/fees/507f1f77bcf86cd799439999", headers=auth_headers_admin
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_owner_cannot_delete(self, client, mongomock_db, auth_headers_owner):
+        response = await client.delete("/fees/some-fee", headers=auth_headers_owner)
+        assert response.status_code == 403

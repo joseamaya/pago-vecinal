@@ -131,3 +131,96 @@ class TestDeletePayment:
     async def test_owner_cannot_delete(self, client, mongomock_db, auth_headers_owner):
         response = await client.delete("/payments/pay-1", headers=auth_headers_owner)
         assert response.status_code == 403
+
+
+class TestGetPayment:
+    @pytest.mark.asyncio
+    async def test_returns_single_payment(
+        self, client, mongomock_db, test_payment, test_fee, auth_headers_admin
+    ):
+        from beanie.odm.fields import Link
+
+        payment_id = str(test_payment.id)
+
+        async def mock_link_fetch(self, fetch_links=False):
+            return test_fee
+
+        with patch.object(Link, "fetch", mock_link_fetch):
+            response = await client.get(f"/payments/{payment_id}", headers=auth_headers_admin)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == payment_id
+        assert data["amount"] == 150.0
+
+    @pytest.mark.asyncio
+    async def test_get_payment_not_found(self, client, mongomock_db, auth_headers_admin):
+        response = await client.get(
+            "/payments/507f1f77bcf86cd799439999", headers=auth_headers_admin
+        )
+        assert response.status_code == 404
+
+
+class TestUpdatePayment:
+    @pytest.mark.asyncio
+    async def test_updates_payment_amount(
+        self, client, mongomock_db, test_payment, test_fee, auth_headers_admin
+    ):
+        from beanie.odm.fields import Link
+
+        payment_id = str(test_payment.id)
+
+        async def mock_link_fetch(self, fetch_links=False):
+            return test_fee
+
+        with patch.object(Link, "fetch", mock_link_fetch):
+            response = await client.put(
+                f"/payments/{payment_id}",
+                data={"amount": "200.00"},
+                headers=auth_headers_admin,
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["amount"] == 200.0
+
+    @pytest.mark.asyncio
+    async def test_update_payment_not_found(self, client, mongomock_db, auth_headers_admin):
+        response = await client.put(
+            "/payments/507f1f77bcf86cd799439999",
+            data={"amount": "200.00"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 404
+
+
+class TestBulkApprove:
+    @pytest.mark.asyncio
+    async def test_approves_payments(
+        self, client, mongomock_db, test_payment, test_fee, auth_headers_admin
+    ):
+        from app.models.payment import Payment
+        from unittest.mock import patch
+
+        payment_id = str(test_payment.id)
+
+        async def mock_fetch_link(self, field):
+            if field is Payment.fee or field == "fee":
+                self.fee = test_fee
+
+        with patch.object(Payment, "fetch_link", mock_fetch_link):
+            response = await client.post(
+                "/payments/bulk-approve",
+                json={"payment_ids": [payment_id]},
+                headers=auth_headers_admin,
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["approved_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_bulk_approve_empty_list(self, client, mongomock_db, auth_headers_admin):
+        response = await client.post(
+            "/payments/bulk-approve",
+            json={"payment_ids": []},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
