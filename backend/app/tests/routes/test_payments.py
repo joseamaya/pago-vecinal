@@ -79,7 +79,7 @@ class TestCreatePayment:
 
         response = await client.post(
             "/payments/",
-            data={"fee_id": str(test_fee.id), "amount": "150.00", "payment_status": "approved"},
+            data={"fee_id": str(test_fee.id), "amount": "150.00", "status": "approved"},
             headers=auth_headers_admin,
         )
         assert response.status_code == 200

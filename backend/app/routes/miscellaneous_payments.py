@@ -204,7 +204,7 @@ async def update_miscellaneous_payment(
     amount: Optional[float] = Form(None),
     payment_type: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    status: Optional[str] = Form(None),
+    payment_status: Optional[str] = Form(None, alias="status"),
     notes: Optional[str] = Form(None),
     receipt_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user)
@@ -249,13 +249,13 @@ async def update_miscellaneous_payment(
         payment.payment_type = MiscellaneousPaymentType(payment_type)
     if description is not None:
         payment.description = description
-    if status is not None:
-        payment.status = MiscellaneousPaymentStatus(status)
+    if payment_status is not None:
+        payment.status = MiscellaneousPaymentStatus(payment_status)
     if notes is not None:
         payment.notes = notes
 
     # Create receipt in database if status changed to approved
-    if status == "approved":
+    if payment_status == "approved":
         try:
             logger.info("Creating receipt for miscellaneous payment %s", payment_id)
 

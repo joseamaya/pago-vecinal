@@ -242,7 +242,7 @@ async def create_payment(
     fee_id: str = Form(...),
     amount: float = Form(...),
     payment_date: Optional[datetime] = Form(None),
-    payment_status: Optional[str] = Form(None),
+    payment_status: Optional[str] = Form(None, alias="status"),
     notes: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user)
 ):
@@ -316,7 +316,7 @@ async def create_payment(
 async def update_payment(
     payment_id: str,
     amount: Optional[float] = Form(None),
-    payment_status: Optional[str] = Form(None),
+    payment_status: Optional[str] = Form(None, alias="status"),
     notes: Optional[str] = Form(None),
     payment_date: Optional[datetime] = Form(None),
     current_user: User = Depends(get_current_user)
