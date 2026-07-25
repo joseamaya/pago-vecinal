@@ -308,7 +308,7 @@ const PaymentManagement = () => {
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('fee_id', formData.fee_id);
-      formDataToSend.append('amount', parseFloat(formData.amount));
+      formDataToSend.append('amount', formData.amount);
       formDataToSend.append('notes', formData.notes || '');
       formDataToSend.append('payment_date', formData.payment_date);
 
@@ -323,22 +323,13 @@ const PaymentManagement = () => {
         await paymentsAPI.createPayment(formDataToSend);
       }
 
-      const refreshAndClose = () => {
-        const currentFilters = {};
-        if (filterYear) currentFilters.year = parseInt(filterYear);
-        if (filterMonth) currentFilters.month = parseInt(filterMonth);
-        if (filterStatus) currentFilters.status = filterStatus;
-        if (filterProperty) currentFilters.property_id = filterProperty;
-        fetchPayments(currentPage, currentFilters);
-        handleCloseDialog();
-      };
-
-      if (isDirectlyApproved) {
-        // Wait a bit for receipt generation to complete, similar to handleApprove
-        setTimeout(refreshAndClose, 2000);
-      } else {
-        refreshAndClose();
-      }
+      const currentFilters = {};
+      if (filterYear) currentFilters.year = parseInt(filterYear);
+      if (filterMonth) currentFilters.month = parseInt(filterMonth);
+      if (filterStatus) currentFilters.status = filterStatus;
+      if (filterProperty) currentFilters.property_id = filterProperty;
+      fetchPayments(currentPage, currentFilters);
+      handleCloseDialog();
 
     } catch (err) {
       setError(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
@@ -370,16 +361,12 @@ const PaymentManagement = () => {
       formDataToSend.append('status', 'approved');
       const response = await paymentsAPI.updatePayment(paymentId, formDataToSend);
 
-      // Wait a bit for receipt generation to complete
-      setTimeout(async () => {
-        const currentFilters = {};
-        if (filterYear) currentFilters.year = parseInt(filterYear);
-        if (filterMonth) currentFilters.month = parseInt(filterMonth);
-        if (filterStatus) currentFilters.status = filterStatus;
-        if (filterProperty) currentFilters.property_id = filterProperty;
-        await fetchPayments(currentPage, currentFilters);
-
-      }, 2000); // 2 second delay
+      const currentFilters = {};
+      if (filterYear) currentFilters.year = parseInt(filterYear);
+      if (filterMonth) currentFilters.month = parseInt(filterMonth);
+      if (filterStatus) currentFilters.status = filterStatus;
+      if (filterProperty) currentFilters.property_id = filterProperty;
+      await fetchPayments(currentPage, currentFilters);
     } catch (err) {
       setError('Error al aprobar pago');
       console.error('Error approving payment:', err);

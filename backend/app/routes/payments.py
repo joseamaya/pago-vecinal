@@ -277,17 +277,12 @@ async def create_payment(
 
     await payment.insert()
 
-    # Create receipt automatically if status changed to approved
+    # Create receipt and update fee status if approved
     if status == "approved":
-        try:
-            logger.info("Creating receipt for payment %s", payment.id)
-            await create_receipt_on_approval(payment)
-        except Exception as e:
-            logger.exception("Error creating receipt for payment %s", payment.id)
-
-    # Update fee status based on total payments if payment was approved
-    if status == "approved" and payment.fee:
-        await update_fee_status_based_on_payments(payment.fee)
+        await payment.fetch_link(Payment.fee)
+        await create_receipt_on_approval(payment)
+        if payment.fee:
+            await update_fee_status_based_on_payments(payment.fee)
 
     # Fetch linked documents for the response
     await payment.fetch_link(Payment.fee)
