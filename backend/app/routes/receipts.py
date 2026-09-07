@@ -48,6 +48,8 @@ async def get_receipts(
     # Fetch links for each receipt
     for receipt in receipts:
         await receipt.fetch_link(Receipt.payment)
+        await receipt.fetch_link(Receipt.miscellaneous_payment)
+        await receipt.fetch_link(Receipt.expense)
 
     # Calculate total pages
     total_pages = (total_count + limit - 1) // limit
@@ -57,7 +59,7 @@ async def get_receipts(
         ReceiptResponse(
             id=str(receipt.id),
             correlative_number=receipt.correlative_number,
-        payment_id=str(payment_doc.id) if payment_doc else None,
+            payment_id=str(receipt.payment.id) if receipt.payment else None,
             miscellaneous_payment_id=str(receipt.miscellaneous_payment.id) if receipt.miscellaneous_payment else None,
             expense_id=str(receipt.expense.id) if receipt.expense else None,
             issue_date=receipt.issue_date,
@@ -95,18 +97,21 @@ async def get_receipt(receipt_id: str, current_user: User = Depends(get_current_
     payment_doc = await receipt.payment.fetch()
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not payment_doc.user or str(payment_doc.user.id) != str(current_user.id))):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    if current_user.role != UserRole.ADMIN and receipt.payment:
+        await payment_doc.fetch_link(Payment.user)
+        if not payment_doc.user or str(payment_doc.user.id) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
+
+    payment_misc = await receipt.miscellaneous_payment.fetch() if receipt.miscellaneous_payment else None
 
     return ReceiptResponse(
         id=str(receipt.id),
         correlative_number=receipt.correlative_number,
         payment_id=str(payment_doc.id) if payment_doc else None,
-        miscellaneous_payment_id=str(receipt.miscellaneous_payment.id) if receipt.miscellaneous_payment else None,
+        miscellaneous_payment_id=str(payment_misc.id) if payment_misc else None,
         issue_date=receipt.issue_date,
         total_amount=receipt.total_amount,
         property_details=receipt.property_details,
@@ -198,12 +203,13 @@ async def update_receipt(
     payment_doc = await receipt.payment.fetch()
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not payment_doc.user or str(payment_doc.user.id) != str(current_user.id))):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    if current_user.role != UserRole.ADMIN and receipt.payment:
+        await payment_doc.fetch_link(Payment.user)
+        if not payment_doc.user or str(payment_doc.user.id) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
 
     # Update fields
     if receipt_data.fee_period is not None:
@@ -233,11 +239,13 @@ async def update_receipt(
     receipt.generated_receipt_file = cloudinary_url
     await receipt.save()
 
+    payment_misc = await receipt.miscellaneous_payment.fetch() if receipt.miscellaneous_payment else None
+
     return ReceiptResponse(
         id=str(receipt.id),
         correlative_number=receipt.correlative_number,
-        payment_id=str(receipt.payment.id) if receipt.payment else None,
-        miscellaneous_payment_id=str(receipt.miscellaneous_payment.id) if receipt.miscellaneous_payment else None,
+        payment_id=str(payment_doc.id) if payment_doc else None,
+        miscellaneous_payment_id=str(payment_misc.id) if payment_misc else None,
         issue_date=receipt.issue_date,
         total_amount=receipt.total_amount,
         property_details=receipt.property_details,
@@ -307,15 +315,17 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
     payment_doc = await receipt.payment.fetch()
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not payment_doc.user or str(payment_doc.user.id) != str(current_user.id))):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    if current_user.role != UserRole.ADMIN and receipt.payment:
+        await payment_doc.fetch_link(Payment.user)
+        if not payment_doc.user or str(payment_doc.user.id) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
 
     # Update property details with current information
     if payment_doc.fee:
+        await payment_doc.fetch_link(Payment.fee)
         await payment_doc.fee.fetch_link(Fee.property)
         if payment_doc.fee.property:
             property = payment_doc.fee.property
@@ -383,6 +393,7 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
 
             # Update property details with current information
             if payment_doc.fee:
+                await payment_doc.fetch_link(Payment.fee)
                 await payment_doc.fee.fetch_link(Fee.property)
                 if payment_doc.fee.property:
                     property = payment_doc.fee.property
