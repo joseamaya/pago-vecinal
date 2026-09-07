@@ -420,6 +420,7 @@ async def update_agreement(
     # Fetch links for response
     await agreement.fetch_link(Agreement.property)
     await agreement.fetch_link(Agreement.user)
+    await agreement.fetch_link(Agreement.fees)
 
     # Fetch installments
     installments = await AgreementInstallment.find(
@@ -833,7 +834,15 @@ async def update_installment_payment(
     await agreement.fetch_link(Agreement.user)
 
     installment = await AgreementInstallment.get(installment_id)
-    if not installment or str(installment.agreement.id) != agreement_id:
+    if not installment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Installment not found"
+        )
+
+    await installment.fetch_link(AgreementInstallment.agreement)
+
+    if not installment.agreement or str(installment.agreement.id) != agreement_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Installment not found"

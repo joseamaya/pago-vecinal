@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from .config.database import init_db
 from .config.logging import setup_logging
 from .utils.init_admin import create_initial_admin
-from .routes import users, properties, fees, payments, auth, receipts, fee_schedules, reports, miscellaneous_payments, expenses, dashboard, treasurers
+from .routes import users, properties, fees, payments, auth, receipts, fee_schedules, reports, miscellaneous_payments, expenses, dashboard, treasurers, agreements
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ app.include_router(miscellaneous_payments.router, prefix="/miscellaneous-payment
 app.include_router(expenses.router, prefix="/expenses", tags=["Expenses"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(treasurers.router, prefix="/treasurers", tags=["Treasurers"])
+app.include_router(agreements.router, prefix="/agreements", tags=["Agreements"])
 
 @app.on_event("startup")
 async def startup_event():
