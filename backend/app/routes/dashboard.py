@@ -146,15 +146,15 @@ async def get_owner_expenses_report(current_user: User = Depends(get_current_use
     if current_user.role == UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Not allowed for admin")
 
-    # For now, show all approved expenses (community expenses)
-    expenses = await Expense.find(Expense.status == "approved").to_list()
+    # For now, show all expenses (community expenses)
+    expenses = await Expense.find_all().to_list()
 
-    # Group by type
+    # Group by description
     expense_types = {}
     total_expenses = 0
 
     for expense in expenses:
-        exp_type = expense.expense_type
+        exp_type = expense.description
         if exp_type not in expense_types:
             expense_types[exp_type] = {
                 "count": 0,
@@ -171,7 +171,6 @@ async def get_owner_expenses_report(current_user: User = Depends(get_current_use
             "amount": expense.amount,
             "expense_date": expense.expense_date,
             "description": expense.description,
-            "beneficiary": expense.beneficiary,
         })
 
     return {
