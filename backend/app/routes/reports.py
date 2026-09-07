@@ -536,6 +536,8 @@ async def download_annual_property_statement(
     if not property_obj:
         raise HTTPException(status_code=404, detail="Property not found")
 
+    await property_obj.fetch_link(Property.owner)
+
     if (current_user.role != UserRole.ADMIN and
         (not property_obj.owner or str(property_obj.owner.id) != str(current_user.id))):
         raise HTTPException(status_code=403, detail="Not enough permissions")
