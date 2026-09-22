@@ -38,6 +38,36 @@ class TestListReceipts:
             assert "data" in data
             assert "pagination" in data
 
+    @pytest.mark.asyncio
+    async def test_owner_query_targets_payment_and_misc_links(self, mongomock_db):
+        from types import SimpleNamespace
+        from beanie import PydanticObjectId
+        from app.models.user import UserRole
+        from app.models.payment import Payment
+        from app.models.miscellaneous_payment import MiscellaneousPayment
+        from app.routes.receipts import _owner_receipts_query
+
+        user = SimpleNamespace(role=UserRole.OWNER, id=PydanticObjectId())
+        pay_id = PydanticObjectId()
+        misc_id = PydanticObjectId()
+
+        pay_query = MagicMock()
+        pay_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=pay_id)])
+        misc_query = MagicMock()
+        misc_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=misc_id)])
+
+        with patch.object(Payment, "find", return_value=pay_query), patch.object(
+            MiscellaneousPayment, "find", return_value=misc_query
+        ):
+            query = await _owner_receipts_query(user)
+
+        assert query.get_filter_query() == {
+            "$or": [
+                {"payment.$id": {"$in": [pay_id]}},
+                {"miscellaneous_payment.$id": {"$in": [misc_id]}},
+            ]
+        }
+
 
 class TestGetReceipt:
     @pytest.mark.asyncio
@@ -166,3 +196,142 @@ class TestDeleteReceipt:
             "/receipts/507f1f77bcf86cd799439999", headers=auth_headers_admin
         )
         assert response.status_code == 404
+
+
+class TestMiscellaneousReceipt:
+    """Receipts created for miscellaneous payments have no `payment` link."""
+
+    @pytest.mark.asyncio
+    async def test_get_returns_misc_payment_id(
+        self, client, mongomock_db, test_misc_receipt, test_misc_payment, auth_headers_admin
+    ):
+        response = await client.get(
+            f"/receipts/{test_misc_receipt.id}", headers=auth_headers_admin
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["payment_id"] is None
+        assert data["miscellaneous_payment_id"] == str(test_misc_payment.id)
+
+    @pytest.mark.asyncio
+    async def test_owner_can_get_own_misc_receipt(
+        self, client, mongomock_db, test_misc_receipt, auth_headers_owner
+    ):
+        response = await client.get(
+            f"/receipts/{test_misc_receipt.id}", headers=auth_headers_owner
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_other_owner_forbidden(
+        self, client, mongomock_db, test_misc_receipt, auth_headers_other_owner
+    ):
+        response = await client.get(
+            f"/receipts/{test_misc_receipt.id}", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_update_without_payment_link(
+        self, client, mongomock_db, test_misc_receipt, auth_headers_admin
+    ):
+        from io import BytesIO
+
+        with patch(
+            "app.routes.receipts.generate_receipt_pdf", return_value=BytesIO(b"%PDF-1.4 mock")
+        ):
+            with patch(
+                "app.routes.receipts.upload_receipt_pdf",
+                return_value="https://cloud.test/recibo.pdf",
+            ):
+                response = await client.put(
+                    f"/receipts/{test_misc_receipt.id}",
+                    json={"notes": "Actualizado"},
+                    headers=auth_headers_admin,
+                )
+        assert response.status_code == 200
+        assert response.json()["notes"] == "Actualizado"
+
+    @pytest.mark.asyncio
+    async def test_regenerate_without_payment_link(
+        self, client, mongomock_db, test_misc_receipt, auth_headers_admin
+    ):
+        from io import BytesIO
+
+        with patch(
+            "app.routes.receipts.generate_receipt_pdf", return_value=BytesIO(b"%PDF-1.4 mock")
+        ):
+            with patch(
+                "app.routes.receipts.upload_receipt_pdf",
+                return_value="https://cloud.test/recibo.pdf",
+            ):
+                response = await client.post(
+                    f"/receipts/{test_misc_receipt.id}/regenerate-pdf",
+                    headers=auth_headers_admin,
+                )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_download_without_payment_link(
+        self, client, mongomock_db, test_misc_receipt, auth_headers_admin
+    ):
+        from io import BytesIO
+
+        with patch(
+            "app.routes.receipts.generate_receipt_pdf",
+            return_value=BytesIO(b"%PDF-1.4 mock pdf content"),
+        ):
+            response = await client.get(
+                f"/receipts/{test_misc_receipt.id}/download", headers=auth_headers_admin
+            )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+
+    @pytest.mark.asyncio
+    async def test_regenerate_all_includes_misc_receipts(
+        self, client, mongomock_db, test_misc_receipt, auth_headers_admin
+    ):
+        from io import BytesIO
+
+        with patch(
+            "app.routes.receipts.generate_receipt_pdf", return_value=BytesIO(b"%PDF-1.4 mock")
+        ):
+            with patch(
+                "app.routes.receipts.upload_receipt_pdf",
+                return_value="https://cloud.test/recibo.pdf",
+            ):
+                response = await client.post(
+                    "/receipts/regenerate-all-pdfs", headers=auth_headers_admin
+                )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["updated_count"] == 1
+        assert data["errors"] == []
+
+    @pytest.mark.asyncio
+    async def test_delete_forbidden_for_other_owner(
+        self, client, mongomock_db, test_misc_receipt, auth_headers_other_owner
+    ):
+        response = await client.delete(
+            f"/receipts/{test_misc_receipt.id}", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 403
+
+
+class TestExpenseReceipt:
+    """Receipts for expenses have no owner and are admin-only."""
+
+    @pytest.mark.asyncio
+    async def test_admin_can_get(self, client, mongomock_db, test_expense_receipt, auth_headers_admin):
+        response = await client.get(
+            f"/receipts/{test_expense_receipt.id}", headers=auth_headers_admin
+        )
+        assert response.status_code == 200
+        assert response.json()["expense_id"] is not None
+
+    @pytest.mark.asyncio
+    async def test_owner_forbidden(self, client, mongomock_db, test_expense_receipt, auth_headers_owner):
+        response = await client.get(
+            f"/receipts/{test_expense_receipt.id}", headers=auth_headers_owner
+        )
+        assert response.status_code == 403

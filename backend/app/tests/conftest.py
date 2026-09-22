@@ -382,3 +382,101 @@ async def test_approved_payment(mongomock_db, test_user, test_fee):
     )
     await payment.insert()
     return payment
+
+
+@pytest.fixture
+async def test_other_owner_user(mongomock_db):
+    from app.models.user import User, UserRole
+
+    user = User(
+        email="other-owner@example.com",
+        password_hash="$2b$12$dummy_hash_for_testing_only",
+        role=UserRole.OWNER,
+        full_name="Other Owner",
+        phone="555-0000",
+        is_active=True,
+    )
+    await user.insert()
+    return user
+
+
+@pytest.fixture
+async def auth_headers_other_owner(test_other_owner_user):
+    token = create_access_token(data={"sub": test_other_owner_user.email})
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+async def test_misc_payment(mongomock_db, test_owner_user):
+    from app.models.miscellaneous_payment import (
+        MiscellaneousPayment,
+        MiscellaneousPaymentStatus,
+        MiscellaneousPaymentType,
+    )
+
+    payment = MiscellaneousPayment(
+        user=test_owner_user,
+        payment_type=MiscellaneousPaymentType.OTHER,
+        amount=50.0,
+        payment_date=datetime.utcnow(),
+        description="Pago jardineria",
+        status=MiscellaneousPaymentStatus.APPROVED,
+    )
+    await payment.insert()
+    return payment
+
+
+@pytest.fixture
+async def test_misc_receipt(mongomock_db, test_misc_payment):
+    from app.models.receipt import Receipt
+
+    receipt = Receipt(
+        correlative_number="OTR-2025-00001",
+        miscellaneous_payment=test_misc_payment,
+        issue_date=datetime.utcnow(),
+        total_amount=50.0,
+        property_details={
+            "villa": "N/A",
+            "row_letter": "N/A",
+            "number": 0,
+            "owner_name": "Owner User",
+            "owner_phone": "555-5678",
+        },
+        owner_details={"name": "Owner User", "phone": "555-5678"},
+        fee_period="Pago varios: Pago jardineria",
+        notes="Recibo generado automaticamente",
+        treasurer_details={
+            "name": "Tesorero no configurado",
+            "signature": None,
+            "villa": None,
+        },
+    )
+    await receipt.insert()
+    return receipt
+
+
+@pytest.fixture
+async def test_expense(mongomock_db):
+    from app.models.expense import Expense
+
+    expense = Expense(
+        expense_date=datetime.utcnow(),
+        description="Compra de insumos",
+        amount=30.0,
+    )
+    await expense.insert()
+    return expense
+
+
+@pytest.fixture
+async def test_expense_receipt(mongomock_db, test_expense):
+    from app.models.receipt import Receipt
+
+    receipt = Receipt(
+        correlative_number="GASTO-2025-00001",
+        expense=test_expense,
+        issue_date=datetime.utcnow(),
+        total_amount=30.0,
+    )
+    await receipt.insert()
+    return receipt
