@@ -5,6 +5,8 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import os
+import shutil
+from beanie import PydanticObjectId
 from ..models.agreement import (
     Agreement, AgreementCreate, AgreementUpdate, AgreementResponse,
     AgreementInstallment, AgreementInstallmentCreate, AgreementInstallmentUpdate, AgreementInstallmentResponse,
@@ -21,6 +23,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def _build_agreement_filters(current_user, property_id=None, status_filter=None):
+    filters = []
+
+    if current_user.role != UserRole.ADMIN:
+        # Regular users can only see agreements for their properties
+        filters.append(Agreement.user.id == current_user.id)
+
+    if property_id:
+        try:
+            filters.append(Agreement.property.id == PydanticObjectId(property_id))
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid property_id"
+            )
+
+    if status_filter:
+        filters.append(Agreement.status == status_filter)
+
+    return filters
+
+
 @router.get("/", response_model=List[AgreementResponse])
 async def get_agreements(
     current_user: User = Depends(get_current_user),
@@ -28,21 +53,11 @@ async def get_agreements(
     status: Optional[str] = None
 ):
     # Build query filters
-    query_filters = {}
-
-    if current_user.role != UserRole.ADMIN:
-        # Regular users can only see agreements for their properties
-        query_filters["user.id"] = current_user.id
-
-    if property_id:
-        query_filters["property.id"] = property_id
-
-    if status:
-        query_filters["status"] = status
+    filters = _build_agreement_filters(current_user, property_id, status)
 
     # Get agreements
-    if query_filters:
-        agreements = await Agreement.find(query_filters).to_list()
+    if filters:
+        agreements = await Agreement.find(*filters).to_list()
     else:
         agreements = await Agreement.find_all().to_list()
 
@@ -288,11 +303,14 @@ async def create_agreement(
 
     agreement_number = f"AGR-{current_year}-{new_number:05d}"
 
+    # Admins can create agreements on behalf of the property owner
+    agreement_owner = prop.owner if (current_user.role == UserRole.ADMIN and prop.owner) else current_user
+
     # Create agreement
     agreement = Agreement(
         property=prop,
         fees=fees,
-        user=current_user,
+        user=agreement_owner,
         total_debt=total_debt,
         monthly_amount=agreement_data.monthly_amount,
         installments_count=agreement_data.installments_count,
@@ -709,6 +727,7 @@ async def pay_next_installment(
         file_path = os.path.join("static", "uploads", unique_filename)
 
         # Save file
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(receipt_file.file, buffer)
 
@@ -722,6 +741,7 @@ async def pay_next_installment(
     await installment_obj.save()
 
     # Generate receipt for agreement installment payment
+    agreement = None
     try:
         logger.info("Creating receipt for agreement installment %s", installment_obj.id)
 

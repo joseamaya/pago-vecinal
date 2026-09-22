@@ -1,11 +1,13 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, RedirectResponse
+from beanie.operators import In, Or
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 from ..models.receipt import Receipt, ReceiptCreate, ReceiptUpdate, ReceiptResponse
 from ..models.payment import Payment
+from ..models.miscellaneous_payment import MiscellaneousPayment
 from ..models.fee import Fee
 from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
@@ -23,6 +25,84 @@ class PaginatedReceiptResponse(BaseModel):
 
 router = APIRouter()
 
+
+async def _fetch_receipt_links(receipt):
+    payment_doc = await receipt.payment.fetch() if receipt.payment else None
+    misc_doc = (
+        await receipt.miscellaneous_payment.fetch()
+        if receipt.miscellaneous_payment
+        else None
+    )
+    expense_doc = await receipt.expense.fetch() if receipt.expense else None
+    return payment_doc, misc_doc, expense_doc
+
+
+async def _assert_receipt_access(payment_doc, misc_doc, current_user):
+    if current_user.role == UserRole.ADMIN:
+        return
+
+    if payment_doc is not None:
+        await payment_doc.fetch_link(Payment.user)
+        owner = payment_doc.user
+    elif misc_doc is not None:
+        await misc_doc.fetch_link(MiscellaneousPayment.user)
+        owner = misc_doc.user
+    else:
+        owner = None
+
+    if not owner or str(owner.id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+
+async def _owner_receipts_query(current_user):
+    # Owners can only see receipts for their own payments (regular and miscellaneous)
+    payment_ids = [
+        p.id
+        for p in await Payment.find(Payment.user.id == current_user.id).to_list()
+    ]
+    misc_payment_ids = [
+        m.id
+        for m in await MiscellaneousPayment.find(
+            MiscellaneousPayment.user.id == current_user.id
+        ).to_list()
+    ]
+    return Receipt.find(
+        Or(
+            In(Receipt.payment.id, payment_ids),
+            In(Receipt.miscellaneous_payment.id, misc_payment_ids),
+        )
+    )
+
+
+def _build_receipt_pdf_data(receipt, payment_doc, misc_doc, treasurer_details=None):
+    if payment_doc is not None:
+        payment_date = payment_doc.payment_date
+        reference = payment_doc.fee_id
+    elif misc_doc is not None:
+        payment_date = misc_doc.payment_date
+        reference = str(misc_doc.id)
+    else:
+        payment_date = receipt.issue_date
+        reference = receipt.correlative_number
+
+    return {
+        "correlative_number": receipt.correlative_number,
+        "issue_date": receipt.issue_date,
+        "payment_date": payment_date,
+        "total_amount": receipt.total_amount,
+        "property_details": receipt.property_details,
+        "reference": reference,
+        "fee_period": receipt.fee_period,
+        "notes": receipt.notes,
+        "treasurer_details": (
+            treasurer_details if treasurer_details is not None else receipt.treasurer_details
+        ),
+    }
+
+
 @router.get("/", response_model=PaginatedReceiptResponse)
 async def get_receipts(
     page: int = 1,
@@ -33,8 +113,7 @@ async def get_receipts(
     if current_user.role == UserRole.ADMIN:
         base_query = Receipt.find_all()
     else:
-        # Owners can only see receipts for their payments
-        base_query = Receipt.find(Receipt.payment.user.id == current_user.id)
+        base_query = await _owner_receipts_query(current_user)
 
     # Get total count
     total_count = await base_query.count()
@@ -93,25 +172,18 @@ async def get_receipt(receipt_id: str, current_user: User = Depends(get_current_
             detail="Receipt not found"
         )
 
-    # Fetch the actual payment document
-    payment_doc = await receipt.payment.fetch()
+    # Fetch the linked documents
+    payment_doc, payment_misc, expense_doc = await _fetch_receipt_links(receipt)
 
     # Check permissions
-    if current_user.role != UserRole.ADMIN and receipt.payment:
-        await payment_doc.fetch_link(Payment.user)
-        if not payment_doc.user or str(payment_doc.user.id) != str(current_user.id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
-
-    payment_misc = await receipt.miscellaneous_payment.fetch() if receipt.miscellaneous_payment else None
+    await _assert_receipt_access(payment_doc, payment_misc, current_user)
 
     return ReceiptResponse(
         id=str(receipt.id),
         correlative_number=receipt.correlative_number,
         payment_id=str(payment_doc.id) if payment_doc else None,
         miscellaneous_payment_id=str(payment_misc.id) if payment_misc else None,
+        expense_id=str(expense_doc.id) if expense_doc else None,
         issue_date=receipt.issue_date,
         total_amount=receipt.total_amount,
         property_details=receipt.property_details,
@@ -199,17 +271,11 @@ async def update_receipt(
             detail="Receipt not found"
         )
 
-    # Fetch the actual payment document
-    payment_doc = await receipt.payment.fetch()
+    # Fetch the linked documents
+    payment_doc, payment_misc, expense_doc = await _fetch_receipt_links(receipt)
 
     # Check permissions
-    if current_user.role != UserRole.ADMIN and receipt.payment:
-        await payment_doc.fetch_link(Payment.user)
-        if not payment_doc.user or str(payment_doc.user.id) != str(current_user.id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
+    await _assert_receipt_access(payment_doc, payment_misc, current_user)
 
     # Update fields
     if receipt_data.fee_period is not None:
@@ -220,17 +286,7 @@ async def update_receipt(
     await receipt.save()
 
     # Regenerate PDF with updated information
-    pdf_data = {
-        "correlative_number": receipt.correlative_number,
-        "issue_date": receipt.issue_date,
-        "payment_date": payment_doc.payment_date,
-        "total_amount": receipt.total_amount,
-        "property_details": receipt.property_details,
-        "reference": payment_doc.fee_id,
-        "fee_period": receipt.fee_period,
-        "notes": receipt.notes,
-        "treasurer_details": receipt.treasurer_details
-    }
+    pdf_data = _build_receipt_pdf_data(receipt, payment_doc, payment_misc)
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
@@ -239,13 +295,12 @@ async def update_receipt(
     receipt.generated_receipt_file = cloudinary_url
     await receipt.save()
 
-    payment_misc = await receipt.miscellaneous_payment.fetch() if receipt.miscellaneous_payment else None
-
     return ReceiptResponse(
         id=str(receipt.id),
         correlative_number=receipt.correlative_number,
         payment_id=str(payment_doc.id) if payment_doc else None,
         miscellaneous_payment_id=str(payment_misc.id) if payment_misc else None,
+        expense_id=str(expense_doc.id) if expense_doc else None,
         issue_date=receipt.issue_date,
         total_amount=receipt.total_amount,
         property_details=receipt.property_details,
@@ -265,32 +320,14 @@ async def download_receipt_pdf(receipt_id: str, current_user: User = Depends(get
             detail="Receipt not found"
         )
 
-    # Fetch the actual payment document
-    payment_doc = await receipt.payment.fetch()
+    # Fetch the linked documents
+    payment_doc, payment_misc, _ = await _fetch_receipt_links(receipt)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not payment_doc.user or str(payment_doc.user.id) != str(current_user.id))):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
-    # Fetch the actual payment document
-    payment_doc = await receipt.payment.fetch()
+    await _assert_receipt_access(payment_doc, payment_misc, current_user)
 
     # Always generate PDF on the fly to avoid Cloudinary permission issues
-    pdf_data = {
-        "correlative_number": receipt.correlative_number,
-        "issue_date": receipt.issue_date,
-        "payment_date": payment_doc.payment_date,
-        "total_amount": receipt.total_amount,
-        "property_details": receipt.property_details,
-        "reference": payment_doc.fee_id,
-        "fee_period": receipt.fee_period,
-        "notes": receipt.notes,
-        "treasurer_details": receipt.treasurer_details
-    }
+    pdf_data = _build_receipt_pdf_data(receipt, payment_doc, payment_misc)
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
@@ -311,20 +348,14 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
             detail="Receipt not found"
         )
 
-    # Fetch the actual payment document
-    payment_doc = await receipt.payment.fetch()
+    # Fetch the linked documents
+    payment_doc, payment_misc, _ = await _fetch_receipt_links(receipt)
 
     # Check permissions
-    if current_user.role != UserRole.ADMIN and receipt.payment:
-        await payment_doc.fetch_link(Payment.user)
-        if not payment_doc.user or str(payment_doc.user.id) != str(current_user.id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
+    await _assert_receipt_access(payment_doc, payment_misc, current_user)
 
     # Update property details with current information
-    if payment_doc.fee:
+    if payment_doc and payment_doc.fee:
         await payment_doc.fetch_link(Payment.fee)
         await payment_doc.fee.fetch_link(Fee.property)
         if payment_doc.fee.property:
@@ -352,17 +383,9 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
     await receipt.save()
 
     # Regenerate PDF data with updated information
-    pdf_data = {
-        "correlative_number": receipt.correlative_number,
-        "issue_date": receipt.issue_date,
-        "payment_date": payment_doc.payment_date,
-        "total_amount": receipt.total_amount,
-        "property_details": receipt.property_details,
-        "reference": payment_doc.fee_id,
-        "fee_period": receipt.fee_period,
-        "notes": receipt.notes,
-        "treasurer_details": updated_treasurer_details
-    }
+    pdf_data = _build_receipt_pdf_data(
+        receipt, payment_doc, payment_misc, treasurer_details=updated_treasurer_details
+    )
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
@@ -388,11 +411,12 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
 
     for receipt in receipts:
         try:
-            # Fetch the actual payment document
-            payment_doc = await receipt.payment.fetch()
+            # Fetch the linked documents (payment may be absent for
+            # miscellaneous-payment and expense receipts)
+            payment_doc, payment_misc, _ = await _fetch_receipt_links(receipt)
 
             # Update property details with current information
-            if payment_doc.fee:
+            if payment_doc and payment_doc.fee:
                 await payment_doc.fetch_link(Payment.fee)
                 await payment_doc.fee.fetch_link(Fee.property)
                 if payment_doc.fee.property:
@@ -419,17 +443,9 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
             receipt.treasurer_details = updated_treasurer_details
 
             # Regenerate PDF data with updated information
-            pdf_data = {
-                "correlative_number": receipt.correlative_number,
-                "issue_date": receipt.issue_date,
-                "payment_date": payment_doc.payment_date,
-                "total_amount": receipt.total_amount,
-                "property_details": receipt.property_details,
-                "reference": payment_doc.fee_id,
-                "fee_period": receipt.fee_period,
-                "notes": receipt.notes,
-                "treasurer_details": updated_treasurer_details
-            }
+            pdf_data = _build_receipt_pdf_data(
+                receipt, payment_doc, payment_misc, treasurer_details=updated_treasurer_details
+            )
 
             pdf_buffer = generate_receipt_pdf(pdf_data)
             cloudinary_url = upload_receipt_pdf(pdf_buffer, receipt.correlative_number)
@@ -456,16 +472,11 @@ async def delete_receipt(receipt_id: str, current_user: User = Depends(get_curre
             detail="Receipt not found"
         )
 
-    # Fetch linked documents
-    await receipt.fetch_link(Receipt.payment)
+    # Fetch the linked documents
+    payment_doc, payment_misc, expense_doc = await _fetch_receipt_links(receipt)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not receipt.payment.user or str(receipt.payment.user.id) != str(current_user.id))):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    await _assert_receipt_access(payment_doc, payment_misc, current_user)
 
     # Delete the Cloudinary file if it exists
     if receipt.generated_receipt_file:

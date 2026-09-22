@@ -97,6 +97,47 @@ class TestGetAgreements:
         response = await client.get("/agreements/", headers=auth_headers_owner)
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
+    async def test_invalid_property_id_returns_400(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        response = await client.get(
+            "/agreements/?property_id=not-an-object-id", headers=auth_headers_admin
+        )
+        assert response.status_code == 400
+
+
+class TestAgreementFilters:
+    """Verify link filters target the DBRef `$id` path (mongomock can't match these)."""
+
+    @pytest.mark.asyncio
+    async def test_owner_filter_targets_link_id(self, mongomock_db):
+        from types import SimpleNamespace
+        from beanie import PydanticObjectId
+        from app.models.user import UserRole
+        from app.models.agreement import Agreement
+        from app.routes.agreements import _build_agreement_filters
+
+        oid = PydanticObjectId()
+        user = SimpleNamespace(role=UserRole.OWNER, id=oid)
+
+        filters = _build_agreement_filters(user)
+        assert Agreement.find(*filters).get_filter_query() == {"user.$id": oid}
+
+    @pytest.mark.asyncio
+    async def test_property_filter_targets_link_id(self, mongomock_db):
+        from types import SimpleNamespace
+        from beanie import PydanticObjectId
+        from app.models.user import UserRole
+        from app.models.agreement import Agreement
+        from app.routes.agreements import _build_agreement_filters
+
+        oid = PydanticObjectId()
+        user = SimpleNamespace(role=UserRole.ADMIN, id=PydanticObjectId())
+
+        filters = _build_agreement_filters(user, property_id=str(oid))
+        assert Agreement.find(*filters).get_filter_query() == {"property.$id": oid}
+
 
 class TestGetAgreement:
     @pytest.mark.asyncio
@@ -141,6 +182,36 @@ class TestCreateAgreement:
         assert data["agreement_number"].startswith("AGR-")
         assert data["installments_count"] == 3
         assert len(data["installments"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_admin_creation_assigns_property_owner(
+        self, client, mongomock_db, test_property, test_owner_user, test_fee,
+        auth_headers_admin, resolve_agreement_links,
+    ):
+        from app.models.agreement import Agreement
+
+        test_property.owner = test_owner_user
+        await test_property.save()
+
+        payload = {
+            "property_id": str(test_property.id),
+            "fee_ids": [str(test_fee.id)],
+            "monthly_amount": 50.0,
+            "installments_count": 3,
+            "start_date": datetime.utcnow().isoformat(),
+        }
+        with patch(
+            "app.routes.agreements.generate_agreement_pdf",
+            return_value=io.BytesIO(b"%PDF-1.4 mock"),
+        ):
+            with patch("builtins.open", return_value=MagicMock()):
+                response = await client.post("/agreements/", json=payload, headers=auth_headers_admin)
+        assert response.status_code == 200
+
+        agreement = await Agreement.find_one(
+            Agreement.agreement_number == response.json()["agreement_number"]
+        )
+        assert str(agreement.user.ref.id) == str(test_owner_user.id)
 
     @pytest.mark.asyncio
     async def test_property_not_found(
@@ -320,6 +391,44 @@ class TestPayNextInstallment:
             headers=auth_headers_admin,
         )
         assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_pays_next_with_receipt_file(
+        self, client, mongomock_db, test_agreement, test_agreement_installment,
+        auth_headers_admin, resolve_agreement_links,
+    ):
+        from app.models.agreement import AgreementInstallmentResponse
+
+        fake_next = {
+            "installment": AgreementInstallmentResponse(
+                id=str(test_agreement_installment.id),
+                agreement_id=str(test_agreement.id),
+                installment_number=1,
+                amount=50.0,
+                due_date=datetime.utcnow() + timedelta(days=30),
+                status="pending",
+            ),
+            "agreement": {
+                "id": str(test_agreement.id),
+                "agreement_number": "AGR-2026-00001",
+            },
+        }
+        with patch(
+            "app.routes.agreements.get_next_pending_installment",
+            new_callable=AsyncMock,
+            return_value=fake_next,
+        ):
+            with patch("app.routes.agreements.os.makedirs"), patch(
+                "builtins.open", MagicMock()
+            ):
+                response = await client.post(
+                    "/agreements/installments/pay-next",
+                    data={"amount": "50.0"},
+                    files={"receipt_file": ("recibo.pdf", b"%PDF-1.4", "application/pdf")},
+                    headers=auth_headers_admin,
+                )
+        assert response.status_code == 200
+        assert response.json()["message"] == "Installment payment processed successfully"
 
 
 class TestUpdateInstallmentPayment:
