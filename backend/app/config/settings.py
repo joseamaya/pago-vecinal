@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic_settings import BaseSettings
 
 
@@ -14,6 +16,7 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str
     CLOUDINARY_API_SECRET: str
     LOG_LEVEL: str = "INFO"
+    CORS_ORIGINS: List[str] = ["*"]
 
     class Config:
         env_file = ".env"

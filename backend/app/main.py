@@ -1,15 +1,17 @@
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config.database import init_db
 from .config.logging import setup_logging
+from .config.settings import settings
 from .utils.init_admin import create_initial_admin
 from .routes import users, properties, fees, payments, auth, receipts, fee_schedules, reports, miscellaneous_payments, expenses, dashboard, treasurers, agreements
 
@@ -36,7 +38,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,8 +49,14 @@ app.add_middleware(
 async def add_request_id(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     request.state.request_id = request_id
+    start = time.perf_counter()
     response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
     response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "%s %s -> %s (%.1fms) [%s]",
+        request.method, request.url.path, response.status_code, duration_ms, request_id
+    )
     return response
 
 
@@ -104,8 +112,3 @@ async def health_check():
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
-
-
-@app.get("/docs")
-async def api_docs():
-    return RedirectResponse(url="/docs")
