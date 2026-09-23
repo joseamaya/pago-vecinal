@@ -14,8 +14,8 @@ describe('statusMappings', () => {
       expect(getStatusColor('rejected')).toBe('error');
     });
 
-    test('completed returns info', () => {
-      expect(getStatusColor('completed')).toBe('info');
+    test('completed returns success', () => {
+      expect(getStatusColor('completed')).toBe('success');
     });
 
     test('cancelled returns default', () => {

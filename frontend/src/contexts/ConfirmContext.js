@@ -30,6 +30,7 @@ export const ConfirmProvider = ({ children }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const resolver = useRef(null);
+  const openRef = useRef(false);
   const [state, setState] = useState({
     open: false,
     title: '',
@@ -42,6 +43,11 @@ export const ConfirmProvider = ({ children }) => {
   const confirm = useCallback(
     (options = {}) =>
       new Promise((resolve) => {
+        if (openRef.current) {
+          resolve(false);
+          return;
+        }
+        openRef.current = true;
         resolver.current = resolve;
         setState({
           open: true,
@@ -56,6 +62,7 @@ export const ConfirmProvider = ({ children }) => {
   );
 
   const close = useCallback((result) => {
+    openRef.current = false;
     setState((current) => ({ ...current, open: false }));
     if (resolver.current) {
       resolver.current(result);
