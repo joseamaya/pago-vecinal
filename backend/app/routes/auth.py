@@ -5,6 +5,7 @@ from ..auth.utils import authenticate_user, create_access_token, get_password_ha
 from ..models.user import User, UserRole
 from ..schemas.user import UserCreate
 from ..dependencies.auth import oauth2_scheme, get_current_user
+from ..dependencies.rate_limit import rate_limit
 from datetime import timedelta
 
 router = APIRouter()
@@ -17,7 +18,10 @@ class TokenData(BaseModel):
     email: str | None = None
 
 @router.post("/register", response_model=Token)
-async def register(user_data: UserCreate):
+async def register(
+    user_data: UserCreate,
+    _: None = Depends(rate_limit(10, 60, "register")),
+):
     existing_user = await User.find_one(User.email == user_data.email)
     if existing_user:
         raise HTTPException(
@@ -43,7 +47,10 @@ async def register(user_data: UserCreate):
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    _: None = Depends(rate_limit(5, 60, "login")),
+):
     user = await authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(

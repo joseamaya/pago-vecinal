@@ -4,11 +4,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta
 from app.config.settings import Settings
 from app.auth.utils import create_access_token
+from app.dependencies.rate_limit import reset_rate_limits
 
 
 # ---------------------------------------------------------------------------
 # Existing sync mock fixtures (kept for backward compatibility)
 # ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits_between_tests():
+    reset_rate_limits()
+    yield
+    reset_rate_limits()
 
 @pytest.fixture
 def settings_override(monkeypatch):

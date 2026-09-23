@@ -49,6 +49,18 @@ async def get_expenses(current_user: User = Depends(get_current_user)):
         for expense in expenses
     ]
 
+@router.get("/template")
+async def download_expenses_template(current_user: User = Depends(require_admin)):
+    template_path = os.path.join("static", "plantilla_gastos_administrativos.xlsx")
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    return FileResponse(
+        path=template_path,
+        filename="plantilla_gastos_administrativos.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
 @router.get("/{expense_id}", response_model=ExpenseResponse)
 async def get_expense(expense_id: str, current_user: User = Depends(get_current_user)):
     # Only admins can access expenses
