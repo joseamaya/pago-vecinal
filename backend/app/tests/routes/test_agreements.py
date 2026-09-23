@@ -173,7 +173,7 @@ class TestCreateAgreement:
             "start_date": datetime.utcnow().isoformat(),
         }
         with patch(
-            "app.routes.agreements.generate_agreement_pdf",
+            "app.services.agreement_service.generate_agreement_pdf",
             return_value=io.BytesIO(b"%PDF-1.4 mock"),
         ):
             with patch("builtins.open", return_value=MagicMock()):
@@ -202,7 +202,7 @@ class TestCreateAgreement:
             "start_date": datetime.utcnow().isoformat(),
         }
         with patch(
-            "app.routes.agreements.generate_agreement_pdf",
+            "app.services.agreement_service.generate_agreement_pdf",
             return_value=io.BytesIO(b"%PDF-1.4 mock"),
         ):
             with patch("builtins.open", return_value=MagicMock()):
@@ -398,7 +398,7 @@ class TestPayNextInstallment:
         self, client, mongomock_db, test_agreement, test_agreement_installment,
         auth_headers_admin, resolve_agreement_links,
     ):
-        from app.models.agreement import AgreementInstallmentResponse
+        from app.schemas.agreement import AgreementInstallmentResponse
 
         fake_next = {
             "installment": AgreementInstallmentResponse(
@@ -436,7 +436,7 @@ class TestPayNextInstallment:
         self, client, mongomock_db, test_agreement, test_fee, test_agreement_installment,
         auth_headers_admin, resolve_agreement_links,
     ):
-        from app.models.agreement import AgreementInstallmentResponse
+        from app.schemas.agreement import AgreementInstallmentResponse
         from app.models.fee import Fee, FeeStatus
 
         fake_next = {
@@ -488,9 +488,9 @@ class TestPayNextInstallment:
         auth_headers_admin,
     ):
         from app.models.agreement import (
-            Agreement, AgreementInstallment, AgreementInstallmentResponse,
-            AgreementInstallmentStatus,
+            Agreement, AgreementInstallment, AgreementInstallmentStatus,
         )
+        from app.schemas.agreement import AgreementInstallmentResponse
 
         fake_next = {
             "installment": AgreementInstallmentResponse(

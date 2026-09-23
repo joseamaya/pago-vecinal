@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from ..models.fee import Fee, FeeCreate, FeeUpdate, FeeResponse, FeeStatus, FeeSchedule
+from ..models.fee import Fee, FeeStatus, FeeSchedule
+from ..schemas.fee import FeeCreate, FeeUpdate, FeeResponse
 from ..models.property import Property
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin

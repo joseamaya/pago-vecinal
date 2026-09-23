@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from ..auth.utils import authenticate_user, create_access_token, get_password_hash
-from ..models.user import User, UserCreate, UserRole
+from ..models.user import User, UserRole
+from ..schemas.user import UserCreate
 from ..dependencies.auth import oauth2_scheme, get_current_user
 from datetime import timedelta
 

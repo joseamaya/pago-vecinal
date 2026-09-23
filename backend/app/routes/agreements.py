@@ -9,16 +9,22 @@ import shutil
 from beanie import PydanticObjectId
 from bson.errors import InvalidId
 from ..models.agreement import (
-    Agreement, AgreementCreate, AgreementUpdate, AgreementResponse,
-    AgreementInstallment, AgreementInstallmentCreate, AgreementInstallmentUpdate, AgreementInstallmentResponse,
-    AgreementStatus, AgreementInstallmentStatus
+    Agreement, AgreementInstallment, AgreementStatus, AgreementInstallmentStatus
+)
+from ..schemas.agreement import (
+    AgreementCreate, AgreementUpdate, AgreementResponse,
+    AgreementInstallmentCreate, AgreementInstallmentUpdate, AgreementInstallmentResponse
 )
 from ..models.fee import Fee, FeeStatus
 from ..models.property import Property
 from ..models.user import User, UserRole
 from ..models.treasurer import Treasurer
 from ..dependencies.auth import get_current_user, require_admin
-from ..utils.pdf_generator import generate_agreement_pdf
+from ..services.agreement_service import (
+    build_agreement_response,
+    build_installment_response,
+    create_agreement_with_installments,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,53 +77,7 @@ async def get_agreements(
         await agreement.fetch_link(Agreement.property)
         await agreement.fetch_link(Agreement.user)
         await agreement.fetch_link(Agreement.fees)
-
-        # Fetch installments
-        installments = await AgreementInstallment.find(
-            AgreementInstallment.agreement.id == agreement.id
-        ).to_list()
-    
-        # Fetch agreement links for installments
-        for inst in installments:
-            await inst.fetch_link(AgreementInstallment.agreement)
-    
-        installment_responses = [
-            AgreementInstallmentResponse(
-                id=str(inst.id),
-                agreement_id=str(inst.agreement.id),
-                installment_number=inst.installment_number,
-                amount=inst.amount,
-                due_date=inst.due_date,
-                paid_date=inst.paid_date,
-                status=inst.status,
-                payment_reference=inst.payment_reference,
-                notes=inst.notes
-            )
-            for inst in installments
-        ]
-
-        responses.append(AgreementResponse(
-            id=str(agreement.id),
-            property_id=str(agreement.property.id),
-            property_villa=agreement.property.villa,
-            property_row_letter=agreement.property.row_letter,
-            property_number=agreement.property.number,
-            property_owner_name=agreement.property.owner_name,
-            fee_ids=[str(fee.id) for fee in agreement.fees],
-            user_id=str(agreement.user.id),
-            total_debt=agreement.total_debt,
-            monthly_amount=agreement.monthly_amount,
-            installments_count=agreement.installments_count,
-            start_date=agreement.start_date,
-            end_date=agreement.end_date,
-            status=agreement.status,
-            agreement_number=agreement.agreement_number,
-            pdf_file=agreement.pdf_file,
-            notes=agreement.notes,
-            created_at=agreement.created_at,
-            updated_at=agreement.updated_at,
-            installments=installment_responses
-        ))
+        responses.append(await build_agreement_response(agreement))
 
     return responses
 
@@ -143,52 +103,7 @@ async def get_agreement(agreement_id: str, current_user: User = Depends(get_curr
             detail="Not enough permissions"
         )
 
-    # Fetch installments
-    installments = await AgreementInstallment.find(
-        AgreementInstallment.agreement.id == agreement.id
-    ).to_list()
-
-    # Fetch agreement links for installments
-    for inst in installments:
-        await inst.fetch_link(AgreementInstallment.agreement)
-
-    installment_responses = [
-        AgreementInstallmentResponse(
-            id=str(inst.id),
-            agreement_id=str(inst.agreement.id),
-            installment_number=inst.installment_number,
-            amount=inst.amount,
-            due_date=inst.due_date,
-            paid_date=inst.paid_date,
-            status=inst.status,
-            payment_reference=inst.payment_reference,
-            notes=inst.notes
-        )
-        for inst in installments
-    ]
-
-    return AgreementResponse(
-        id=str(agreement.id),
-        property_id=str(agreement.property.id),
-        property_villa=agreement.property.villa,
-        property_row_letter=agreement.property.row_letter,
-        property_number=agreement.property.number,
-        property_owner_name=agreement.property.owner_name,
-        fee_ids=[str(fee.id) for fee in agreement.fees],
-        user_id=str(agreement.user.id),
-        total_debt=agreement.total_debt,
-        monthly_amount=agreement.monthly_amount,
-        installments_count=agreement.installments_count,
-        start_date=agreement.start_date,
-        end_date=agreement.end_date,
-        status=agreement.status,
-        agreement_number=agreement.agreement_number,
-        pdf_file=agreement.pdf_file,
-        notes=agreement.notes,
-        created_at=agreement.created_at,
-        updated_at=agreement.updated_at,
-        installments=installment_responses
-    )
+    return await build_agreement_response(agreement)
 
 @router.post("/", response_model=AgreementResponse)
 async def create_agreement(
@@ -202,16 +117,6 @@ async def create_agreement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Property not found"
         )
-
-    # Get the treasurer for this villa
-    treasurer = await Treasurer.find_one(Treasurer.villa == prop.villa)
-    treasurer_details = None
-    if treasurer:
-        treasurer_details = {
-            "name": treasurer.name,
-            "signature": treasurer.signature,
-            "villa": treasurer.villa
-        }
 
     # Check permissions
     if (current_user.role != UserRole.ADMIN and
@@ -283,127 +188,18 @@ async def create_agreement(
             detail="Installments count must be greater than 0"
         )
 
-    # Calculate end date (last installment date)
-    end_date = agreement_data.start_date + relativedelta(months=agreement_data.installments_count)
-
-    # Generate agreement number
-    current_year = datetime.utcnow().year
-    last_agreement = await Agreement.find(
-        {"agreement_number": {"$regex": f"^AGR-{current_year}"}}
-    ).sort([("agreement_number", -1)]).first_or_none()
-
-    if last_agreement:
-        parts = last_agreement.agreement_number.split("-")
-        if len(parts) == 3:
-            last_number = int(parts[2])
-            new_number = last_number + 1
-        else:
-            new_number = 1
-    else:
-        new_number = 1
-
-    agreement_number = f"AGR-{current_year}-{new_number:05d}"
-
     # Admins can create agreements on behalf of the property owner
     agreement_owner = prop.owner if (current_user.role == UserRole.ADMIN and prop.owner) else current_user
 
-    # Create agreement
-    agreement = Agreement(
-        property=prop,
-        fees=fees,
-        user=agreement_owner,
-        total_debt=total_debt,
-        monthly_amount=agreement_data.monthly_amount,
-        installments_count=agreement_data.installments_count,
-        start_date=agreement_data.start_date,
-        end_date=end_date,
-        agreement_number=agreement_number,
-        notes=agreement_data.notes
+    agreement, installments = await create_agreement_with_installments(
+        prop, fees, agreement_data, agreement_owner
     )
-    await agreement.insert()
 
-    # Update fee statuses to AGREEMENT
-    for fee in fees:
-        fee.status = FeeStatus.AGREEMENT
-        await fee.save()
-
-    # Create installments
-    installments = []
-    for i in range(1, agreement_data.installments_count + 1):
-        # First installment starts the next month, all installments on the same day of month
-        due_date = agreement_data.start_date + relativedelta(months=i)
-        installment = AgreementInstallment(
-            agreement=agreement,
-            installment_number=i,
-            amount=agreement_data.monthly_amount,
-            due_date=due_date
-        )
-        await installment.insert()
-        installments.append(installment)
-
-    # Generate PDF
-    try:
-        pdf_buffer = generate_agreement_pdf(agreement, prop, fees, installments, treasurer_details)
-        pdf_filename = f"agreement_{agreement_number}.pdf"
-        pdf_path = f"static/agreements/{pdf_filename}"
-        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
-
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_buffer.getvalue())
-
-        agreement.pdf_file = pdf_path
-        await agreement.save()
-    except Exception as e:
-        logger.error("Error generating agreement PDF: %s", e)
-        # Don't fail the agreement creation if PDF generation fails
-
-    # Fetch links for response
     await agreement.fetch_link(Agreement.property)
     await agreement.fetch_link(Agreement.user)
     await agreement.fetch_link(Agreement.fees)
-    await agreement.fetch_link(Agreement.fees)
 
-    # Fetch agreement links for installments
-    for inst in installments:
-        await inst.fetch_link(AgreementInstallment.agreement)
-
-    installment_responses = [
-        AgreementInstallmentResponse(
-            id=str(inst.id),
-            agreement_id=str(inst.agreement.id),
-            installment_number=inst.installment_number,
-            amount=inst.amount,
-            due_date=inst.due_date,
-            paid_date=inst.paid_date,
-            status=inst.status,
-            payment_reference=inst.payment_reference,
-            notes=inst.notes
-        )
-        for inst in installments
-    ]
-
-    return AgreementResponse(
-        id=str(agreement.id),
-        property_id=str(agreement.property.id),
-        property_villa=agreement.property.villa,
-        property_row_letter=agreement.property.row_letter,
-        property_number=agreement.property.number,
-        property_owner_name=agreement.property.owner_name,
-        fee_ids=[str(fee.id) for fee in agreement.fees],
-        user_id=str(agreement.user.id),
-        total_debt=agreement.total_debt,
-        monthly_amount=agreement.monthly_amount,
-        installments_count=agreement.installments_count,
-        start_date=agreement.start_date,
-        end_date=agreement.end_date,
-        status=agreement.status,
-        agreement_number=agreement.agreement_number,
-        pdf_file=agreement.pdf_file,
-        notes=agreement.notes,
-        created_at=agreement.created_at,
-        updated_at=agreement.updated_at,
-        installments=installment_responses
-    )
+    return await build_agreement_response(agreement, installments)
 
 @router.put("/{agreement_id}", response_model=AgreementResponse)
 async def update_agreement(
@@ -441,52 +237,7 @@ async def update_agreement(
     await agreement.fetch_link(Agreement.user)
     await agreement.fetch_link(Agreement.fees)
 
-    # Fetch installments
-    installments = await AgreementInstallment.find(
-        AgreementInstallment.agreement.id == agreement.id
-    ).to_list()
-
-    # Fetch agreement links for installments
-    for inst in installments:
-        await inst.fetch_link(AgreementInstallment.agreement)
-
-    installment_responses = [
-        AgreementInstallmentResponse(
-            id=str(inst.id),
-            agreement_id=str(inst.agreement.id),
-            installment_number=inst.installment_number,
-            amount=inst.amount,
-            due_date=inst.due_date,
-            paid_date=inst.paid_date,
-            status=inst.status,
-            payment_reference=inst.payment_reference,
-            notes=inst.notes
-        )
-        for inst in installments
-    ]
-
-    return AgreementResponse(
-        id=str(agreement.id),
-        property_id=str(agreement.property.id),
-        property_villa=agreement.property.villa,
-        property_row_letter=agreement.property.row_letter,
-        property_number=agreement.property.number,
-        property_owner_name=agreement.property.owner_name,
-        fee_ids=[str(fee.id) for fee in agreement.fees],
-        user_id=str(agreement.user.id),
-        total_debt=agreement.total_debt,
-        monthly_amount=agreement.monthly_amount,
-        installments_count=agreement.installments_count,
-        start_date=agreement.start_date,
-        end_date=agreement.end_date,
-        status=agreement.status,
-        agreement_number=agreement.agreement_number,
-        pdf_file=agreement.pdf_file,
-        notes=agreement.notes,
-        created_at=agreement.created_at,
-        updated_at=agreement.updated_at,
-        installments=installment_responses
-    )
+    return await build_agreement_response(agreement)
 
 @router.delete("/{agreement_id}")
 async def delete_agreement(agreement_id: str, current_user: User = Depends(get_current_user)):
@@ -602,17 +353,7 @@ async def create_installment_payment(
     # Fetch agreement link for response
     await installment.fetch_link(AgreementInstallment.agreement)
 
-    return AgreementInstallmentResponse(
-        id=str(installment.id),
-        agreement_id=str(installment.agreement.id),
-        installment_number=installment.installment_number,
-        amount=installment.amount,
-        due_date=installment.due_date,
-        paid_date=installment.paid_date,
-        status=installment.status,
-        payment_reference=installment.payment_reference,
-        notes=installment.notes
-    )
+    return build_installment_response(installment)
 
 @router.get("/installments/next-pending", response_model=Optional[dict])
 async def get_next_pending_installment(current_user: User = Depends(get_current_user)):
@@ -657,17 +398,7 @@ async def get_next_pending_installment(current_user: User = Depends(get_current_
     await oldest_pending.agreement.fetch_link(Agreement.user)
 
     return {
-        "installment": AgreementInstallmentResponse(
-            id=str(oldest_pending.id),
-            agreement_id=str(oldest_pending.agreement.id),
-            installment_number=oldest_pending.installment_number,
-            amount=oldest_pending.amount,
-            due_date=oldest_pending.due_date,
-            paid_date=oldest_pending.paid_date,
-            status=oldest_pending.status,
-            payment_reference=oldest_pending.payment_reference,
-            notes=oldest_pending.notes
-        ),
+        "installment": build_installment_response(oldest_pending),
         "agreement": {
             "id": str(oldest_pending.agreement.id),
             "agreement_number": oldest_pending.agreement.agreement_number,
@@ -897,14 +628,4 @@ async def update_installment_payment(
     # Fetch agreement link for response
     await installment.fetch_link(AgreementInstallment.agreement)
 
-    return AgreementInstallmentResponse(
-        id=str(installment.id),
-        agreement_id=str(installment.agreement.id),
-        installment_number=installment.installment_number,
-        amount=installment.amount,
-        due_date=installment.due_date,
-        paid_date=installment.paid_date,
-        status=installment.status,
-        payment_reference=installment.payment_reference,
-        notes=installment.notes
-    )
+    return build_installment_response(installment)

@@ -2,22 +2,27 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
-from pydantic import BaseModel
 from datetime import datetime
 import os
 import shutil
 from ..models.miscellaneous_payment import (
-    MiscellaneousPayment, MiscellaneousPaymentCreate, MiscellaneousPaymentUpdate,
-    MiscellaneousPaymentResponse, MiscellaneousPaymentStatus, MiscellaneousPaymentType
+    MiscellaneousPayment, MiscellaneousPaymentStatus, MiscellaneousPaymentType
+)
+from ..schemas.miscellaneous_payment import (
+    MiscellaneousPaymentCreate, MiscellaneousPaymentUpdate, MiscellaneousPaymentResponse
 )
 from ..models.receipt import Receipt
-from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..models.property import Property
 from ..dependencies.auth import get_current_user, require_admin
 from ..utils.pdf_generator import generate_receipt_pdf
-from ..services.receipt_service import generate_correlative_number, create_receipt_for_payment
-from ..services.cloudinary_service import upload_receipt_pdf
+from ..services.miscellaneous_payment_service import (
+    DEFAULT_PROPERTY_DETAILS,
+    DEFAULT_OWNER_DETAILS,
+    build_miscellaneous_payment_response,
+    create_receipt_for_miscellaneous_payment,
+    resolve_treasurer_details,
+)
 from ..schemas.common import BulkApproveRequest
 
 logger = logging.getLogger(__name__)
@@ -38,27 +43,7 @@ async def get_miscellaneous_payments(current_user: User = Depends(get_current_us
             await payment.fetch_link(MiscellaneousPayment.property)
         await payment.fetch_link(MiscellaneousPayment.user)
 
-    return [
-        MiscellaneousPaymentResponse(
-            id=str(payment.id),
-            property_id=str(payment.property.id) if payment.property else None,
-            property_villa=getattr(payment.property, 'villa', None) if payment.property else None,
-            property_row_letter=getattr(payment.property, 'row_letter', None) if payment.property else None,
-            property_number=getattr(payment.property, 'number', None) if payment.property else None,
-            property_owner_name=getattr(payment.property, 'owner_name', None) if payment.property else None,
-            user_id=str(payment.user.id),
-            payment_type=payment.payment_type,
-            amount=payment.amount,
-            payment_date=payment.payment_date,
-            receipt_file=payment.receipt_file,
-            generated_receipt_file=payment.generated_receipt_file,
-            status=payment.status,
-            description=payment.description,
-            notes=payment.notes,
-            created_at=payment.id.generation_time if hasattr(payment.id, 'generation_time') else datetime.utcnow()
-        )
-        for payment in payments
-    ]
+    return [build_miscellaneous_payment_response(payment) for payment in payments]
 
 @router.get("/{payment_id}", response_model=MiscellaneousPaymentResponse)
 async def get_miscellaneous_payment(payment_id: str, current_user: User = Depends(get_current_user)):
@@ -82,24 +67,7 @@ async def get_miscellaneous_payment(payment_id: str, current_user: User = Depend
             detail="Not enough permissions"
         )
 
-    return MiscellaneousPaymentResponse(
-        id=str(payment.id),
-        property_id=str(payment.property.id) if payment.property else None,
-        property_villa=getattr(payment.property, 'villa', None) if payment.property else None,
-        property_row_letter=getattr(payment.property, 'row_letter', None) if payment.property else None,
-        property_number=getattr(payment.property, 'number', None) if payment.property else None,
-        property_owner_name=getattr(payment.property, 'owner_name', None) if payment.property else None,
-        user_id=str(payment.user.id),
-        payment_type=payment.payment_type,
-        amount=payment.amount,
-        payment_date=payment.payment_date,
-        receipt_file=payment.receipt_file,
-        generated_receipt_file=payment.generated_receipt_file,
-        status=payment.status,
-        description=payment.description,
-        notes=payment.notes,
-        created_at=payment.id.generation_time if hasattr(payment.id, 'generation_time') else datetime.utcnow()
-    )
+    return build_miscellaneous_payment_response(payment)
 
 @router.post("/", response_model=MiscellaneousPaymentResponse)
 async def create_miscellaneous_payment(
@@ -179,24 +147,7 @@ async def create_miscellaneous_payment(
         await payment.fetch_link(MiscellaneousPayment.property)
     await payment.fetch_link(MiscellaneousPayment.user)
 
-    return MiscellaneousPaymentResponse(
-        id=str(payment.id),
-        property_id=str(payment.property.id) if payment.property else None,
-        property_villa=getattr(payment.property, 'villa', None) if payment.property else None,
-        property_row_letter=getattr(payment.property, 'row_letter', None) if payment.property else None,
-        property_number=getattr(payment.property, 'number', None) if payment.property else None,
-        property_owner_name=getattr(payment.property, 'owner_name', None) if payment.property else None,
-        user_id=str(payment.user.id),
-        payment_type=payment.payment_type,
-        amount=payment.amount,
-        payment_date=payment.payment_date,
-        receipt_file=payment.receipt_file,
-        generated_receipt_file=payment.generated_receipt_file,
-        status=payment.status,
-        description=payment.description,
-        notes=payment.notes,
-        created_at=payment.id.generation_time if hasattr(payment.id, 'generation_time') else datetime.utcnow()
-    )
+    return build_miscellaneous_payment_response(payment)
 
 @router.put("/{payment_id}", response_model=MiscellaneousPaymentResponse)
 async def update_miscellaneous_payment(
@@ -258,76 +209,15 @@ async def update_miscellaneous_payment(
     if payment_status == "approved":
         try:
             logger.info("Creating receipt for miscellaneous payment %s", payment_id)
-
-            # Generate correlative number - miscellaneous payments use OTR
-            current_year = datetime.utcnow().year
-            correlative_number = await generate_correlative_number(current_year, "OTR")
-
-            # Use stored property and owner details or create defaults
-            property_details = payment.property_details or {
-                "villa": "N/A",
-                "row_letter": "N/A",
-                "number": 0,
-                "owner_name": "Propietario no registrado",
-                "owner_phone": "N/A"
-            }
-            owner_details = payment.owner_details or {
-                "name": "Propietario no registrado",
-                "phone": "N/A"
-            }
-
-            # Get treasurer data based on villa
-            villa = property_details.get('villa') if property_details and property_details.get('villa') != 'N/A' else None
-            treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
-            treasurer_details = {
-                "name": treasurer.name if treasurer else "Tesorero no configurado",
-                "signature": treasurer.signature if treasurer else None,
-                "villa": treasurer.villa if treasurer else None
-            }
-
-            # Create receipt record
-            receipt = Receipt(
-                correlative_number=correlative_number,
-                miscellaneous_payment=payment,
-                issue_date=datetime.utcnow(),
-                total_amount=payment.amount,
-                property_details=property_details,
-                owner_details=owner_details,
-                fee_period=f"Pago varios: {payment.description}",
-                notes=f"Recibo generado automáticamente al aprobar el pago varios",
-                treasurer_details=treasurer_details
+            _, cloudinary_url = await create_receipt_for_miscellaneous_payment(
+                payment,
+                note="Recibo generado automáticamente al aprobar el pago varios",
             )
-
-            await receipt.insert()
-
-            logger.info("Receipt created in database with ID: %s", receipt.id)
-
-            # Generate PDF and upload to Cloudinary
-            pdf_data = {
-                "correlative_number": receipt.correlative_number,
-                "issue_date": receipt.issue_date,
-                "payment_date": payment.payment_date,
-                "total_amount": receipt.total_amount,
-                "property_details": receipt.property_details,
-                "reference": payment.id,  # Use payment ID as reference for miscellaneous payments
-                "fee_period": receipt.fee_period,
-                "notes": receipt.notes,
-                "treasurer_details": treasurer_details
-            }
-
-            pdf_buffer = generate_receipt_pdf(pdf_data)
-            cloudinary_url = upload_receipt_pdf(pdf_buffer, receipt.correlative_number)
-
-            receipt.generated_receipt_file = cloudinary_url
-            await receipt.save()
-
             payment.generated_receipt_file = cloudinary_url
             await payment.save()
-
             logger.info("Receipt PDF generated and uploaded for miscellaneous payment %s", payment_id)
-        except Exception as e:
+        except Exception:
             logger.exception("Error creating receipt for miscellaneous payment %s", payment_id)
-            traceback.print_exc()
 
     await payment.save()
 
@@ -336,24 +226,7 @@ async def update_miscellaneous_payment(
         await payment.fetch_link(MiscellaneousPayment.property)
     await payment.fetch_link(MiscellaneousPayment.user)
 
-    response_data = MiscellaneousPaymentResponse(
-        id=str(payment.id),
-        property_id=str(payment.property.id) if payment.property else None,
-        property_villa=getattr(payment.property, 'villa', None) if payment.property else None,
-        property_row_letter=getattr(payment.property, 'row_letter', None) if payment.property else None,
-        property_number=getattr(payment.property, 'number', None) if payment.property else None,
-        property_owner_name=getattr(payment.property, 'owner_name', None) if payment.property else None,
-        user_id=str(payment.user.id),
-        payment_type=payment.payment_type,
-        amount=payment.amount,
-        payment_date=payment.payment_date,
-        receipt_file=payment.receipt_file,
-        generated_receipt_file=payment.generated_receipt_file,
-        status=payment.status,
-        description=payment.description,
-        notes=payment.notes,
-        created_at=payment.id.generation_time if hasattr(payment.id, 'generation_time') else datetime.utcnow()
-    )
+    response_data = build_miscellaneous_payment_response(payment)
     logger.info("Returning response with generated_receipt_file: %s", response_data.generated_receipt_file)
     return response_data
 
@@ -409,66 +282,16 @@ async def download_miscellaneous_receipt(payment_id: str, current_user: User = D
     if not receipt:
         # Create receipt on the fly for payments approved before the fix
         logger.info("Creating receipt on the fly for miscellaneous payment %s", payment_id)
-
-        # Generate correlative number - miscellaneous payments use OTR
-        current_year = datetime.utcnow().year
-        correlative_number = await generate_correlative_number(current_year, "OTR")
-
-        # Use stored property and owner details or create defaults
-        property_details = payment.property_details or {
-            "villa": "N/A",
-            "row_letter": "N/A",
-            "number": 0,
-            "owner_name": "Propietario no registrado",
-            "owner_phone": "N/A"
-        }
-        owner_details = payment.owner_details or {
-            "name": "Propietario no registrado",
-            "phone": "N/A"
-        }
-
-        # Get treasurer data based on villa
-        villa = property_details.get('villa') if property_details and property_details.get('villa') != 'N/A' else None
-        treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
-        treasurer_details = {
-            "name": treasurer.name if treasurer else "Tesorero no configurado",
-            "signature": treasurer.signature if treasurer else None,
-            "villa": treasurer.villa if treasurer else None
-        }
-
-        # Create receipt record
-        receipt = Receipt(
-            correlative_number=correlative_number,
-            miscellaneous_payment=payment,
-            issue_date=datetime.utcnow(),
-            total_amount=payment.amount,
-            property_details=property_details,
-            owner_details=owner_details,
-            fee_period=f"Pago varios: {payment.description}",
-            notes=f"Recibo generado automáticamente al descargar",
-            treasurer_details=treasurer_details
+        receipt, _ = await create_receipt_for_miscellaneous_payment(
+            payment,
+            note="Recibo generado automáticamente al descargar",
+            upload=False,
         )
-
-        await receipt.insert()
         logger.info("Receipt created on the fly with ID: %s", receipt.id)
 
     # Fetch property and treasurer details
-    property_details = payment.property_details or {
-        "villa": "N/A",
-        "row_letter": "N/A",
-        "number": 0,
-        "owner_name": "Propietario no registrado",
-        "owner_phone": "N/A"
-    }
-
-    # Get treasurer data based on villa
-    villa = property_details.get('villa') if property_details and property_details.get('villa') != 'N/A' else None
-    treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
-    treasurer_details = {
-        "name": treasurer.name if treasurer else "Tesorero no configurado",
-        "signature": treasurer.signature if treasurer else None,
-        "villa": treasurer.villa if treasurer else None
-    }
+    property_details = payment.property_details or DEFAULT_PROPERTY_DETAILS
+    treasurer_details = await resolve_treasurer_details(property_details)
 
     # Generate PDF data
     pdf_data = {
@@ -539,83 +362,23 @@ async def bulk_approve_miscellaneous_payments(
             # Generate receipt (similar to individual approval)
             try:
                 logger.info("Creating receipt for miscellaneous payment %s", payment_id)
-
-                # Generate correlative number - miscellaneous payments use OTR
-                current_year = datetime.utcnow().year
-                correlative_number = await generate_correlative_number(current_year, "OTR")
-
-                # Use stored property and owner details or create defaults
-                property_details = payment.property_details or {
-                    "villa": "N/A",
-                    "row_letter": "N/A",
-                    "number": 0,
-                    "owner_name": "Propietario no registrado",
-                    "owner_phone": "N/A"
-                }
-                owner_details = payment.owner_details or {
-                    "name": "Propietario no registrado",
-                    "phone": "N/A"
-                }
-
-                # Get treasurer data based on villa
-                villa = property_details.get('villa') if property_details and property_details.get('villa') != 'N/A' else None
-                treasurer = await Treasurer.find_one(Treasurer.villa == villa) if villa else None
-                treasurer_details = {
-                    "name": treasurer.name if treasurer else "Tesorero no configurado",
-                    "signature": treasurer.signature if treasurer else None,
-                    "villa": treasurer.villa if treasurer else None
-                }
-
-                # Create receipt record
-                receipt = Receipt(
-                    correlative_number=correlative_number,
-                    miscellaneous_payment=payment,
-                    issue_date=datetime.utcnow(),
-                    total_amount=payment.amount,
-                    property_details=property_details,
-                    owner_details=owner_details,
-                    fee_period=f"Pago varios: {payment.description}",
-                    notes=f"Recibo generado automáticamente al aprobar el pago varios (aprobación masiva)",
-                    treasurer_details=treasurer_details
+                _, cloudinary_url = await create_receipt_for_miscellaneous_payment(
+                    payment,
+                    note="Recibo generado automáticamente al aprobar el pago varios (aprobación masiva)",
                 )
-
-                await receipt.insert()
-
-                logger.info("Receipt created in database with ID: %s", receipt.id)
-
-                # Generate PDF and upload to Cloudinary
-                pdf_data = {
-                    "correlative_number": receipt.correlative_number,
-                    "issue_date": receipt.issue_date,
-                    "payment_date": payment.payment_date,
-                    "total_amount": receipt.total_amount,
-                    "property_details": receipt.property_details,
-                    "reference": payment.id,  # Use payment ID as reference for miscellaneous payments
-                    "fee_period": receipt.fee_period,
-                    "notes": receipt.notes,
-                    "treasurer_details": treasurer_details
-                }
-
-                pdf_buffer = generate_receipt_pdf(pdf_data)
-
-                cloudinary_url = upload_receipt_pdf(pdf_buffer, receipt.correlative_number)
-
                 if cloudinary_url:
-                    receipt.generated_receipt_file = cloudinary_url
                     payment.generated_receipt_file = cloudinary_url
-
-                await receipt.save()
                 await payment.save()
-
                 logger.info("Receipt PDF generated for miscellaneous payment %s", payment_id)
-            except Exception as e:
+            except Exception:
                 # Log the error but don't fail the bulk operation
                 logger.exception("Error creating receipt for miscellaneous payment %s", payment_id)
 
             approved_count += 1
 
-        except Exception as e:
-            errors.append(f"Error processing payment {payment_id}: {str(e)}")
+        except Exception:
+            logger.exception("Error processing miscellaneous payment %s in bulk approve", payment_id)
+            errors.append(f"Error processing payment {payment_id}")
 
     return {
         "message": f"Successfully approved {approved_count} miscellaneous payments",

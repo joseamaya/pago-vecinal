@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List
 import os
 import shutil
-from ..models.treasurer import Treasurer, TreasurerCreate, TreasurerUpdate, TreasurerResponse
+from ..models.treasurer import Treasurer
+from ..schemas.treasurer import TreasurerCreate, TreasurerUpdate, TreasurerResponse
 
 logger = logging.getLogger(__name__)
 from ..models.user import User, UserRole

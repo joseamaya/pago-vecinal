@@ -9,16 +9,22 @@ import shutil
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from bson import ObjectId
-from ..models.payment import Payment, PaymentCreate, PaymentUpdate, PaymentResponse, PaymentStatus
+from ..models.payment import Payment, PaymentStatus
+from ..schemas.payment import PaymentCreate, PaymentUpdate, PaymentResponse
 from ..models.fee import Fee, FeeStatus
 from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
-from ..models.receipt import Receipt, ReceiptResponse
+from ..models.receipt import Receipt
+from ..schemas.receipt import ReceiptResponse
 from ..models.property import Property
 from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
 from ..utils.pdf_generator import generate_receipt_pdf
-from ..services.payment_service import update_fee_status_based_on_payments, create_receipt_on_approval
+from ..services.payment_service import (
+    update_fee_status_based_on_payments,
+    create_receipt_on_approval,
+    bulk_import_payment_rows,
+)
 from ..schemas.common import BulkApproveRequest
 
 logger = logging.getLogger(__name__)
@@ -554,169 +560,18 @@ async def bulk_import_payments(
                 detail=f"Invalid Excel format. Expected headers: {', '.join(expected_headers[:7])}"
             )
 
-        results = {
-            "successful_imports": 0,
-            "failed_imports": 0,
-            "errors": []
-        }
-
-        # Process each row starting from row 2
-        for row_idx in range(2, ws.max_row + 1):
-            try:
-                # Extract data
-                villa = str(ws.cell(row=row_idx, column=1).value or "").strip()
-                fila = str(ws.cell(row=row_idx, column=2).value or "").strip()
-                numero = ws.cell(row=row_idx, column=3).value
-                year = ws.cell(row=row_idx, column=4).value
-                month = ws.cell(row=row_idx, column=5).value
-                amount = ws.cell(row=row_idx, column=6).value
-                payment_date_cell = ws.cell(row=row_idx, column=7).value
-                notes = str(ws.cell(row=row_idx, column=8).value or "").strip()
-
-                # Validate required fields
-                if not all([villa, fila, numero is not None, year is not None, month is not None, amount is not None, payment_date_cell is not None]):
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": "Missing required fields"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Convert types
-                try:
-                    numero = int(numero)
-                    year = int(year)
-                    month = int(month)
-                    amount = float(amount)
-                    logger.debug("Payment date cell: %s", payment_date_cell)
-
-                    if isinstance(payment_date_cell, datetime):
-                        payment_date = payment_date_cell
-                    else:
-                        payment_date = datetime.strptime(str(payment_date_cell), '%Y-%m-%d')
-
-                    logger.debug("Parsed payment_date: %s", payment_date)
-
-                except (ValueError, TypeError) as e:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": f"Invalid data types: {str(e)}"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Validate data ranges
-                if month < 1 or month > 12:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": "Month must be between 1 and 12"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                if amount <= 0:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": "Amount must be greater than 0"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                if payment_date > datetime.utcnow():
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": "Payment date cannot be in the future"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Find property
-                property_obj = await Property.find_one(
-                    Property.villa == villa,
-                    Property.row_letter == fila,
-                    Property.number == numero
-                )
-
-                if not property_obj:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": f"Property not found: Villa {villa}, {fila}{numero}"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Find fee for this property and period
-                fee = await Fee.find_one(
-                    Fee.property.id == property_obj.id,
-                    Fee.year == year,
-                    Fee.month == month,
-                    Fee.status == FeeStatus.PENDING
-                )
-
-                if not fee:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": f"No pending fee found for property {villa}-{fila}{numero} in {month}/{year}"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Check if payment already exists for this fee
-                existing_payment = await Payment.find_one(Payment.fee_id == str(fee.id))
-                if existing_payment:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": f"Payment already exists for this fee"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Create payment
-                payment = Payment(
-                    fee=fee,
-                    fee_id=str(fee.id),
-                    user=current_user,  # Admin user creating the bulk import
-                    amount=amount,
-                    payment_date=payment_date,
-                    notes=notes if notes else None
-                )
-                await payment.insert()
-
-                # Set payment status to approved
-                payment.status = PaymentStatus.APPROVED
-                await payment.save()
-
-                # Create receipt automatically
-                try:
-                    logger.info("Creating receipt for bulk import payment %s", payment.id)
-                    await create_receipt_on_approval(payment)
-                except Exception as e:
-                    logger.exception("Error creating receipt for bulk import payment %s", payment.id)
-
-                # Update fee status based on total payments
-                await update_fee_status_based_on_payments(fee)
-
-                results["successful_imports"] += 1
-
-            except Exception as e:
-                results["errors"].append({
-                    "row": row_idx,
-                    "error": f"Unexpected error: {str(e)}"
-                })
-                results["failed_imports"] += 1
-                continue
-
-        return results
+        return await bulk_import_payment_rows(ws, current_user)
 
     except InvalidFileException:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid Excel file"
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("Error processing payments import file")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing file: {str(e)}"
+            detail="Error processing file"
         )
 
 @router.post("/bulk-approve")
@@ -775,8 +630,9 @@ async def bulk_approve_payments(
 
             approved_count += 1
 
-        except Exception as e:
-            errors.append(f"Error processing payment {payment_id}: {str(e)}")
+        except Exception:
+            logger.exception("Error processing payment %s in bulk approve", payment_id)
+            errors.append(f"Error processing payment {payment_id}")
 
     return {
         "message": f"Successfully approved {approved_count} payments",

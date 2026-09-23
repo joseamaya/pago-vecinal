@@ -1,7 +1,13 @@
 import logging
-from fastapi import FastAPI
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+
 from .config.database import init_db
 from .config.logging import setup_logging
 from .utils.init_admin import create_initial_admin
@@ -10,10 +16,22 @@ from .routes import users, properties, fees, payments, auth, receipts, fee_sched
 setup_logging()
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting Pago Vecinal API...")
+    await init_db()
+    await create_initial_admin()
+    logger.info("Pago Vecinal API startup complete")
+    yield
+    logger.info("Shutting down Pago Vecinal API")
+
+
 app = FastAPI(
     title="Pago Vecinal API",
     description="API for managing condominium fee payments",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -23,6 +41,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -41,20 +75,14 @@ app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(treasurers.router, prefix="/treasurers", tags=["Treasurers"])
 app.include_router(agreements.router, prefix="/agreements", tags=["Agreements"])
 
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting Pago Vecinal API...")
-    await init_db()
-    await create_initial_admin()
-    logger.info("Pago Vecinal API startup complete")
 
 @app.get("/")
 async def root():
     return {"message": "Pago Vecinal API", "status": "running"}
 
+
 @app.get("/health")
 async def health_check():
-    from datetime import datetime
     try:
         from .config.database import client
         await client.admin.command('ping')
@@ -64,16 +92,20 @@ async def health_check():
             "database": "connected",
             "timestamp": datetime.utcnow().isoformat()
         }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "service": "Pago Vecinal API",
-            "database": "disconnected",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }
+    except Exception:
+        logger.exception("Health check failed: database unreachable")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "service": "Pago Vecinal API",
+                "database": "disconnected",
+                "error": "Database connection failed",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
 
 @app.get("/docs")
 async def api_docs():
-    from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
-from ..models.user import User, UserCreate, UserUpdate, UserResponse, UserRole
+from ..models.user import User, UserRole
+from ..schemas.user import UserCreate, UserUpdate, UserResponse
 from ..dependencies.auth import get_current_user, require_admin
 from ..auth.utils import get_password_hash
 

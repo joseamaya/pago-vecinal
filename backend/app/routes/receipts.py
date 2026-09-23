@@ -5,7 +5,8 @@ from beanie.operators import In, Or
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
-from ..models.receipt import Receipt, ReceiptCreate, ReceiptUpdate, ReceiptResponse
+from ..models.receipt import Receipt
+from ..schemas.receipt import ReceiptCreate, ReceiptUpdate, ReceiptResponse
 from ..models.payment import Payment
 from ..models.miscellaneous_payment import MiscellaneousPayment
 from ..models.fee import Fee
@@ -457,8 +458,9 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
 
             updated_count += 1
 
-        except Exception as e:
-            errors.append(f"Error processing receipt {receipt.correlative_number}: {str(e)}")
+        except Exception:
+            logger.exception("Error regenerating receipt %s", receipt.correlative_number)
+            errors.append(f"Error processing receipt {receipt.correlative_number}")
 
     return {
         "message": f"Regenerated {updated_count} receipt PDFs successfully",

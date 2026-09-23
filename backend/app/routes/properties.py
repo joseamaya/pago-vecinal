@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List, Optional
 from pydantic import BaseModel
-from ..models.property import Property, PropertyCreate, PropertyUpdate, PropertyResponse
+from ..models.property import Property
+from ..schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
+from ..services.property_service import bulk_import_property_rows
+import logging
 import openpyxl
+
+logger = logging.getLogger(__name__)
 
 class BulkImportResponse(BaseModel):
     imported: int
@@ -251,50 +256,12 @@ async def bulk_import_properties(
         workbook = openpyxl.load_workbook(file.file)
         sheet = workbook.active
 
-        imported = 0
-        updated = 0
-        errors = []
+        results = await bulk_import_property_rows(sheet)
+        return BulkImportResponse(**results)
 
-        # Skip header row
-        for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            villa, row_letter, number, owner_name, owner_phone = row[:5]
-
-            if not all([villa, row_letter, number, owner_name]):
-                errors.append(f"Row {row_idx}: Missing required fields")
-                continue
-
-            try:
-                number = int(number)
-            except ValueError:
-                errors.append(f"Row {row_idx}: Invalid number")
-                continue
-
-            # Check if property already exists
-            existing = await Property.find_one(
-                Property.row_letter == row_letter.upper(),
-                Property.number == number,
-                Property.villa == villa
-            )
-            if existing:
-                existing.owner_name = owner_name
-                existing.owner_phone = owner_phone
-                await existing.save()
-                updated += 1
-            else:
-                prop = Property(
-                    row_letter=row_letter.upper(),
-                    number=number,
-                    villa=villa,
-                    owner_name=owner_name,
-                    owner_phone=owner_phone
-                )
-                await prop.insert()
-                imported += 1
-
-        return BulkImportResponse(imported=imported, updated=updated, errors=errors)
-
-    except Exception as e:
+    except Exception:
+        logger.exception("Error processing properties import file")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error processing file: {str(e)}"
+            detail="Error processing file"
         )
