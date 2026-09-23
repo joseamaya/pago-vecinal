@@ -72,6 +72,25 @@ class TestUpdateFeeStatus:
             assert fee.status == FeeStatus.PENDING
 
 
+    @pytest.mark.asyncio
+    async def test_preserves_agreement_status(self):
+        fee = MagicMock()
+        fee.id = "fee-1"
+        fee.amount = 100.0
+        fee.paid_amount = 30.0
+        fee.status = FeeStatus.AGREEMENT
+        fee.save = AsyncMock()
+
+        with patch("app.services.payment_service.Payment") as MockPayment:
+            MockPayment.find.return_value.to_list = AsyncMock(return_value=[])
+            await update_fee_status_based_on_payments(fee)
+
+            assert fee.status == FeeStatus.AGREEMENT
+            assert fee.paid_amount == 30.0
+            fee.save.assert_not_called()
+            MockPayment.find.assert_not_called()
+
+
 class TestCreateReceiptOnApproval:
     @pytest.mark.asyncio
     async def test_calls_create_receipt_and_logs(self, mock_payment):

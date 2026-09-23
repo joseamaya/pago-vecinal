@@ -96,6 +96,7 @@ class TestGetAgreements:
     ):
         response = await client.get("/agreements/", headers=auth_headers_owner)
         assert response.status_code == 200
+        assert response.json() == []
 
     @pytest.mark.asyncio
     async def test_invalid_property_id_returns_400(
@@ -429,6 +430,97 @@ class TestPayNextInstallment:
                 )
         assert response.status_code == 200
         assert response.json()["message"] == "Installment payment processed successfully"
+
+    @pytest.mark.asyncio
+    async def test_reconciles_fees_when_receipt_generation_fails(
+        self, client, mongomock_db, test_agreement, test_fee, test_agreement_installment,
+        auth_headers_admin, resolve_agreement_links,
+    ):
+        from app.models.agreement import AgreementInstallmentResponse
+        from app.models.fee import Fee, FeeStatus
+
+        fake_next = {
+            "installment": AgreementInstallmentResponse(
+                id=str(test_agreement_installment.id),
+                agreement_id=str(test_agreement.id),
+                installment_number=1,
+                amount=50.0,
+                due_date=datetime.utcnow() + timedelta(days=30),
+                status="pending",
+            ),
+            "agreement": {
+                "id": str(test_agreement.id),
+                "agreement_number": "AGR-2026-00001",
+            },
+        }
+        with patch(
+            "app.routes.agreements.get_next_pending_installment",
+            new_callable=AsyncMock,
+            return_value=fake_next,
+        ), patch(
+            "app.services.receipt_service.generate_correlative_number",
+            new_callable=AsyncMock,
+            side_effect=Exception("correlative failed"),
+        ):
+            response = await client.post(
+                "/agreements/installments/pay-next",
+                data={"amount": "50.0"},
+                headers=auth_headers_admin,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["receipt_created"] is False
+
+        # Reconciliation still ran: the fee moved from PENDING to AGREEMENT
+        # even though receipt generation failed.
+        updated_fee = await Fee.get(test_fee.id)
+        assert updated_fee.status == FeeStatus.AGREEMENT
+
+        # An empty installment query must not complete the agreement.
+        from app.models.agreement import Agreement, AgreementStatus
+
+        updated_agreement = await Agreement.get(test_agreement.id)
+        assert updated_agreement.status != AgreementStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_missing_agreement_does_not_mark_installment_paid(
+        self, client, mongomock_db, test_agreement, test_agreement_installment,
+        auth_headers_admin,
+    ):
+        from app.models.agreement import (
+            Agreement, AgreementInstallment, AgreementInstallmentResponse,
+            AgreementInstallmentStatus,
+        )
+
+        fake_next = {
+            "installment": AgreementInstallmentResponse(
+                id=str(test_agreement_installment.id),
+                agreement_id=str(test_agreement.id),
+                installment_number=1,
+                amount=50.0,
+                due_date=datetime.utcnow() + timedelta(days=30),
+                status="pending",
+            ),
+            "agreement": {
+                "id": str(test_agreement.id),
+                "agreement_number": "AGR-2026-00001",
+            },
+        }
+        with patch(
+            "app.routes.agreements.get_next_pending_installment",
+            new_callable=AsyncMock,
+            return_value=fake_next,
+        ), patch.object(Agreement, "get", new_callable=AsyncMock, return_value=None):
+            response = await client.post(
+                "/agreements/installments/pay-next",
+                data={"amount": "50.0"},
+                headers=auth_headers_admin,
+            )
+
+        assert response.status_code == 404
+
+        reloaded = await AgreementInstallment.get(test_agreement_installment.id)
+        assert reloaded.status != AgreementInstallmentStatus.PAID
 
 
 class TestUpdateInstallmentPayment:

@@ -16,6 +16,7 @@ export const FEE_STATUS = {
   FAILED: 'failed',
   CANCELLED: 'cancelled',
   PARTIALLY_PAID: 'partially_paid',
+  AGREEMENT: 'agreement',
 };
 
 export const MISC_PAYMENT_STATUS = {

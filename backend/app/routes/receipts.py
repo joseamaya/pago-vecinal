@@ -77,13 +77,16 @@ async def _owner_receipts_query(current_user):
     )
 
 
-def _build_receipt_pdf_data(receipt, payment_doc, misc_doc, treasurer_details=None):
+def _build_receipt_pdf_data(receipt, payment_doc, misc_doc, expense_doc=None, treasurer_details=None):
     if payment_doc is not None:
         payment_date = payment_doc.payment_date
         reference = payment_doc.fee_id
     elif misc_doc is not None:
         payment_date = misc_doc.payment_date
         reference = str(misc_doc.id)
+    elif expense_doc is not None:
+        payment_date = expense_doc.expense_date
+        reference = str(expense_doc.id)
     else:
         payment_date = receipt.issue_date
         reference = receipt.correlative_number
@@ -286,7 +289,7 @@ async def update_receipt(
     await receipt.save()
 
     # Regenerate PDF with updated information
-    pdf_data = _build_receipt_pdf_data(receipt, payment_doc, payment_misc)
+    pdf_data = _build_receipt_pdf_data(receipt, payment_doc, payment_misc, expense_doc)
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
@@ -321,13 +324,13 @@ async def download_receipt_pdf(receipt_id: str, current_user: User = Depends(get
         )
 
     # Fetch the linked documents
-    payment_doc, payment_misc, _ = await _fetch_receipt_links(receipt)
+    payment_doc, payment_misc, expense_doc = await _fetch_receipt_links(receipt)
 
     # Check permissions
     await _assert_receipt_access(payment_doc, payment_misc, current_user)
 
     # Always generate PDF on the fly to avoid Cloudinary permission issues
-    pdf_data = _build_receipt_pdf_data(receipt, payment_doc, payment_misc)
+    pdf_data = _build_receipt_pdf_data(receipt, payment_doc, payment_misc, expense_doc)
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
 
@@ -349,7 +352,7 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
         )
 
     # Fetch the linked documents
-    payment_doc, payment_misc, _ = await _fetch_receipt_links(receipt)
+    payment_doc, payment_misc, expense_doc = await _fetch_receipt_links(receipt)
 
     # Check permissions
     await _assert_receipt_access(payment_doc, payment_misc, current_user)
@@ -384,7 +387,7 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
 
     # Regenerate PDF data with updated information
     pdf_data = _build_receipt_pdf_data(
-        receipt, payment_doc, payment_misc, treasurer_details=updated_treasurer_details
+        receipt, payment_doc, payment_misc, expense_doc, treasurer_details=updated_treasurer_details
     )
 
     pdf_buffer = generate_receipt_pdf(pdf_data)
@@ -413,7 +416,7 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
         try:
             # Fetch the linked documents (payment may be absent for
             # miscellaneous-payment and expense receipts)
-            payment_doc, payment_misc, _ = await _fetch_receipt_links(receipt)
+            payment_doc, payment_misc, expense_doc = await _fetch_receipt_links(receipt)
 
             # Update property details with current information
             if payment_doc and payment_doc.fee:
@@ -444,7 +447,7 @@ async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_u
 
             # Regenerate PDF data with updated information
             pdf_data = _build_receipt_pdf_data(
-                receipt, payment_doc, payment_misc, treasurer_details=updated_treasurer_details
+                receipt, payment_doc, payment_misc, expense_doc, treasurer_details=updated_treasurer_details
             )
 
             pdf_buffer = generate_receipt_pdf(pdf_data)
