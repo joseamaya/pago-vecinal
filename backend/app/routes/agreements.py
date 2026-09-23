@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 import os
 import shutil
 from beanie import PydanticObjectId
+from bson.errors import InvalidId
 from ..models.agreement import (
     Agreement, AgreementCreate, AgreementUpdate, AgreementResponse,
     AgreementInstallment, AgreementInstallmentCreate, AgreementInstallmentUpdate, AgreementInstallmentResponse,
@@ -34,7 +35,7 @@ def _build_agreement_filters(current_user, property_id=None, status_filter=None)
     if property_id:
         try:
             filters.append(Agreement.property.id == PydanticObjectId(property_id))
-        except Exception:
+        except (InvalidId, TypeError):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid property_id"
@@ -718,6 +719,16 @@ async def pay_next_installment(
             detail="Installment not found"
         )
 
+    # Resolve the agreement before mutating the installment so a lookup
+    # failure doesn't leave a paid installment behind.
+    agreement = await Agreement.get(agreement_data["id"])
+    if not agreement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agreement not found"
+        )
+    await agreement.fetch_link(Agreement.property)
+
     # Handle file upload
     receipt_file_path = None
     if receipt_file:
@@ -740,18 +751,14 @@ async def pay_next_installment(
     installment_obj.notes = notes
     await installment_obj.save()
 
-    # Generate receipt for agreement installment payment
-    agreement = None
+    # Generate receipt for agreement installment payment (best effort)
+    receipt_created = False
     try:
         logger.info("Creating receipt for agreement installment %s", installment_obj.id)
 
         from ..services.receipt_service import generate_correlative_number
         current_year = datetime.utcnow().year
         correlative_number = await generate_correlative_number(current_year, "CONV")
-
-        # Get agreement and property details
-        agreement = await Agreement.get(agreement_data["id"])
-        await agreement.fetch_link(Agreement.property)
 
         # Create property and owner details snapshot
         property_details = {
@@ -790,50 +797,54 @@ async def pay_next_installment(
 
         await receipt.insert()
 
+        receipt_created = True
         logger.info("Receipt created in database with ID: %s", receipt.id)
-    except Exception as e:
+    except Exception:
         logger.exception("Error creating receipt for agreement installment %s", installment_obj.id)
 
-    # Update fee statuses based on agreement payments
-    if agreement:
-        await agreement.fetch_link(Agreement.fees)
-        total_paid_installments = await AgreementInstallment.find(
-            AgreementInstallment.agreement.id == agreement.id,
-            AgreementInstallment.status == AgreementInstallmentStatus.PAID
-        ).to_list()
+    # Update fee statuses based on agreement payments, regardless of whether
+    # receipt generation succeeded.
+    await agreement.fetch_link(Agreement.fees)
+    total_paid_installments = await AgreementInstallment.find(
+        AgreementInstallment.agreement.id == agreement.id,
+        AgreementInstallment.status == AgreementInstallmentStatus.PAID
+    ).to_list()
 
-        total_paid_amount = sum(inst.amount for inst in total_paid_installments)
+    total_paid_amount = sum(inst.amount for inst in total_paid_installments)
 
-        # Distribute the payment across the fees proportionally
-        for fee in agreement.fees:
-            # Calculate how much of this fee has been paid through the agreement
-            fee_portion = (fee.amount / agreement.total_debt) * total_paid_amount
-            fee.paid_amount = min(fee_portion, fee.amount)  # Don't exceed the fee amount
+    # Distribute the payment across the fees proportionally
+    for fee in agreement.fees:
+        # Calculate how much of this fee has been paid through the agreement
+        fee_portion = (fee.amount / agreement.total_debt) * total_paid_amount
+        fee.paid_amount = min(fee_portion, fee.amount)  # Don't exceed the fee amount
 
-            # Update fee status
-            if fee.paid_amount >= fee.amount:
-                fee.status = FeeStatus.COMPLETED
-            elif fee.paid_amount > 0:
-                fee.status = FeeStatus.PARTIALLY_PAID
-            else:
-                fee.status = FeeStatus.AGREEMENT  # Keep as agreement if no payment yet
+        # Update fee status
+        if fee.paid_amount >= fee.amount:
+            fee.status = FeeStatus.COMPLETED
+        elif fee.paid_amount > 0:
+            fee.status = FeeStatus.PARTIALLY_PAID
+        else:
+            fee.status = FeeStatus.AGREEMENT  # Keep as agreement if no payment yet
 
-            await fee.save()
+        await fee.save()
 
-        # Check if all installments are paid to update agreement status
-        all_installments = await AgreementInstallment.find(
-            AgreementInstallment.agreement.id == agreement.id
-        ).to_list()
+    # Check if all installments are paid to update agreement status
+    all_installments = await AgreementInstallment.find(
+        AgreementInstallment.agreement.id == agreement.id
+    ).to_list()
 
-        if all(inst.status == AgreementInstallmentStatus.PAID for inst in all_installments):
-            agreement.status = AgreementStatus.COMPLETED
-            await agreement.save()
+    if all_installments and all(
+        inst.status == AgreementInstallmentStatus.PAID for inst in all_installments
+    ):
+        agreement.status = AgreementStatus.COMPLETED
+        await agreement.save()
 
     return {
         "message": "Installment payment processed successfully",
         "installment": installment,
         "agreement": agreement_data,
-        "receipt_file": receipt_file_path
+        "receipt_file": receipt_file_path,
+        "receipt_created": receipt_created
     }
 
 @router.put("/{agreement_id}/installments/{installment_id}", response_model=AgreementInstallmentResponse)

@@ -202,6 +202,7 @@ async def mongomock_db():
         "app.routes.expenses",
         "app.routes.dashboard",
         "app.routes.treasurers",
+        "app.routes.agreements",
     ]
     for mod_name in route_modules:
         if mod_name in sys.modules:

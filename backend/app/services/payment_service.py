@@ -7,6 +7,11 @@ logger = logging.getLogger(__name__)
 
 
 async def update_fee_status_based_on_payments(fee):
+    if fee.status == FeeStatus.AGREEMENT:
+        # Fees under an agreement are reconciled by the agreement logic;
+        # recomputing from direct payments would wipe that state.
+        return
+
     approved_payments = await Payment.find(
         Payment.fee_id == str(fee.id),
         Payment.status == PaymentStatus.APPROVED

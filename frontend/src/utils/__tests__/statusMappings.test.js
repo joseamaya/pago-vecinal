@@ -29,6 +29,10 @@ describe('statusMappings', () => {
     test('partially_paid returns info', () => {
       expect(getStatusColor('partially_paid')).toBe('info');
     });
+
+    test('agreement returns secondary', () => {
+      expect(getStatusColor('agreement')).toBe('secondary');
+    });
   });
 
   describe('getStatusLabel', () => {
@@ -58,6 +62,10 @@ describe('statusMappings', () => {
 
     test('partially_paid label is correct', () => {
       expect(getStatusLabel('partially_paid')).toBe('Parcialmente pagado');
+    });
+
+    test('agreement label is correct', () => {
+      expect(getStatusLabel('agreement')).toBe('En convenio');
     });
   });
 });

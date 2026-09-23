@@ -335,3 +335,19 @@ class TestExpenseReceipt:
             f"/receipts/{test_expense_receipt.id}", headers=auth_headers_owner
         )
         assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_pdf_data_uses_expense_reference(self, test_expense_receipt):
+        from app.routes.receipts import _build_receipt_pdf_data
+        from app.models.expense import Expense
+
+        expense = Expense(
+            expense_date=datetime(2026, 5, 1),
+            description="Reparación",
+            amount=100.0,
+        )
+        await expense.insert()
+
+        data = _build_receipt_pdf_data(test_expense_receipt, None, None, expense)
+        assert data["reference"] == str(expense.id)
+        assert data["payment_date"] == expense.expense_date
