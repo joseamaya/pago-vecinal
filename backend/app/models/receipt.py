@@ -1,4 +1,5 @@
 from beanie import Document, Link
+from pymongo import IndexModel, ASCENDING
 from datetime import datetime
 from typing import Optional, Union
 from .payment import Payment
@@ -21,3 +22,6 @@ class Receipt(Document):
 
     class Settings:
         name = "receipts"
+        indexes = [
+            IndexModel([("correlative_number", ASCENDING)]),
+        ]

@@ -1,4 +1,5 @@
 from beanie import Document, Link
+from pymongo import IndexModel, ASCENDING
 from typing import Optional
 from .user import User
 
@@ -12,3 +13,6 @@ class Property(Document):
 
     class Settings:
         name = "properties"
+        indexes = [
+            IndexModel([("villa", ASCENDING), ("row_letter", ASCENDING), ("number", ASCENDING)]),
+        ]

@@ -1,4 +1,5 @@
 from beanie import Document, Link
+from pymongo import IndexModel, ASCENDING
 from datetime import datetime
 from typing import List, Optional
 from enum import Enum
@@ -30,6 +31,9 @@ class AgreementInstallment(Document):
 
     class Settings:
         name = "agreement_installments"
+        indexes = [
+            IndexModel([("status", ASCENDING)]),
+        ]
 
 class Agreement(Document):
     property: Link[Property]
@@ -49,3 +53,6 @@ class Agreement(Document):
 
     class Settings:
         name = "agreements"
+        indexes = [
+            IndexModel([("agreement_number", ASCENDING)]),
+        ]

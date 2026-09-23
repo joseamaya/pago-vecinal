@@ -1,4 +1,5 @@
 from beanie import Document, Link
+from pymongo import IndexModel, ASCENDING
 from datetime import datetime
 from typing import Optional
 from enum import Enum
@@ -24,3 +25,7 @@ class Payment(Document):
 
     class Settings:
         name = "payments"
+        indexes = [
+            IndexModel([("fee_id", ASCENDING)]),
+            IndexModel([("status", ASCENDING)]),
+        ]
