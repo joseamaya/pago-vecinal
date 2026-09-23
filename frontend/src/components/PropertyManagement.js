@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { propertiesAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -139,7 +140,9 @@ const PropertyManagement = () => {
       fetchProperties(currentPage);
       handleCloseDialog();
     } catch (err) {
-      toast.error(editingProperty ? 'Error al actualizar propiedad' : 'Error al crear propiedad');
+      if (!isNetworkError(err)) {
+        toast.error(editingProperty ? 'Error al actualizar propiedad' : 'Error al crear propiedad');
+      }
       console.error('Error saving property:', err);
     } finally {
       setSaving(false);
@@ -159,7 +162,9 @@ const PropertyManagement = () => {
       toast.success('Propiedad eliminada correctamente');
       fetchProperties(currentPage);
     } catch (err) {
-      toast.error('Error al eliminar propiedad');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar propiedad');
+      }
       console.error('Error deleting property:', err);
     }
   };
@@ -184,7 +189,9 @@ const PropertyManagement = () => {
       setBulkImportOpen(false);
       setSelectedFile(null);
     } catch (err) {
-      toast.error('Error al importar propiedades');
+      if (!isNetworkError(err)) {
+        toast.error('Error al importar propiedades');
+      }
       console.error('Error bulk importing properties:', err);
     } finally {
       setImporting(false);

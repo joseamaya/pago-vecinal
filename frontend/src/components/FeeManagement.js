@@ -40,6 +40,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { feesAPI, propertiesAPI, feeSchedulesAPI, reportsAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -193,7 +194,9 @@ const FeeManagement = () => {
       fetchFees(currentPage);
       handleCloseDialog();
     } catch (err) {
-      toast.error(editingFee ? 'Error al actualizar cuota' : 'Error al crear cuota');
+      if (!isNetworkError(err)) {
+        toast.error(editingFee ? 'Error al actualizar cuota' : 'Error al crear cuota');
+      }
       console.error('Error saving fee:', err);
     } finally {
       setSaving(false);
@@ -213,7 +216,9 @@ const FeeManagement = () => {
       toast.success('Cuota eliminada correctamente');
       fetchFees(currentPage);
     } catch (err) {
-      toast.error('Error al eliminar cuota');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar cuota');
+      }
       console.error('Error deleting fee:', err);
     }
   };
@@ -236,7 +241,9 @@ const FeeManagement = () => {
       fetchFees(currentPage);
       setGenerateOpen(false);
     } catch (err) {
-      toast.error('Error al generar cuotas');
+      if (!isNetworkError(err)) {
+        toast.error('Error al generar cuotas');
+      }
       console.error('Error generating fees:', err);
     } finally {
       setGeneratingFees(false);
@@ -313,7 +320,9 @@ const handleMonthsChange = (event) => {
       link.click();
       link.remove();
     } catch (err) {
-      toast.error('Error al descargar el reporte Excel');
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar el reporte Excel');
+      }
       console.error('Error downloading Excel report:', err);
     }
   };
@@ -329,7 +338,9 @@ const handleMonthsChange = (event) => {
       link.click();
       link.remove();
     } catch (err) {
-      toast.error('Error al descargar el reporte semáforo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar el reporte semáforo');
+      }
       console.error('Error downloading traffic light report:', err);
     }
   };

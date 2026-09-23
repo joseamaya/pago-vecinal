@@ -31,7 +31,8 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
-    } else if (!error.response) {
+    } else if (!error.response && !axios.isCancel(error)) {
+      error.isNetworkError = true;
       notify.error('No se pudo conectar con el servidor');
     }
     return Promise.reject(error);

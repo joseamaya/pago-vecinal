@@ -32,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { usersAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -125,7 +126,9 @@ const UserManagement = () => {
       fetchUsers();
       handleCloseDialog();
     } catch (err) {
-      toast.error(editingUser ? 'Error al actualizar usuario' : 'Error al crear usuario');
+      if (!isNetworkError(err)) {
+        toast.error(editingUser ? 'Error al actualizar usuario' : 'Error al crear usuario');
+      }
       console.error('Error saving user:', err);
     } finally {
       setSaving(false);
@@ -145,7 +148,9 @@ const UserManagement = () => {
       toast.success('Usuario eliminado correctamente');
       fetchUsers();
     } catch (err) {
-      toast.error('Error al eliminar usuario');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar usuario');
+      }
       console.error('Error deleting user:', err);
     }
   };

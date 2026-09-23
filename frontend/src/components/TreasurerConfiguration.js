@@ -30,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { treasurersAPI, propertiesAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -155,7 +156,9 @@ const TreasurerConfiguration = () => {
       fetchTreasurers();
       handleCloseDialog();
     } catch (err) {
-      toast.error('Error al guardar el tesorero');
+      if (!isNetworkError(err)) {
+        toast.error('Error al guardar el tesorero');
+      }
       console.error('Error saving treasurer:', err);
     } finally {
       setSaving(false);
@@ -176,7 +179,9 @@ const TreasurerConfiguration = () => {
       toast.success('Tesorero eliminado exitosamente');
       fetchTreasurers();
     } catch (err) {
-      toast.error('Error al eliminar el tesorero');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar el tesorero');
+      }
       console.error('Error deleting treasurer:', err);
     }
   };

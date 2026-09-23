@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { feeSchedulesAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -129,7 +130,9 @@ const FeeScheduleManagement = () => {
       fetchFeeSchedules();
       handleCloseDialog();
     } catch (err) {
-      toast.error(editingSchedule ? 'Error al actualizar plan de cuotas' : 'Error al crear plan de cuotas');
+      if (!isNetworkError(err)) {
+        toast.error(editingSchedule ? 'Error al actualizar plan de cuotas' : 'Error al crear plan de cuotas');
+      }
       console.error('Error saving fee schedule:', err);
     } finally {
       setSaving(false);
@@ -149,7 +152,9 @@ const FeeScheduleManagement = () => {
       toast.success('Plan de cuotas eliminado correctamente');
       fetchFeeSchedules();
     } catch (err) {
-      toast.error('Error al eliminar plan de cuotas');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar plan de cuotas');
+      }
       console.error('Error deleting fee schedule:', err);
     }
   };

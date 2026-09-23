@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { expensesAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -148,7 +149,9 @@ const ExpenseManagement = () => {
       fetchExpenses();
       handleCloseDialog();
     } catch (err) {
-      toast.error(editingExpense ? 'Error al actualizar gasto' : 'Error al crear gasto');
+      if (!isNetworkError(err)) {
+        toast.error(editingExpense ? 'Error al actualizar gasto' : 'Error al crear gasto');
+      }
       console.error('Error saving expense:', err);
     } finally {
       setSaving(false);
@@ -168,7 +171,9 @@ const ExpenseManagement = () => {
       toast.success('Gasto eliminado correctamente');
       fetchExpenses();
     } catch (err) {
-      toast.error('Error al eliminar gasto');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar gasto');
+      }
       console.error('Error deleting expense:', err);
     }
   };
@@ -207,7 +212,9 @@ const ExpenseManagement = () => {
       fetchExpenses(); // Refresh the list
       setError('');
     } catch (err) {
-      toast.error('Error al importar gastos masivamente');
+      if (!isNetworkError(err)) {
+        toast.error('Error al importar gastos masivamente');
+      }
       console.error('Error bulk importing expenses:', err);
     }
   };
@@ -230,7 +237,7 @@ const ExpenseManagement = () => {
   });
 
   return (
-    <PageContainer>
+    <PageContainer maxWidth="xl">
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Gastos Administrativos

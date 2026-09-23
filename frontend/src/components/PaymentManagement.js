@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentsAPI, feesAPI, propertiesAPI, reportsAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -343,7 +344,9 @@ const PaymentManagement = () => {
       handleCloseDialog();
 
     } catch (err) {
-      toast.error(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
+      if (!isNetworkError(err)) {
+        toast.error(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
+      }
       console.error('Error saving payment:', err);
     } finally {
       setSaving(false);
@@ -368,7 +371,9 @@ const PaymentManagement = () => {
       if (filterProperty) currentFilters.property_id = filterProperty;
       fetchPayments(currentPage, currentFilters);
     } catch (err) {
-      toast.error('Error al eliminar pago');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar pago');
+      }
       console.error('Error deleting payment:', err);
     }
   };
@@ -388,7 +393,9 @@ const PaymentManagement = () => {
       if (filterProperty) currentFilters.property_id = filterProperty;
       await fetchPayments(currentPage, currentFilters);
     } catch (err) {
-      toast.error('Error al aprobar pago');
+      if (!isNetworkError(err)) {
+        toast.error('Error al aprobar pago');
+      }
       console.error('Error approving payment:', err);
     }
   };
@@ -406,7 +413,9 @@ const PaymentManagement = () => {
       if (filterProperty) currentFilters.property_id = filterProperty;
       fetchPayments(currentPage, currentFilters);
     } catch (err) {
-      toast.error('Error al rechazar pago');
+      if (!isNetworkError(err)) {
+        toast.error('Error al rechazar pago');
+      }
       console.error('Error rejecting payment:', err);
     }
   };
@@ -445,7 +454,9 @@ const PaymentManagement = () => {
       if (filterProperty) currentFilters.property_id = filterProperty;
       fetchPayments(currentPage, currentFilters); // Refresh the payments list
     } catch (err) {
-      toast.error('Error al subir archivo masivo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al subir archivo masivo');
+      }
       console.error('Error bulk uploading payments:', err);
     } finally {
       setBulkUploading(false);
@@ -523,7 +534,9 @@ const PaymentManagement = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error('Error al exportar el reporte de pagos');
+      if (!isNetworkError(err)) {
+        toast.error('Error al exportar el reporte de pagos');
+      }
       console.error('Error exporting payments:', err);
     }
   };
@@ -709,7 +722,9 @@ const PaymentManagement = () => {
       setError('');
       toast.success(`Se aprobaron ${response.data.approved_count} pagos exitosamente`);
     } catch (err) {
-      toast.error('Error al aprobar pagos masivamente');
+      if (!isNetworkError(err)) {
+        toast.error('Error al aprobar pagos masivamente');
+      }
       console.error('Error bulk approving payments:', err);
     }
   };
@@ -739,7 +754,9 @@ const PaymentManagement = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error('Error al descargar el recibo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar el recibo');
+      }
       console.error('Error downloading receipt:', err);
     }
   };

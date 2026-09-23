@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { reportsAPI, propertiesAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import PageContainer from './common/PageContainer';
 import LoadingSpinner from './common/LoadingSpinner';
@@ -70,7 +71,9 @@ const ReportsManagement = () => {
 
       toast.success('Reporte descargado exitosamente');
     } catch (err) {
-      toast.error('Error al descargar el reporte');
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar el reporte');
+      }
       console.error('Error downloading report:', err);
     } finally {
       setLoading(false);

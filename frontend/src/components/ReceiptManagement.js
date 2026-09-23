@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { receiptsAPI, paymentsAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -154,7 +155,9 @@ const ReceiptManagement = () => {
       fetchReceipts();
       handleCloseDialog();
     } catch (err) {
-      toast.error(editingReceipt ? 'Error al actualizar recibo' : 'Error al crear recibo');
+      if (!isNetworkError(err)) {
+        toast.error(editingReceipt ? 'Error al actualizar recibo' : 'Error al crear recibo');
+      }
       console.error('Error saving receipt:', err);
     } finally {
       setSaving(false);
@@ -174,7 +177,9 @@ const ReceiptManagement = () => {
       toast.success('Recibo eliminado correctamente');
       fetchReceipts();
     } catch (err) {
-      toast.error('Error al eliminar recibo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar recibo');
+      }
       console.error('Error deleting receipt:', err);
     }
   };
@@ -191,7 +196,9 @@ const ReceiptManagement = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error('Error al descargar el recibo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar el recibo');
+      }
       console.error('Error downloading receipt:', err);
     }
   };
@@ -209,7 +216,9 @@ const ReceiptManagement = () => {
       await receiptsAPI.regenerateReceiptPDF(receipt.id);
       toast.success('PDF regenerado exitosamente');
     } catch (err) {
-      toast.error('Error al regenerar el PDF del recibo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al regenerar el PDF del recibo');
+      }
       console.error('Error regenerating receipt PDF:', err);
     }
   };
@@ -232,7 +241,9 @@ const ReceiptManagement = () => {
         toast.warning(`Hubo ${response.data.errors.length} errores. Revisa la consola para más detalles.`);
       }
     } catch (err) {
-      toast.error('Error al regenerar los PDFs de los recibos');
+      if (!isNetworkError(err)) {
+        toast.error('Error al regenerar los PDFs de los recibos');
+      }
       console.error('Error regenerating all receipt PDFs:', err);
     } finally {
       setLoading(false);

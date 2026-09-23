@@ -16,3 +16,5 @@ export const notify = {
   warning: (message) => emit(message, 'warning'),
   info: (message) => emit(message, 'info'),
 };
+
+export const isNetworkError = (error) => Boolean(error?.isNetworkError);

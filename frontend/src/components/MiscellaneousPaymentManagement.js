@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { miscellaneousPaymentsAPI, propertiesAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
@@ -187,7 +188,9 @@ const MiscellaneousPaymentManagement = () => {
       fetchMiscellaneousPayments();
       handleCloseDialog();
     } catch (err) {
-      toast.error(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
+      if (!isNetworkError(err)) {
+        toast.error(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
+      }
       console.error('Error saving miscellaneous payment:', err);
     } finally {
       setSaving(false);
@@ -207,7 +210,9 @@ const MiscellaneousPaymentManagement = () => {
       toast.success('Pago eliminado correctamente');
       fetchMiscellaneousPayments();
     } catch (err) {
-      toast.error('Error al eliminar pago');
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar pago');
+      }
       console.error('Error deleting miscellaneous payment:', err);
     }
   };
@@ -220,7 +225,9 @@ const MiscellaneousPaymentManagement = () => {
       toast.success('Pago aprobado correctamente');
       fetchMiscellaneousPayments();
     } catch (err) {
-      toast.error('Error al aprobar pago');
+      if (!isNetworkError(err)) {
+        toast.error('Error al aprobar pago');
+      }
       console.error('Error approving miscellaneous payment:', err);
     }
   };
@@ -233,7 +240,9 @@ const MiscellaneousPaymentManagement = () => {
       toast.success('Pago rechazado');
       fetchMiscellaneousPayments();
     } catch (err) {
-      toast.error('Error al rechazar pago');
+      if (!isNetworkError(err)) {
+        toast.error('Error al rechazar pago');
+      }
       console.error('Error rejecting miscellaneous payment:', err);
     }
   };
@@ -249,7 +258,9 @@ const MiscellaneousPaymentManagement = () => {
       link.click();
       document.body.removeChild(link);
     } catch (err) {
-      toast.error('Error al descargar recibo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar recibo');
+      }
       console.error('Error downloading receipt:', err);
     }
   };
@@ -288,7 +299,7 @@ const MiscellaneousPaymentManagement = () => {
   });
 
   return (
-    <PageContainer>
+    <PageContainer maxWidth="xl">
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Pagos Varios
