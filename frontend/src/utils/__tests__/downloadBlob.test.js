@@ -25,7 +25,7 @@ describe('downloadBlob', () => {
     createObjectURLMock = jest.fn().mockReturnValue('blob:test-url');
     revokeObjectURLMock = jest.fn();
 
-    Object.defineProperty(globalThis, 'URL', {
+    Object.defineProperty(window, 'URL', {
       value: {
         createObjectURL: createObjectURLMock,
         revokeObjectURL: revokeObjectURLMock,

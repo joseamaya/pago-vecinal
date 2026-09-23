@@ -143,6 +143,7 @@ const PaymentManagement = () => {
     } else {
       setInitialLoad(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterYear, filterMonth, filterStatus, filterProperty]);
 
 
