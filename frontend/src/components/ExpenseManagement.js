@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   Table,
@@ -19,11 +18,12 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Chip,
   IconButton,
   Box,
   Alert,
   Grid,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,14 +34,24 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { expensesAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import EmptyState from './common/EmptyState';
 
 
 
 const ExpenseManagement = () => {
   const { isAdmin } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
@@ -116,6 +126,7 @@ const ExpenseManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('expense_date', new Date(formData.expense_date).toISOString());
@@ -130,26 +141,40 @@ const ExpenseManagement = () => {
 
       if (editingExpense) {
         await expensesAPI.updateExpense(editingExpense.id, formDataToSend);
+        toast.success('Gasto actualizado correctamente');
       } else {
         await expensesAPI.createExpense(formDataToSend);
+        toast.success('Gasto creado correctamente');
       }
       fetchExpenses();
       handleCloseDialog();
     } catch (err) {
-      setError(editingExpense ? 'Error al actualizar gasto' : 'Error al crear gasto');
+      if (!isNetworkError(err)) {
+        toast.error(editingExpense ? 'Error al actualizar gasto' : 'Error al crear gasto');
+      }
       console.error('Error saving expense:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (expenseId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este gasto?')) {
-      try {
-        await expensesAPI.deleteExpense(expenseId);
-        fetchExpenses();
-      } catch (err) {
-        setError('Error al eliminar gasto');
-        console.error('Error deleting expense:', err);
+  const handleDelete = async (expense) => {
+    const confirmed = await confirm({
+      title: 'Eliminar gasto',
+      message: `¿Estás seguro de que quieres eliminar "${expense.description}"? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await expensesAPI.deleteExpense(expense.id);
+      toast.success('Gasto eliminado correctamente');
+      fetchExpenses();
+    } catch (err) {
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar gasto');
       }
+      console.error('Error deleting expense:', err);
     }
   };
 
@@ -187,7 +212,9 @@ const ExpenseManagement = () => {
       fetchExpenses(); // Refresh the list
       setError('');
     } catch (err) {
-      setError('Error al importar gastos masivamente');
+      if (!isNetworkError(err)) {
+        toast.error('Error al importar gastos masivamente');
+      }
       console.error('Error bulk importing expenses:', err);
     }
   };
@@ -195,14 +222,11 @@ const ExpenseManagement = () => {
   const handleDownloadTemplate = () => {
     // Create a sample Excel template
     const headers = ['Fecha de Gasto', 'Descripción', 'Monto', 'Año', 'Mes'];
-    const sampleData = [
-      ['2024-01-15', 'Mantenimiento de jardín', '150.50', '2024', '1'],
-      ['2024-01-20', 'Pago de luz', '200.00', '2024', '1'],
-      ['2024-01-25', 'Compra de materiales', '75.25', '2024', '1']
-    ];
 
-    // For now, just show an alert with instructions
-    alert('Descarga la plantilla desde: /templates/plantilla_gastos_administrativos.xlsx\n\nEncabezados esperados:\n' + headers.join(', '));
+    // For now, just show instructions
+    toast.info(
+      `Descarga la plantilla desde: /templates/plantilla_gastos_administrativos.xlsx. Encabezados esperados: ${headers.join(', ')}`
+    );
   };
 
 
@@ -213,7 +237,7 @@ const ExpenseManagement = () => {
   });
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer maxWidth="xl">
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Gastos Administrativos
@@ -306,8 +330,8 @@ const ExpenseManagement = () => {
       )}
 
       {/* Filters */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
+      <Paper sx={{ p: 3, mb: 2 }}>
+        <Typography variant="h6" component="h2" gutterBottom>
           Filtros
         </Typography>
         <Grid container spacing={2} alignItems="center">
@@ -386,8 +410,11 @@ const ExpenseManagement = () => {
                 <LoadingSkeleton type="table" rows={5} columns={6} />
               ) : filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    No hay gastos administrativos registrados
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      title="No hay gastos administrativos registrados"
+                      description="Agrega un gasto o importa un archivo Excel."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -407,13 +434,15 @@ const ExpenseManagement = () => {
                         <>
                           <IconButton
                             color="primary"
+                            aria-label={`Editar ${expense.description}`}
                             onClick={() => handleOpenDialog(expense)}
                           >
                             <EditIcon />
                           </IconButton>
                           <IconButton
                             color="error"
-                            onClick={() => handleDelete(expense.id)}
+                            aria-label={`Eliminar ${expense.description}`}
+                            onClick={() => handleDelete(expense)}
                             sx={{ ml: 1 }}
                           >
                             <DeleteIcon />
@@ -430,7 +459,13 @@ const ExpenseManagement = () => {
       </Paper>
 
       {/* Dialog for Add/Edit Expense */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+      <Dialog
+        open={open}
+        onClose={handleCloseDialog}
+        maxWidth="md"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           {editingExpense ? 'Editar Gasto Administrativo' : 'Nuevo Gasto Administrativo'}
         </DialogTitle>
@@ -439,6 +474,7 @@ const ExpenseManagement = () => {
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <TextField
+                  autoFocus={!isMobile}
                   margin="dense"
                   label="Fecha de Gasto"
                   type="date"
@@ -446,9 +482,7 @@ const ExpenseManagement = () => {
                   required
                   value={formData.expense_date}
                   onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
+                  slotProps={{ inputLabel: { shrink: true } }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -518,14 +552,16 @@ const ExpenseManagement = () => {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              {editingExpense ? 'Actualizar' : 'Crear'}
+            <Button onClick={handleCloseDialog} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? 'Guardando...' : editingExpense ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 };
 

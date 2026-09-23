@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   Table,
@@ -29,6 +28,8 @@ import {
   Checkbox,
   Pagination,
   FormControlLabel,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -40,15 +41,24 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentsAPI, feesAPI, propertiesAPI, reportsAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
 import LoadingSkeleton from './common/LoadingSkeleton';
 import LoadingSpinner from './common/LoadingSpinner';
+import EmptyState from './common/EmptyState';
 import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
 import { MONTHS } from '../utils/months';
 
 const PaymentManagement = () => {
   const { isAdmin } = useAuth();
-  const [payments, setPayments] = useState([]);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
@@ -101,7 +111,6 @@ const PaymentManagement = () => {
       const response = await paymentsAPI.getPayments(page, pageSize, filters);
 
       const sortedData = response.data.data.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
-      setPayments(sortedData);
       setFilteredPayments(sortedData);
       setTotalPages(response.data.pagination.total_pages);
       setTotalCount(response.data.pagination.total_count);
@@ -301,10 +310,11 @@ const PaymentManagement = () => {
     // Validate amount
     const amountError = validateAmount(formData.amount);
     if (amountError) {
-      setError(amountError);
+      toast.error(amountError);
       return;
     }
 
+    setSaving(true);
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('fee_id', formData.fee_id);
@@ -316,11 +326,13 @@ const PaymentManagement = () => {
 
       if (editingPayment) {
         await paymentsAPI.updatePayment(editingPayment.id, formDataToSend);
+        toast.success('Pago actualizado correctamente');
       } else {
         if (isDirectlyApproved) {
           formDataToSend.append('status', 'approved');
         }
         await paymentsAPI.createPayment(formDataToSend);
+        toast.success('Pago creado correctamente');
       }
 
       const currentFilters = {};
@@ -332,34 +344,47 @@ const PaymentManagement = () => {
       handleCloseDialog();
 
     } catch (err) {
-      setError(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
-      console.error('Error saving payment:', err);
-    }
-  };
-
-  const handleDelete = async (paymentId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este pago?')) {
-      try {
-        await paymentsAPI.deletePayment(paymentId);
-        const currentFilters = {};
-        if (filterYear) currentFilters.year = parseInt(filterYear);
-        if (filterMonth) currentFilters.month = parseInt(filterMonth);
-        if (filterStatus) currentFilters.status = filterStatus;
-        if (filterProperty) currentFilters.property_id = filterProperty;
-        fetchPayments(currentPage, currentFilters);
-      } catch (err) {
-        setError('Error al eliminar pago');
-        console.error('Error deleting payment:', err);
+      if (!isNetworkError(err)) {
+        toast.error(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
       }
+      console.error('Error saving payment:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleApprove = async (paymentId) => {
+  const handleDelete = async (payment) => {
+    const confirmed = await confirm({
+      title: 'Eliminar pago',
+      message: `¿Estás seguro de que quieres eliminar este pago de S/ ${payment.amount.toFixed(2)}? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await paymentsAPI.deletePayment(payment.id);
+      toast.success('Pago eliminado correctamente');
+      const currentFilters = {};
+      if (filterYear) currentFilters.year = parseInt(filterYear);
+      if (filterMonth) currentFilters.month = parseInt(filterMonth);
+      if (filterStatus) currentFilters.status = filterStatus;
+      if (filterProperty) currentFilters.property_id = filterProperty;
+      fetchPayments(currentPage, currentFilters);
+    } catch (err) {
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar pago');
+      }
+      console.error('Error deleting payment:', err);
+    }
+  };
+
+  const handleApprove = async (payment) => {
     try {
 
       const formDataToSend = new FormData();
       formDataToSend.append('status', 'approved');
-      const response = await paymentsAPI.updatePayment(paymentId, formDataToSend);
+      await paymentsAPI.updatePayment(payment.id, formDataToSend);
+      toast.success('Pago aprobado correctamente');
 
       const currentFilters = {};
       if (filterYear) currentFilters.year = parseInt(filterYear);
@@ -368,16 +393,19 @@ const PaymentManagement = () => {
       if (filterProperty) currentFilters.property_id = filterProperty;
       await fetchPayments(currentPage, currentFilters);
     } catch (err) {
-      setError('Error al aprobar pago');
+      if (!isNetworkError(err)) {
+        toast.error('Error al aprobar pago');
+      }
       console.error('Error approving payment:', err);
     }
   };
 
-  const handleReject = async (paymentId) => {
+  const handleReject = async (payment) => {
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('status', 'rejected');
-      await paymentsAPI.updatePayment(paymentId, formDataToSend);
+      await paymentsAPI.updatePayment(payment.id, formDataToSend);
+      toast.success('Pago rechazado');
       const currentFilters = {};
       if (filterYear) currentFilters.year = parseInt(filterYear);
       if (filterMonth) currentFilters.month = parseInt(filterMonth);
@@ -385,7 +413,9 @@ const PaymentManagement = () => {
       if (filterProperty) currentFilters.property_id = filterProperty;
       fetchPayments(currentPage, currentFilters);
     } catch (err) {
-      setError('Error al rechazar pago');
+      if (!isNetworkError(err)) {
+        toast.error('Error al rechazar pago');
+      }
       console.error('Error rejecting payment:', err);
     }
   };
@@ -424,7 +454,9 @@ const PaymentManagement = () => {
       if (filterProperty) currentFilters.property_id = filterProperty;
       fetchPayments(currentPage, currentFilters); // Refresh the payments list
     } catch (err) {
-      setError('Error al subir archivo masivo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al subir archivo masivo');
+      }
       console.error('Error bulk uploading payments:', err);
     } finally {
       setBulkUploading(false);
@@ -502,7 +534,9 @@ const PaymentManagement = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Error al exportar el reporte de pagos');
+      if (!isNetworkError(err)) {
+        toast.error('Error al exportar el reporte de pagos');
+      }
       console.error('Error exporting payments:', err);
     }
   };
@@ -686,9 +720,11 @@ const PaymentManagement = () => {
 
       // Show success message
       setError('');
-      alert(`Se aprobaron ${response.data.approved_count} pagos exitosamente`);
+      toast.success(`Se aprobaron ${response.data.approved_count} pagos exitosamente`);
     } catch (err) {
-      setError('Error al aprobar pagos masivamente');
+      if (!isNetworkError(err)) {
+        toast.error('Error al aprobar pagos masivamente');
+      }
       console.error('Error bulk approving payments:', err);
     }
   };
@@ -718,56 +754,16 @@ const PaymentManagement = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Error al descargar el recibo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar el recibo');
+      }
       console.error('Error downloading receipt:', err);
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-        return 'success';
-      case 'completed':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'partially_paid':
-        return 'info';
-      case 'rejected':
-        return 'error';
-      case 'failed':
-        return 'error';
-      case 'cancelled':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'approved':
-        return 'Aprobado';
-      case 'completed':
-        return 'Completado';
-      case 'pending':
-        return 'Pendiente';
-      case 'partially_paid':
-        return 'Pago Parcial';
-      case 'rejected':
-        return 'Rechazado';
-      case 'failed':
-        return 'Fallido';
-      case 'cancelled':
-        return 'Cancelado';
-      default:
-        return status;
     }
   };
 
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Pagos de Cuotas Condominales
@@ -812,8 +808,8 @@ const PaymentManagement = () => {
       </Box>
 
       {/* Filters */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
+      <Paper sx={{ p: 3, mb: 2 }}>
+        <Typography variant="h6" component="h2" gutterBottom>
           Filtros
         </Typography>
         <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
@@ -845,21 +841,8 @@ const PaymentManagement = () => {
               <MenuItem value="">
                 <em>Todos</em>
               </MenuItem>
-              {[
-                { value: '1', label: 'Enero' },
-                { value: '2', label: 'Febrero' },
-                { value: '3', label: 'Marzo' },
-                { value: '4', label: 'Abril' },
-                { value: '5', label: 'Mayo' },
-                { value: '6', label: 'Junio' },
-                { value: '7', label: 'Julio' },
-                { value: '8', label: 'Agosto' },
-                { value: '9', label: 'Septiembre' },
-                { value: '10', label: 'Octubre' },
-                { value: '11', label: 'Noviembre' },
-                { value: '12', label: 'Diciembre' }
-              ].map(month => (
-                <MenuItem key={month.value} value={month.value}>
+              {MONTHS.map(month => (
+                <MenuItem key={month.value} value={month.value.toString()}>
                   {month.label}
                 </MenuItem>
               ))}
@@ -919,7 +902,7 @@ const PaymentManagement = () => {
       <Paper>
         {/* Pagination Info */}
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="textSecondary">
             Mostrando {filteredPayments.length > 0 ? ((currentPage - 1) * pageSize) + 1 : 0} - {Math.min(currentPage * pageSize, totalCount)} de {totalCount} pagos
           </Typography>
         </Box>
@@ -932,6 +915,7 @@ const PaymentManagement = () => {
                     <Checkbox
                       checked={selectAll}
                       onChange={handleSelectAll}
+                      inputProps={{ 'aria-label': 'Seleccionar todos los pagos pendientes' }}
                       indeterminate={selectedPayments.length > 0 && selectedPayments.length < filteredPayments.filter(p => p.status === 'pending').length}
                     />
                   )}
@@ -949,8 +933,11 @@ const PaymentManagement = () => {
                 <LoadingSkeleton type="table" rows={5} columns={7} />
               ) : filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    No hay pagos registrados
+                  <TableCell colSpan={7}>
+                    <EmptyState
+                      title="No hay pagos registrados"
+                      description="Registra un pago o ajusta los filtros."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -961,6 +948,7 @@ const PaymentManagement = () => {
                         <Checkbox
                           checked={selectedPayments.includes(payment.id)}
                           onChange={() => handleSelectPayment(payment.id)}
+                          inputProps={{ 'aria-label': 'Seleccionar pago' }}
                         />
                       )}
                     </TableCell>
@@ -986,6 +974,7 @@ const PaymentManagement = () => {
                           size="small"
                           color="primary"
                           onClick={() => handleDownload(payment)}
+                          aria-label="Descargar recibo PDF"
                           title="Descargar Recibo PDF"
                         >
                           <DownloadIcon fontSize="small" />
@@ -996,6 +985,7 @@ const PaymentManagement = () => {
                       <IconButton
                         color="primary"
                         onClick={() => handleOpenDialog(payment)}
+                        aria-label="Editar pago"
                       >
                         <EditIcon />
                       </IconButton>
@@ -1005,7 +995,7 @@ const PaymentManagement = () => {
                             size="small"
                             variant="contained"
                             color="success"
-                            onClick={() => handleApprove(payment.id)}
+                            onClick={() => handleApprove(payment)}
                             sx={{ ml: 1 }}
                           >
                             Aprobar
@@ -1014,7 +1004,7 @@ const PaymentManagement = () => {
                             size="small"
                             variant="contained"
                             color="error"
-                            onClick={() => handleReject(payment.id)}
+                            onClick={() => handleReject(payment)}
                             sx={{ ml: 1 }}
                           >
                             Rechazar
@@ -1024,7 +1014,8 @@ const PaymentManagement = () => {
                       {isAdmin && (
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(payment.id)}
+                          onClick={() => handleDelete(payment)}
+                          aria-label="Eliminar pago"
                           sx={{ ml: 1 }}
                         >
                           <DeleteIcon />
@@ -1053,7 +1044,7 @@ const PaymentManagement = () => {
       )}
 
       {/* Dialog for Add/Edit Payment */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>
           {editingPayment ? 'Editar Pago' : 'Nuevo Pago'}
         </DialogTitle>
@@ -1206,10 +1197,10 @@ const PaymentManagement = () => {
                     inputProps={{ min: 0, step: 0.01 }}
                     helperText={
                       editingPayment
-                        ? "💰 Editar monto del pago"
+                        ? "Editar monto del pago"
                         : selectedFeeInfo.status === 'partially_paid'
-                          ? `💰 Pago restante (máx. S/ ${selectedFeeAmount.toFixed(2)})`
-                          : `💰 Pagos parciales permitidos (máx. S/ ${selectedFeeAmount.toFixed(2)})`
+                          ? `Pago restante (máx. S/ ${selectedFeeAmount.toFixed(2)})`
+                          : `Pagos parciales permitidos (máx. S/ ${selectedFeeAmount.toFixed(2)})`
                     }
                     required
                   />
@@ -1223,9 +1214,7 @@ const PaymentManagement = () => {
               fullWidth
               value={formData.payment_date}
               onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-              InputLabelProps={{
-                shrink: true,
-              }}
+              slotProps={{ inputLabel: { shrink: true } }}
               required
             />
             <TextField
@@ -1251,28 +1240,31 @@ const PaymentManagement = () => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              {editingPayment ? 'Actualizar' : 'Crear'}
+            <Button onClick={handleCloseDialog} disabled={saving}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? 'Guardando...' : editingPayment ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
 
       {/* Bulk Upload Dialog */}
-      <Dialog open={bulkUploadOpen} onClose={handleBulkUploadClose} maxWidth="md" fullWidth>
+      <Dialog open={bulkUploadOpen} onClose={handleBulkUploadClose} maxWidth="md" fullWidth fullScreen={isMobile}>
         <DialogTitle>Subida Masiva de Pagos</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
             Sube un archivo Excel con los pagos. El formato debe incluir las columnas: Villa, Fila, Número, Año, Mes, Monto, Fecha de Pago, Notas.
           </Typography>
 
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleBulkFileChange}
-            style={{ marginBottom: 16 }}
-          />
+          <Button variant="outlined" component="label" startIcon={<CloudUploadIcon />}>
+            Seleccionar archivo
+            <input
+              type="file"
+              hidden
+              accept=".xlsx,.xls"
+              onChange={handleBulkFileChange}
+            />
+          </Button>
 
           {bulkFile && (
             <Typography variant="body2" sx={{ mb: 2 }}>
@@ -1321,7 +1313,7 @@ const PaymentManagement = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 };
 

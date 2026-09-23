@@ -17,6 +17,8 @@ import {
   IconButton,
   Box,
   Alert,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -24,9 +26,12 @@ import {
 } from '@mui/icons-material';
 import { paymentsAPI } from '../services/api';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import EmptyState from './common/EmptyState';
 import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
 
 const PaymentsModal = ({ open, onClose, fee }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,13 +75,13 @@ const PaymentsModal = ({ open, onClose, fee }) => {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth fullScreen={isMobile}>
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="h6">
             Pagos de la Cuota - {fee ? `${fee.year}/${fee.month}` : ''}
           </Typography>
-          <IconButton onClick={onClose}>
+          <IconButton onClick={onClose} aria-label="Cerrar">
             <CloseIcon />
           </IconButton>
         </Box>
@@ -90,13 +95,13 @@ const PaymentsModal = ({ open, onClose, fee }) => {
 
         {fee && (
           <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="textSecondary">
               <strong>Propiedad:</strong> {fee.property_villa} {fee.property_row_letter}{fee.property_number} - {fee.property_owner_name}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="textSecondary">
               <strong>Monto Total:</strong> S/ {fee.amount.toFixed(2)}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="textSecondary">
               <strong>Monto Pagado:</strong> S/ {(fee.paid_amount || 0).toFixed(2)}
             </Typography>
           </Box>
@@ -118,8 +123,11 @@ const PaymentsModal = ({ open, onClose, fee }) => {
                 <LoadingSkeleton type="table" rows={3} columns={5} />
               ) : payments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    No hay pagos registrados para esta cuota
+                  <TableCell colSpan={5}>
+                    <EmptyState
+                      title="No hay pagos registrados para esta cuota"
+                      description="Los pagos aprobados o completados aparecerán aquí."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -142,6 +150,7 @@ const PaymentsModal = ({ open, onClose, fee }) => {
                         <IconButton
                           color="primary"
                           onClick={() => handleDownload(payment)}
+                          aria-label="Descargar recibo PDF"
                           title="Descargar Recibo PDF"
                         >
                           <DownloadIcon />

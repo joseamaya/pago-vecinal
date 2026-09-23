@@ -5,6 +5,7 @@ import {
   Typography,
   Button,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 
 const LoadingSpinner = ({
   size = 40,
@@ -49,7 +50,7 @@ const LoadingSpinner = ({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.7),
           zIndex: 9999,
         }}
       >

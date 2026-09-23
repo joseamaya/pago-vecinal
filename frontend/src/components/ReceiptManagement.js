@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   Table,
@@ -23,6 +22,8 @@ import {
   Box,
   Alert,
   TablePagination,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,13 +35,23 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { receiptsAPI, paymentsAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import EmptyState from './common/EmptyState';
 
 const ReceiptManagement = () => {
   const { isAdmin } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState(null);
@@ -132,29 +143,44 @@ const ReceiptManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     try {
       if (editingReceipt) {
         await receiptsAPI.updateReceipt(editingReceipt.id, formData);
+        toast.success('Recibo actualizado correctamente');
       } else {
         await receiptsAPI.createReceipt(formData);
+        toast.success('Recibo creado correctamente');
       }
       fetchReceipts();
       handleCloseDialog();
     } catch (err) {
-      setError(editingReceipt ? 'Error al actualizar recibo' : 'Error al crear recibo');
+      if (!isNetworkError(err)) {
+        toast.error(editingReceipt ? 'Error al actualizar recibo' : 'Error al crear recibo');
+      }
       console.error('Error saving receipt:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (receiptId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este recibo?')) {
-      try {
-        await receiptsAPI.deleteReceipt(receiptId);
-        fetchReceipts();
-      } catch (err) {
-        setError('Error al eliminar recibo');
-        console.error('Error deleting receipt:', err);
+  const handleDelete = async (receipt) => {
+    const confirmed = await confirm({
+      title: 'Eliminar recibo',
+      message: `¿Estás seguro de que quieres eliminar el recibo ${receipt.correlative_number}? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await receiptsAPI.deleteReceipt(receipt.id);
+      toast.success('Recibo eliminado correctamente');
+      fetchReceipts();
+    } catch (err) {
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar recibo');
       }
+      console.error('Error deleting receipt:', err);
     }
   };
 
@@ -170,47 +196,63 @@ const ReceiptManagement = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Error al descargar el recibo');
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar el recibo');
+      }
       console.error('Error downloading receipt:', err);
     }
   };
 
   const handleRegenerate = async (receipt) => {
-    if (window.confirm('¿Estás seguro de que quieres regenerar el PDF de este recibo? Esto sobreescribirá el archivo existente.')) {
-      try {
-        await receiptsAPI.regenerateReceiptPDF(receipt.id);
-        setError('');
-        alert('PDF regenerado exitosamente');
-      } catch (err) {
-        setError('Error al regenerar el PDF del recibo');
-        console.error('Error regenerating receipt PDF:', err);
+    const confirmed = await confirm({
+      title: 'Regenerar PDF',
+      message: '¿Estás seguro de que quieres regenerar el PDF de este recibo? Esto sobreescribirá el archivo existente.',
+      confirmLabel: 'Regenerar',
+      destructive: false,
+    });
+    if (!confirmed) return;
+
+    try {
+      await receiptsAPI.regenerateReceiptPDF(receipt.id);
+      toast.success('PDF regenerado exitosamente');
+    } catch (err) {
+      if (!isNetworkError(err)) {
+        toast.error('Error al regenerar el PDF del recibo');
       }
+      console.error('Error regenerating receipt PDF:', err);
     }
   };
 
   const handleRegenerateAll = async () => {
-    if (window.confirm('¿Estás seguro de que quieres regenerar TODOS los PDFs de recibos? Esto sobreescribirá todos los archivos existentes y puede tomar tiempo.')) {
-      try {
-        setLoading(true);
-        const response = await receiptsAPI.regenerateAllReceiptPDFs();
-        setError('');
-        alert(`PDFs regenerados exitosamente: ${response.data.updated_count} recibos actualizados`);
-        if (response.data.errors && response.data.errors.length > 0) {
-          console.warn('Errores durante la regeneración:', response.data.errors);
-          alert(`Hubo ${response.data.errors.length} errores. Revisa la consola para más detalles.`);
-        }
-      } catch (err) {
-        setError('Error al regenerar los PDFs de los recibos');
-        console.error('Error regenerating all receipt PDFs:', err);
-      } finally {
-        setLoading(false);
+    const confirmed = await confirm({
+      title: 'Regenerar todos los PDFs',
+      message: '¿Estás seguro de que quieres regenerar TODOS los PDFs de recibos? Esto sobreescribirá todos los archivos existentes y puede tomar tiempo.',
+      confirmLabel: 'Regenerar todos',
+      destructive: false,
+    });
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      const response = await receiptsAPI.regenerateAllReceiptPDFs();
+      toast.success(`PDFs regenerados exitosamente: ${response.data.updated_count} recibos actualizados`);
+      if (response.data.errors && response.data.errors.length > 0) {
+        console.warn('Errores durante la regeneración:', response.data.errors);
+        toast.warning(`Hubo ${response.data.errors.length} errores. Revisa la consola para más detalles.`);
       }
+    } catch (err) {
+      if (!isNetworkError(err)) {
+        toast.error('Error al regenerar los PDFs de los recibos');
+      }
+      console.error('Error regenerating all receipt PDFs:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Recibos
@@ -262,8 +304,11 @@ const ReceiptManagement = () => {
                 <LoadingSkeleton type="table" rows={5} columns={7} />
               ) : receipts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    No hay recibos registrados
+                  <TableCell colSpan={7}>
+                    <EmptyState
+                      title="No hay recibos registrados"
+                      description="Los recibos generados aparecerán aquí."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -283,6 +328,7 @@ const ReceiptManagement = () => {
                       <IconButton
                         color="primary"
                         onClick={() => handleDownload(receipt)}
+                        aria-label={`Descargar recibo ${receipt.correlative_number}`}
                         title="Descargar Recibo PDF"
                       >
                         <DownloadIcon />
@@ -290,6 +336,7 @@ const ReceiptManagement = () => {
                       <IconButton
                         color="secondary"
                         onClick={() => handleRegenerate(receipt)}
+                        aria-label={`Regenerar PDF del recibo ${receipt.correlative_number}`}
                         title="Regenerar PDF"
                       >
                         <RefreshIcon />
@@ -297,13 +344,15 @@ const ReceiptManagement = () => {
                       <IconButton
                         color="primary"
                         onClick={() => handleOpenDialog(receipt)}
+                        aria-label={`Editar recibo ${receipt.correlative_number}`}
                       >
                         <EditIcon />
                       </IconButton>
                       {isAdmin && (
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(receipt.id)}
+                          onClick={() => handleDelete(receipt)}
+                          aria-label={`Eliminar recibo ${receipt.correlative_number}`}
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -331,7 +380,13 @@ const ReceiptManagement = () => {
       </Paper>
 
       {/* Dialog for Add/Edit Receipt */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog
+        open={open}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           {editingReceipt ? 'Editar Recibo' : 'Nuevo Recibo'}
         </DialogTitle>
@@ -371,14 +426,16 @@ const ReceiptManagement = () => {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              {editingReceipt ? 'Actualizar' : 'Crear'}
+            <Button onClick={handleCloseDialog} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? 'Guardando...' : editingReceipt ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 };
 

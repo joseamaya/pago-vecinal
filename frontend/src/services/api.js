@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { notify } from './notifications';
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -30,6 +31,9 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+    } else if (!error.response && !axios.isCancel(error)) {
+      error.isNetworkError = true;
+      notify.error('No se pudo conectar con el servidor');
     }
     return Promise.reject(error);
   }

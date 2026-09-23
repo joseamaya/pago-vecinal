@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   TextField,
@@ -20,6 +19,8 @@ import {
   DialogActions,
   IconButton,
   MenuItem,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -29,13 +30,22 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { treasurersAPI, propertiesAPI } from '../services/api';
+import { isNetworkError } from '../services/notifications';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
+import LoadingSkeleton from './common/LoadingSkeleton';
+import EmptyState from './common/EmptyState';
 
 const TreasurerConfiguration = () => {
   const { isAdmin } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [treasurers, setTreasurers] = useState([]);
   const [villas, setVillas] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -119,7 +129,6 @@ const TreasurerConfiguration = () => {
     e.preventDefault();
     setSaving(true);
     setError('');
-    setSuccess('');
 
     try {
       let signaturePath = formData.signature;
@@ -139,15 +148,17 @@ const TreasurerConfiguration = () => {
 
       if (editingTreasurer) {
         await treasurersAPI.updateTreasurer(editingTreasurer.villa, treasurerData);
-        setSuccess('Tesorero actualizado exitosamente');
+        toast.success('Tesorero actualizado exitosamente');
       } else {
         await treasurersAPI.createTreasurer(treasurerData);
-        setSuccess('Tesorero creado exitosamente');
+        toast.success('Tesorero creado exitosamente');
       }
       fetchTreasurers();
       handleCloseDialog();
     } catch (err) {
-      setError('Error al guardar el tesorero');
+      if (!isNetworkError(err)) {
+        toast.error('Error al guardar el tesorero');
+      }
       console.error('Error saving treasurer:', err);
     } finally {
       setSaving(false);
@@ -156,15 +167,22 @@ const TreasurerConfiguration = () => {
   };
 
   const handleDelete = async (villa) => {
-    if (window.confirm(`¿Estás seguro de que quieres eliminar el tesorero de la villa ${villa}?`)) {
-      try {
-        await treasurersAPI.deleteTreasurer(villa);
-        setSuccess('Tesorero eliminado exitosamente');
-        fetchTreasurers();
-      } catch (err) {
-        setError('Error al eliminar el tesorero');
-        console.error('Error deleting treasurer:', err);
+    const confirmed = await confirm({
+      title: 'Eliminar tesorero',
+      message: `¿Estás seguro de que quieres eliminar el tesorero de la villa ${villa}? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await treasurersAPI.deleteTreasurer(villa);
+      toast.success('Tesorero eliminado exitosamente');
+      fetchTreasurers();
+    } catch (err) {
+      if (!isNetworkError(err)) {
+        toast.error('Error al eliminar el tesorero');
       }
+      console.error('Error deleting treasurer:', err);
     }
   };
 
@@ -175,16 +193,16 @@ const TreasurerConfiguration = () => {
 
   if (!isAdmin) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <PageContainer>
         <Alert severity="error">
           No tienes permisos para acceder a esta página.
         </Alert>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Configuración de Tesoreros por Villa
@@ -204,12 +222,6 @@ const TreasurerConfiguration = () => {
         </Alert>
       )}
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
-
       <Paper>
         <TableContainer>
           <Table>
@@ -223,15 +235,14 @@ const TreasurerConfiguration = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+                <LoadingSkeleton type="table" rows={5} columns={4} />
               ) : treasurers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    No hay tesoreros configurados
+                  <TableCell colSpan={4}>
+                    <EmptyState
+                      title="No hay tesoreros configurados"
+                      description="Configura un tesorero por villa para las firmas de recibos."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -243,12 +254,14 @@ const TreasurerConfiguration = () => {
                     <TableCell>
                       <IconButton
                         color="primary"
+                        aria-label={`Editar tesorero de ${treasurer.villa}`}
                         onClick={() => handleOpenDialog(treasurer)}
                       >
                         <EditIcon />
                       </IconButton>
                       <IconButton
                         color="error"
+                        aria-label={`Eliminar tesorero de ${treasurer.villa}`}
                         onClick={() => handleDelete(treasurer.villa)}
                       >
                         <DeleteIcon />
@@ -263,7 +276,13 @@ const TreasurerConfiguration = () => {
       </Paper>
 
       {/* Dialog for Add/Edit Treasurer */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           {editingTreasurer ? 'Editar Tesorero' : 'Nuevo Tesorero'}
         </DialogTitle>
@@ -342,7 +361,7 @@ const TreasurerConfiguration = () => {
           </DialogActions>
         </form>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 };
 
