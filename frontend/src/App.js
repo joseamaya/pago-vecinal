@@ -4,6 +4,8 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import Login from './components/Login';
@@ -85,11 +87,15 @@ function App() {
   return (
     <ThemeProvider>
       <ThemeWrapper>
-        <AuthProvider>
-          <ErrorBoundary>
-            <AppRouter />
-          </ErrorBoundary>
-        </AuthProvider>
+        <ToastProvider>
+          <ConfirmProvider>
+            <AuthProvider>
+              <ErrorBoundary>
+                <AppRouter />
+              </ErrorBoundary>
+            </AuthProvider>
+          </ConfirmProvider>
+        </ToastProvider>
       </ThemeWrapper>
     </ThemeProvider>
   );

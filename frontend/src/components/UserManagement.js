@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   Table,
@@ -23,6 +22,8 @@ import {
   IconButton,
   Box,
   Alert,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -31,12 +32,21 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { usersAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import EmptyState from './common/EmptyState';
 
 const UserManagement = () => {
   const { user: currentUser, isAdmin } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -103,29 +113,40 @@ const UserManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     try {
       if (editingUser) {
         await usersAPI.updateUser(editingUser.id, formData);
+        toast.success('Usuario actualizado correctamente');
       } else {
         await usersAPI.createUser(formData);
+        toast.success('Usuario creado correctamente');
       }
       fetchUsers();
       handleCloseDialog();
     } catch (err) {
-      setError(editingUser ? 'Error al actualizar usuario' : 'Error al crear usuario');
+      toast.error(editingUser ? 'Error al actualizar usuario' : 'Error al crear usuario');
       console.error('Error saving user:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (userId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este usuario?')) {
-      try {
-        await usersAPI.deleteUser(userId);
-        fetchUsers();
-      } catch (err) {
-        setError('Error al eliminar usuario');
-        console.error('Error deleting user:', err);
-      }
+  const handleDelete = async (user) => {
+    const confirmed = await confirm({
+      title: 'Eliminar usuario',
+      message: `¿Estás seguro de que quieres eliminar a ${user.full_name}? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await usersAPI.deleteUser(user.id);
+      toast.success('Usuario eliminado correctamente');
+      fetchUsers();
+    } catch (err) {
+      toast.error('Error al eliminar usuario');
+      console.error('Error deleting user:', err);
     }
   };
 
@@ -135,16 +156,16 @@ const UserManagement = () => {
 
   if (!isAdmin) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <PageContainer>
         <Alert severity="error">
           No tienes permisos para acceder a esta página.
         </Alert>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Usuarios
@@ -182,8 +203,11 @@ const UserManagement = () => {
                 <LoadingSkeleton type="table" rows={5} columns={6} />
               ) : users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    No hay usuarios registrados
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      title="No hay usuarios registrados"
+                      description="Crea el primer usuario para empezar."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -209,13 +233,15 @@ const UserManagement = () => {
                     <TableCell>
                       <IconButton
                         color="primary"
+                        aria-label={`Editar ${user.full_name}`}
                         onClick={() => handleOpenDialog(user)}
                       >
                         <EditIcon />
                       </IconButton>
                       <IconButton
                         color="error"
-                        onClick={() => handleDelete(user.id)}
+                        aria-label={`Eliminar ${user.full_name}`}
+                        onClick={() => handleDelete(user)}
                         disabled={user.id === currentUser?.id}
                       >
                         <DeleteIcon />
@@ -230,14 +256,20 @@ const UserManagement = () => {
       </Paper>
 
       {/* Dialog for Add/Edit User */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog
+        open={open}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
             <TextField
-              autoFocus
+              autoFocus={!isMobile}
               margin="dense"
               label="Email"
               type="email"
@@ -285,14 +317,16 @@ const UserManagement = () => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              {editingUser ? 'Actualizar' : 'Crear'}
+            <Button onClick={handleCloseDialog} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? 'Guardando...' : editingUser ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 };
 

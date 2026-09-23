@@ -21,6 +21,8 @@ import {
   People as PeopleIcon,
   Home as HomeIcon,
   Payment as PaymentIcon,
+  AccountBalanceWallet as MiscPaymentIcon,
+  RequestQuote as ExpenseIcon,
   Receipt as ReceiptIcon,
   MonetizationOn as FeeIcon,
   Schedule as ScheduleIcon,
@@ -83,13 +85,13 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle, handleDrawerClose }) => {
     },
     {
       text: 'Pagos Varios',
-      icon: <PaymentIcon />,
+      icon: <MiscPaymentIcon />,
       path: '/miscellaneous-payments',
       roles: ['admin', 'owner'],
     },
     {
       text: 'Gastos Administrativos',
-      icon: <PaymentIcon />,
+      icon: <ExpenseIcon />,
       path: '/expenses',
       roles: ['admin'],
     },
@@ -137,7 +139,7 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle, handleDrawerClose }) => {
           Pago Vecinal
         </Typography>
         {isMobile && (
-          <IconButton onClick={handleDrawerToggle}>
+          <IconButton onClick={handleDrawerToggle} aria-label="Cerrar menú">
             <ChevronLeftIcon />
           </IconButton>
         )}
@@ -246,7 +248,7 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle, handleDrawerClose }) => {
   );
 
   return (
-    <Box component="nav">
+    <Box component="nav" aria-label="Navegación principal">
       {/* Mobile drawer */}
       <Drawer
         variant="temporary"

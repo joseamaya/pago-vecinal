@@ -23,6 +23,22 @@ const sharedTypography = {
 };
 
 const sharedComponents = {
+  MuiCssBaseline: {
+    styleOverrides: (theme) => ({
+      '*, *::before, *::after': {
+        '@media (prefers-reduced-motion: reduce)': {
+          animationDuration: '0.01ms !important',
+          animationIterationCount: '1 !important',
+          transitionDuration: '0.01ms !important',
+          scrollBehavior: 'auto !important',
+        },
+      },
+      ':focus-visible': {
+        outline: `2px solid ${theme.palette.primary.main}`,
+        outlineOffset: 2,
+      },
+    }),
+  },
   MuiCard: {
     styleOverrides: {
       root: {

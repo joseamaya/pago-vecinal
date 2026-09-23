@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   Table,
@@ -24,16 +23,24 @@ import {
   Box,
   Alert,
   Grid,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   FileDownload as FileDownloadIcon,
+  CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { miscellaneousPaymentsAPI, propertiesAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import EmptyState from './common/EmptyState';
+import { getStatusColor } from '../utils/statusMappings';
 
 const PAYMENT_TYPES = {
   maintenance: 'Mantenimiento',
@@ -54,9 +61,14 @@ const PAYMENT_STATUSES = {
 
 const MiscellaneousPaymentManagement = () => {
   const { isAdmin } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [miscellaneousPayments, setMiscellaneousPayments] = useState([]);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
@@ -151,6 +163,7 @@ const MiscellaneousPaymentManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('property_id', formData.property_id || '');
@@ -166,49 +179,61 @@ const MiscellaneousPaymentManagement = () => {
 
       if (editingPayment) {
         await miscellaneousPaymentsAPI.updateMiscellaneousPayment(editingPayment.id, formDataToSend);
+        toast.success('Pago actualizado correctamente');
       } else {
         await miscellaneousPaymentsAPI.createMiscellaneousPayment(formDataToSend);
+        toast.success('Pago creado correctamente');
       }
       fetchMiscellaneousPayments();
       handleCloseDialog();
     } catch (err) {
-      setError(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
+      toast.error(editingPayment ? 'Error al actualizar pago' : 'Error al crear pago');
       console.error('Error saving miscellaneous payment:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (paymentId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este pago?')) {
-      try {
-        await miscellaneousPaymentsAPI.deleteMiscellaneousPayment(paymentId);
-        fetchMiscellaneousPayments();
-      } catch (err) {
-        setError('Error al eliminar pago');
-        console.error('Error deleting miscellaneous payment:', err);
-      }
+  const handleDelete = async (payment) => {
+    const confirmed = await confirm({
+      title: 'Eliminar pago',
+      message: `¿Estás seguro de que quieres eliminar el pago "${payment.description}"? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await miscellaneousPaymentsAPI.deleteMiscellaneousPayment(payment.id);
+      toast.success('Pago eliminado correctamente');
+      fetchMiscellaneousPayments();
+    } catch (err) {
+      toast.error('Error al eliminar pago');
+      console.error('Error deleting miscellaneous payment:', err);
     }
   };
 
-  const handleApprove = async (paymentId) => {
+  const handleApprove = async (payment) => {
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('status', 'approved');
-      await miscellaneousPaymentsAPI.updateMiscellaneousPayment(paymentId, formDataToSend);
+      await miscellaneousPaymentsAPI.updateMiscellaneousPayment(payment.id, formDataToSend);
+      toast.success('Pago aprobado correctamente');
       fetchMiscellaneousPayments();
     } catch (err) {
-      setError('Error al aprobar pago');
+      toast.error('Error al aprobar pago');
       console.error('Error approving miscellaneous payment:', err);
     }
   };
 
-  const handleReject = async (paymentId) => {
+  const handleReject = async (payment) => {
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('status', 'rejected');
-      await miscellaneousPaymentsAPI.updateMiscellaneousPayment(paymentId, formDataToSend);
+      await miscellaneousPaymentsAPI.updateMiscellaneousPayment(payment.id, formDataToSend);
+      toast.success('Pago rechazado');
       fetchMiscellaneousPayments();
     } catch (err) {
-      setError('Error al rechazar pago');
+      toast.error('Error al rechazar pago');
       console.error('Error rejecting miscellaneous payment:', err);
     }
   };
@@ -224,7 +249,7 @@ const MiscellaneousPaymentManagement = () => {
       link.click();
       document.body.removeChild(link);
     } catch (err) {
-      setError('Error al descargar recibo');
+      toast.error('Error al descargar recibo');
       console.error('Error downloading receipt:', err);
     }
   };
@@ -249,25 +274,6 @@ const MiscellaneousPaymentManagement = () => {
     fetchMiscellaneousPayments();
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-        return 'success';
-      case 'completed':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'rejected':
-        return 'error';
-      case 'failed':
-        return 'error';
-      case 'cancelled':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-
   const getPropertyInfo = (propertyId) => {
     if (!propertyId) return 'N/A';
     const property = properties.find(p => p.id === propertyId);
@@ -282,7 +288,7 @@ const MiscellaneousPaymentManagement = () => {
   });
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Pagos Varios
@@ -304,7 +310,7 @@ const MiscellaneousPaymentManagement = () => {
 
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h6" component="h2" gutterBottom>
           Filtros
         </Typography>
         <Grid container spacing={2} alignItems="center">
@@ -406,8 +412,11 @@ const MiscellaneousPaymentManagement = () => {
                 <LoadingSkeleton type="table" rows={5} columns={8} />
               ) : filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    No hay pagos varios registrados
+                  <TableCell colSpan={8}>
+                    <EmptyState
+                      title="No hay pagos varios registrados"
+                      description="Registra un pago o ajusta los filtros."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -443,6 +452,7 @@ const MiscellaneousPaymentManagement = () => {
                       <IconButton
                         color="primary"
                         onClick={() => handleOpenDialog(payment)}
+                        aria-label={`Editar pago ${payment.description}`}
                       >
                         <EditIcon />
                       </IconButton>
@@ -452,7 +462,7 @@ const MiscellaneousPaymentManagement = () => {
                             size="small"
                             variant="contained"
                             color="success"
-                            onClick={() => handleApprove(payment.id)}
+                            onClick={() => handleApprove(payment)}
                             sx={{ ml: 1 }}
                           >
                             Aprobar
@@ -461,7 +471,7 @@ const MiscellaneousPaymentManagement = () => {
                             size="small"
                             variant="contained"
                             color="error"
-                            onClick={() => handleReject(payment.id)}
+                            onClick={() => handleReject(payment)}
                             sx={{ ml: 1 }}
                           >
                             Rechazar
@@ -471,7 +481,8 @@ const MiscellaneousPaymentManagement = () => {
                       {isAdmin && (
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(payment.id)}
+                          onClick={() => handleDelete(payment)}
+                          aria-label={`Eliminar pago ${payment.description}`}
                           sx={{ ml: 1 }}
                         >
                           <DeleteIcon />
@@ -487,7 +498,7 @@ const MiscellaneousPaymentManagement = () => {
       </Paper>
 
       {/* Dialog for Add/Edit Payment */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+      <Dialog open={open} onClose={handleCloseDialog} maxWidth="md" fullWidth fullScreen={isMobile}>
         <DialogTitle>
           {editingPayment ? 'Editar Pago Vario' : 'Nuevo Pago Vario'}
         </DialogTitle>
@@ -551,9 +562,7 @@ const MiscellaneousPaymentManagement = () => {
                   required
                   value={formData.payment_date}
                   onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
+                  slotProps={{ inputLabel: { shrink: true } }}
                 />
               </Grid>
               <Grid item xs={12}>
@@ -581,25 +590,32 @@ const MiscellaneousPaymentManagement = () => {
                 />
               </Grid>
               <Grid item xs={12}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setReceiptFile(e.target.files[0])}
-                  style={{ marginTop: 16, marginBottom: 8 }}
-                />
-                {receiptFile && <Typography variant="body2">{receiptFile.name}</Typography>}
+                <Button variant="outlined" component="label" startIcon={<CloudUploadIcon />}>
+                  Adjuntar recibo (opcional)
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={(e) => setReceiptFile(e.target.files[0])}
+                  />
+                </Button>
+                {receiptFile && (
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    {receiptFile.name}
+                  </Typography>
+                )}
               </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              {editingPayment ? 'Actualizar' : 'Crear'}
+            <Button onClick={handleCloseDialog} disabled={saving}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? 'Guardando...' : editingPayment ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 };
 

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   Table,
@@ -28,6 +27,8 @@ import {
   OutlinedInput,
   Grid,
   Pagination,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,18 +40,27 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { feesAPI, propertiesAPI, feeSchedulesAPI, reportsAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
 import LoadingSkeleton from './common/LoadingSkeleton';
 import LoadingSpinner from './common/LoadingSpinner';
+import EmptyState from './common/EmptyState';
 import PaymentsModal from './PaymentsModal';
 import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
 import { MONTHS } from '../utils/months';
 
 const FeeManagement = () => {
   const { isAdmin } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [fees, setFees] = useState([]);
   const [properties, setProperties] = useState([]);
   const [feeSchedules, setFeeSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -166,6 +176,7 @@ const FeeManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     try {
       const submitData = {
         ...formData,
@@ -174,26 +185,36 @@ const FeeManagement = () => {
 
       if (editingFee) {
         await feesAPI.updateFee(editingFee.id, submitData);
+        toast.success('Cuota actualizada correctamente');
       } else {
         await feesAPI.createFee(submitData);
+        toast.success('Cuota creada correctamente');
       }
       fetchFees(currentPage);
       handleCloseDialog();
     } catch (err) {
-      setError(editingFee ? 'Error al actualizar cuota' : 'Error al crear cuota');
+      toast.error(editingFee ? 'Error al actualizar cuota' : 'Error al crear cuota');
       console.error('Error saving fee:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (feeId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar esta cuota?')) {
-      try {
-        await feesAPI.deleteFee(feeId);
-        fetchFees(currentPage);
-      } catch (err) {
-        setError('Error al eliminar cuota');
-        console.error('Error deleting fee:', err);
-      }
+  const handleDelete = async (fee) => {
+    const confirmed = await confirm({
+      title: 'Eliminar cuota',
+      message: `¿Estás seguro de que quieres eliminar la cuota de ${getPropertyInfo(fee.property_id)} (${fee.month}/${fee.year})? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await feesAPI.deleteFee(fee.id);
+      toast.success('Cuota eliminada correctamente');
+      fetchFees(currentPage);
+    } catch (err) {
+      toast.error('Error al eliminar cuota');
+      console.error('Error deleting fee:', err);
     }
   };
 
@@ -211,11 +232,11 @@ const FeeManagement = () => {
         generateFormData.months,
         generateFormData.feeScheduleIds.length > 0 ? generateFormData.feeScheduleIds : null
       );
-      alert(response.data.message);
+      toast.success(response.data.message || 'Cuotas generadas correctamente');
       fetchFees(currentPage);
       setGenerateOpen(false);
     } catch (err) {
-      setError('Error al generar cuotas');
+      toast.error('Error al generar cuotas');
       console.error('Error generating fees:', err);
     } finally {
       setGeneratingFees(false);
@@ -292,7 +313,7 @@ const handleMonthsChange = (event) => {
       link.click();
       link.remove();
     } catch (err) {
-      setError('Error al descargar el reporte Excel');
+      toast.error('Error al descargar el reporte Excel');
       console.error('Error downloading Excel report:', err);
     }
   };
@@ -308,7 +329,7 @@ const handleMonthsChange = (event) => {
       link.click();
       link.remove();
     } catch (err) {
-      setError('Error al descargar el reporte semáforo');
+      toast.error('Error al descargar el reporte semáforo');
       console.error('Error downloading traffic light report:', err);
     }
   };
@@ -324,7 +345,7 @@ const handleMonthsChange = (event) => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Cuotas
@@ -376,7 +397,7 @@ const handleMonthsChange = (event) => {
 
       {/* Filters Section */}
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h6" component="h2" gutterBottom>
           Filtros
         </Typography>
         <Grid container spacing={2} alignItems="center">
@@ -471,7 +492,7 @@ const handleMonthsChange = (event) => {
       <Paper>
         {/* Pagination Info */}
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="textSecondary">
             Mostrando {fees.length > 0 ? ((currentPage - 1) * pageSize) + 1 : 0} - {Math.min(currentPage * pageSize, totalCount)} de {totalCount} cuotas
           </Typography>
         </Box>
@@ -495,8 +516,11 @@ const handleMonthsChange = (event) => {
                 <LoadingSkeleton type="table" rows={5} columns={9} />
               ) : fees.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center">
-                    No hay cuotas registradas
+                  <TableCell colSpan={9}>
+                    <EmptyState
+                      title="No hay cuotas registradas"
+                      description="Genera cuotas o crea una manualmente para empezar."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -523,6 +547,7 @@ const handleMonthsChange = (event) => {
                         <IconButton
                           color="info"
                           onClick={() => handleViewPayments(fee)}
+                          aria-label="Ver pagos de la cuota"
                           title="Ver Pagos"
                         >
                           <ViewIcon />
@@ -531,13 +556,15 @@ const handleMonthsChange = (event) => {
                       <IconButton
                         color="primary"
                         onClick={() => handleOpenDialog(fee)}
+                        aria-label={`Editar cuota ${fee.month}/${fee.year}`}
                       >
                         <EditIcon />
                       </IconButton>
                       {isAdmin && (
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(fee.id)}
+                          onClick={() => handleDelete(fee)}
+                          aria-label={`Eliminar cuota ${fee.month}/${fee.year}`}
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -565,7 +592,7 @@ const handleMonthsChange = (event) => {
       )}
 
       {/* Dialog for Add/Edit Fee */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>
           {editingFee ? 'Editar Cuota' : 'Nueva Cuota'}
         </DialogTitle>
@@ -609,9 +636,7 @@ const handleMonthsChange = (event) => {
               required
               value={formData.due_date}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              InputLabelProps={{
-                shrink: true,
-              }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               margin="dense"
@@ -624,22 +649,22 @@ const handleMonthsChange = (event) => {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              {editingFee ? 'Actualizar' : 'Crear'}
+            <Button onClick={handleCloseDialog} disabled={saving}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? 'Guardando...' : editingFee ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
 
       {/* Dialog for Generate Fees */}
-      <Dialog open={generateOpen} onClose={handleGenerateClose} maxWidth="sm" fullWidth>
+      <Dialog open={generateOpen} onClose={handleGenerateClose} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>
           Generar Cuotas
         </DialogTitle>
         <form onSubmit={handleGenerateSubmit}>
           <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
               Selecciona el año, los meses y los planes de cuotas para generar las cuotas. Se generarán cuotas para todas las propiedades usando los planes seleccionados.
             </Typography>
             <TextField
@@ -692,7 +717,7 @@ const handleMonthsChange = (event) => {
                 ))}
               </Select>
             </FormControl>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+            <Typography variant="caption" color="textSecondary" sx={{ mt: 1 }}>
               Si no seleccionas ningún plan de cuotas, se usarán todos los planes activos.
             </Typography>
           </DialogContent>
@@ -718,7 +743,7 @@ const handleMonthsChange = (event) => {
         onClose={handleClosePaymentsModal}
         fee={selectedFeeForPayments}
       />
-    </Container>
+    </PageContainer>
   );
 };
 

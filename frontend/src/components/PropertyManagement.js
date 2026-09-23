@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   Table,
@@ -19,6 +18,8 @@ import {
   Box,
   Alert,
   Pagination,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,12 +29,22 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { propertiesAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
 import LoadingSkeleton from './common/LoadingSkeleton';
+import EmptyState from './common/EmptyState';
 
 const PropertyManagement = () => {
   const { isAdmin } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -111,6 +122,7 @@ const PropertyManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     try {
       const submitData = {
         ...formData,
@@ -119,26 +131,36 @@ const PropertyManagement = () => {
 
       if (editingProperty) {
         await propertiesAPI.updateProperty(editingProperty.id, submitData);
+        toast.success('Propiedad actualizada correctamente');
       } else {
         await propertiesAPI.createProperty(submitData);
+        toast.success('Propiedad creada correctamente');
       }
       fetchProperties(currentPage);
       handleCloseDialog();
     } catch (err) {
-      setError(editingProperty ? 'Error al actualizar propiedad' : 'Error al crear propiedad');
+      toast.error(editingProperty ? 'Error al actualizar propiedad' : 'Error al crear propiedad');
       console.error('Error saving property:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (propertyId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar esta propiedad?')) {
-      try {
-        await propertiesAPI.deleteProperty(propertyId);
-        fetchProperties(currentPage);
-      } catch (err) {
-        setError('Error al eliminar propiedad');
-        console.error('Error deleting property:', err);
-      }
+  const handleDelete = async (property) => {
+    const confirmed = await confirm({
+      title: 'Eliminar propiedad',
+      message: `¿Estás seguro de que quieres eliminar ${property.villa} ${property.row_letter}${property.number}? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await propertiesAPI.deleteProperty(property.id);
+      toast.success('Propiedad eliminada correctamente');
+      fetchProperties(currentPage);
+    } catch (err) {
+      toast.error('Error al eliminar propiedad');
+      console.error('Error deleting property:', err);
     }
   };
 
@@ -148,10 +170,13 @@ const PropertyManagement = () => {
       return;
     }
 
+    setImporting(true);
     try {
       const response = await propertiesAPI.bulkImportProperties(selectedFile);
       const { imported, updated, errors } = response.data;
-      alert(`Importación completada. Propiedades importadas: ${imported}. Propiedades actualizadas: ${updated}. Errores: ${errors.length}`);
+      toast.success(
+        `Importación completada. Importadas: ${imported}. Actualizadas: ${updated}. Errores: ${errors.length}.`
+      );
       if (errors.length > 0) {
         console.error('Errores de importación:', errors);
       }
@@ -159,13 +184,15 @@ const PropertyManagement = () => {
       setBulkImportOpen(false);
       setSelectedFile(null);
     } catch (err) {
-      setError('Error al importar propiedades');
+      toast.error('Error al importar propiedades');
       console.error('Error bulk importing properties:', err);
+    } finally {
+      setImporting(false);
     }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Propiedades
@@ -213,8 +240,11 @@ const PropertyManagement = () => {
                 <LoadingSkeleton type="table" rows={5} columns={6} />
               ) : properties.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    No hay propiedades registradas
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      title="No hay propiedades registradas"
+                      description="Agrega una propiedad o importa un archivo Excel."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -228,6 +258,7 @@ const PropertyManagement = () => {
                     <TableCell>
                       <IconButton
                         color="primary"
+                        aria-label={`Editar ${property.villa} ${property.row_letter}${property.number}`}
                         onClick={() => handleOpenDialog(property)}
                       >
                         <EditIcon />
@@ -235,7 +266,8 @@ const PropertyManagement = () => {
                       {isAdmin && (
                         <IconButton
                           color="error"
-                          onClick={() => handleDelete(property.id)}
+                          aria-label={`Eliminar ${property.villa} ${property.row_letter}${property.number}`}
+                          onClick={() => handleDelete(property)}
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -263,14 +295,20 @@ const PropertyManagement = () => {
       )}
 
       {/* Dialog for Add/Edit Property */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog
+        open={open}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           {editingProperty ? 'Editar Propiedad' : 'Nueva Propiedad'}
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
             <TextField
-              autoFocus
+              autoFocus={!isMobile}
               margin="dense"
               label="Villa"
               fullWidth
@@ -312,42 +350,59 @@ const PropertyManagement = () => {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              {editingProperty ? 'Actualizar' : 'Crear'}
+            <Button onClick={handleCloseDialog} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? 'Guardando...' : editingProperty ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
 
       {/* Bulk Import Dialog */}
-      <Dialog open={bulkImportOpen} onClose={() => setBulkImportOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={bulkImportOpen}
+        onClose={() => setBulkImportOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>Importar Propiedades desde Excel</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
             El archivo Excel debe tener las columnas: villa, row_letter, number, owner_name, owner_phone (opcional).
             La primera fila es el encabezado y se ignorará.
           </Typography>
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={(e) => setSelectedFile(e.target.files[0])}
-            style={{ marginBottom: 16 }}
-          />
+          <Button variant="outlined" component="label" startIcon={<CloudUploadIcon />}>
+            Seleccionar archivo
+            <input
+              type="file"
+              hidden
+              accept=".xlsx,.xls"
+              onChange={(e) => setSelectedFile(e.target.files[0])}
+            />
+          </Button>
           {selectedFile && (
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ mt: 2 }}>
               Archivo seleccionado: {selectedFile.name}
             </Typography>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBulkImportOpen(false)}>Cancelar</Button>
-          <Button onClick={handleBulkImport} variant="contained" disabled={!selectedFile}>
-            Importar
+          <Button onClick={() => setBulkImportOpen(false)} disabled={importing}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleBulkImport}
+            variant="contained"
+            disabled={!selectedFile || importing}
+          >
+            {importing ? 'Importando...' : 'Importar'}
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 };
 

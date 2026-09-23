@@ -34,7 +34,7 @@ class ErrorBoundary extends React.Component {
           <Typography variant="h5" gutterBottom>
             Algo salió mal
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
             Ha ocurrido un error inesperado. Intenta recargar la página.
           </Typography>
           <Button

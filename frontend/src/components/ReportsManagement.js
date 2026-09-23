@@ -1,29 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container, Typography, Paper, Grid, Card, CardContent, CardActions,
-  Button, TextField, MenuItem, Alert, FormControl, InputLabel, Select,
+  Typography, Paper, Grid, Card, CardContent, CardActions,
+  Button, TextField, MenuItem, FormControl, InputLabel, Select,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { reportsAPI, propertiesAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
+import PageContainer from './common/PageContainer';
 import LoadingSpinner from './common/LoadingSpinner';
+import { MONTHS } from '../utils/months';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 
-const MONTHS = [
-  { value: 1, label: 'Enero' }, { value: 2, label: 'Febrero' },
-  { value: 3, label: 'Marzo' }, { value: 4, label: 'Abril' },
-  { value: 5, label: 'Mayo' }, { value: 6, label: 'Junio' },
-  { value: 7, label: 'Julio' }, { value: 8, label: 'Agosto' },
-  { value: 9, label: 'Septiembre' }, { value: 10, label: 'Octubre' },
-  { value: 11, label: 'Noviembre' }, { value: 12, label: 'Diciembre' },
-];
-
 const ReportsManagement = () => {
   const { isAdmin } = useAuth();
+  const toast = useToast();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const [selectedProperty, setSelectedProperty] = useState('');
   const [statementYear, setStatementYear] = useState(new Date().getFullYear());
@@ -58,8 +51,6 @@ const ReportsManagement = () => {
 
   const triggerDownload = async (apiCall, filename) => {
     setLoading(true);
-    setError('');
-    setSuccess('');
     try {
       const response = await apiCall;
       const contentType = response.headers['content-type'] || 'application/octet-stream';
@@ -77,9 +68,9 @@ const ReportsManagement = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      setSuccess('Reporte descargado exitosamente');
+      toast.success('Reporte descargado exitosamente');
     } catch (err) {
-      setError('Error al descargar el reporte');
+      toast.error('Error al descargar el reporte');
       console.error('Error downloading report:', err);
     } finally {
       setLoading(false);
@@ -91,7 +82,7 @@ const ReportsManagement = () => {
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>{title}</Typography>
-          <Typography variant="body2" color="text.secondary">{description}</Typography>
+          <Typography variant="body2" color="textSecondary">{description}</Typography>
         </CardContent>
         <CardActions>
           <Button fullWidth variant="contained" onClick={onClick} disabled={disabled || loading}>
@@ -205,15 +196,12 @@ const ReportsManagement = () => {
   );
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h4" gutterBottom>Gestión de Reportes</Typography>
-
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+    <PageContainer>
+      <Typography variant="h4" component="h1" gutterBottom>Gestión de Reportes</Typography>
 
       {/* Payment Reports */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Reportes de Pagos</Typography>
+        <Typography variant="h6" component="h2" gutterBottom>Reportes de Pagos</Typography>
         <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Filtros por Período de Cuota</Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={3}>{yearField(payStartYear, setPayStartYear, 'Año Inicial')}</Grid>
@@ -269,7 +257,7 @@ const ReportsManagement = () => {
 
       {/* Fee Reports */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Reportes de Cuotas</Typography>
+        <Typography variant="h6" component="h2" gutterBottom>Reportes de Cuotas</Typography>
         <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Filtros</Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={3}>{yearField(startYear, setStartYear, 'Año Inicial')}</Grid>
@@ -301,7 +289,7 @@ const ReportsManagement = () => {
 
       {/* Expense Reports */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Reportes de Gastos Administrativos</Typography>
+        <Typography variant="h6" component="h2" gutterBottom>Reportes de Gastos Administrativos</Typography>
         <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Filtros</Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={3}>{yearField(expenseStartYear, setExpenseStartYear, 'Año Inicial')}</Grid>
@@ -324,7 +312,7 @@ const ReportsManagement = () => {
           ))}
         </Grid>
       </Paper>
-    </Container>
+    </PageContainer>
   );
 };
 

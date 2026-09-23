@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Container,
   Grid,
   Paper,
   Typography,
   Box,
   Button,
-  Card,
-  CardContent,
 } from '@mui/material';
 import {
   People as PeopleIcon,
@@ -23,6 +20,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI } from '../services/api';
 import LoadingSpinner from './common/LoadingSpinner';
 import StatCard from './common/StatCard';
+import PageContainer from './common/PageContainer';
 
 const Dashboard = () => {
   const { user, isAdmin, isOwner } = useAuth();
@@ -94,7 +92,7 @@ const Dashboard = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
+    <PageContainer>
       {/* Header */}
       <Box mb={4}>
         <Typography variant="h4" component="h1" gutterBottom>
@@ -113,6 +111,7 @@ const Dashboard = () => {
             value={stats.properties}
             icon={<HomeIcon color="primary" fontSize="large" />}
             color="primary.main"
+            loading={loading}
             onClick={() => navigate('/properties')}
           />
         </Grid>
@@ -123,6 +122,7 @@ const Dashboard = () => {
               value={stats.fees}
               icon={<FeeIcon color="warning" fontSize="large" />}
               color="warning.main"
+              loading={loading}
               onClick={() => navigate('/fees')}
             />
           </Grid>
@@ -134,6 +134,7 @@ const Dashboard = () => {
               value={`S/ ${stats.total_debt?.toFixed(2) || '0.00'}`}
               icon={<FeeIcon color="error" fontSize="large" />}
               color="error.main"
+              loading={loading}
             />
           </Grid>
         )}
@@ -143,6 +144,7 @@ const Dashboard = () => {
             value={stats.payments}
             icon={<PaymentIcon color="secondary" fontSize="large" />}
             color="secondary.main"
+            loading={loading}
             onClick={() => navigate('/payments')}
           />
         </Grid>
@@ -153,6 +155,7 @@ const Dashboard = () => {
               value={stats.receipts}
               icon={<ReceiptIcon color="success" fontSize="large" />}
               color="success.main"
+              loading={loading}
               onClick={() => navigate('/receipts')}
             />
           </Grid>
@@ -162,13 +165,13 @@ const Dashboard = () => {
 
       {/* Quick Actions */}
       <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h6" component="h2" gutterBottom>
           Acciones Rápidas
         </Typography>
         <Grid container spacing={2}>
           {isAdmin && (
             <>
-              <Grid item xs={12} sm={6} md={2.4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Button
                   variant="contained"
                   fullWidth
@@ -179,7 +182,7 @@ const Dashboard = () => {
                   Gestionar Usuarios
                 </Button>
               </Grid>
-              <Grid item xs={12} sm={6} md={2.4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Button
                   variant="contained"
                   fullWidth
@@ -190,7 +193,7 @@ const Dashboard = () => {
                   Gestionar Propiedades
                 </Button>
               </Grid>
-              <Grid item xs={12} sm={6} md={2.4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Button
                   variant="contained"
                   color="info"
@@ -202,7 +205,7 @@ const Dashboard = () => {
                   Planes de Cuotas
                 </Button>
               </Grid>
-              <Grid item xs={12} sm={6} md={2.4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Button
                   variant="contained"
                   color="warning"
@@ -218,7 +221,7 @@ const Dashboard = () => {
           )}
           {isOwner && (
             <>
-              <Grid item xs={12} sm={6} md={2.4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Button
                   variant="contained"
                   fullWidth
@@ -229,7 +232,7 @@ const Dashboard = () => {
                   Mis Propiedades
                 </Button>
               </Grid>
-              <Grid item xs={12} sm={6} md={2.4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Button
                   variant="contained"
                   color="warning"
@@ -243,7 +246,7 @@ const Dashboard = () => {
               </Grid>
             </>
           )}
-          <Grid item xs={12} sm={6} md={2.4}>
+          <Grid item xs={12} sm={6} md={3}>
             <Button
               variant="contained"
               color="secondary"
@@ -255,7 +258,7 @@ const Dashboard = () => {
               {isOwner ? 'Mis Pagos' : 'Ver Pagos'}
             </Button>
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
+          <Grid item xs={12} sm={6} md={3}>
             <Button
               variant="contained"
               color="success"
@@ -267,7 +270,7 @@ const Dashboard = () => {
               {isOwner ? 'Mis Recibos' : 'Ver Recibos'}
             </Button>
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
+          <Grid item xs={12} sm={6} md={3}>
             <Button
               variant="contained"
               color="info"
@@ -287,7 +290,7 @@ const Dashboard = () => {
         <>
           {/* Debt Summary */}
           <Paper sx={{ p: 3, mt: 4 }}>
-            <Typography variant="h6" gutterBottom>
+            <Typography variant="h6" component="h2" gutterBottom>
               Resumen de Deuda
             </Typography>
             {ownerDataLoading ? (
@@ -325,7 +328,7 @@ const Dashboard = () => {
 
           {/* Property Report */}
           <Paper sx={{ p: 3, mt: 4 }}>
-            <Typography variant="h6" gutterBottom>
+            <Typography variant="h6" component="h2" gutterBottom>
               Reporte de Propiedades
             </Typography>
             {ownerDataLoading ? (
@@ -353,7 +356,7 @@ const Dashboard = () => {
 
           {/* Expenses Report */}
           <Paper sx={{ p: 3, mt: 4 }}>
-            <Typography variant="h6" gutterBottom>
+            <Typography variant="h6" component="h2" gutterBottom>
               Reporte de Gastos Comunitarios
             </Typography>
             {ownerDataLoading ? (
@@ -391,7 +394,7 @@ const Dashboard = () => {
       {/* Recent Activity - Only for Admin */}
       {isAdmin && (
         <Paper sx={{ p: 3, mt: 4 }}>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" component="h2" gutterBottom>
             Actividad Reciente
           </Typography>
           <Typography variant="body2" color="textSecondary">
@@ -399,7 +402,7 @@ const Dashboard = () => {
           </Typography>
         </Paper>
       )}
-    </Container>
+    </PageContainer>
   );
 };
 

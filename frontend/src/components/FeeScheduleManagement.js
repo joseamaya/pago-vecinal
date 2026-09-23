@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Paper,
   Table,
@@ -19,6 +18,8 @@ import {
   IconButton,
   Box,
   Alert,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -27,11 +28,21 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { feeSchedulesAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import PageContainer from './common/PageContainer';
+import LoadingSkeleton from './common/LoadingSkeleton';
+import EmptyState from './common/EmptyState';
 
 const FeeScheduleManagement = () => {
   const { isAdmin } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [feeSchedules, setFeeSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
@@ -98,6 +109,7 @@ const FeeScheduleManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     try {
       const submitData = {
         ...formData,
@@ -109,31 +121,41 @@ const FeeScheduleManagement = () => {
 
       if (editingSchedule) {
         await feeSchedulesAPI.updateFeeSchedule(editingSchedule.id, submitData);
+        toast.success('Plan de cuotas actualizado correctamente');
       } else {
         await feeSchedulesAPI.createFeeSchedule(submitData);
+        toast.success('Plan de cuotas creado correctamente');
       }
       fetchFeeSchedules();
       handleCloseDialog();
     } catch (err) {
-      setError(editingSchedule ? 'Error al actualizar plan de cuotas' : 'Error al crear plan de cuotas');
+      toast.error(editingSchedule ? 'Error al actualizar plan de cuotas' : 'Error al crear plan de cuotas');
       console.error('Error saving fee schedule:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (scheduleId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este plan de cuotas?')) {
-      try {
-        await feeSchedulesAPI.deleteFeeSchedule(scheduleId);
-        fetchFeeSchedules();
-      } catch (err) {
-        setError('Error al eliminar plan de cuotas');
-        console.error('Error deleting fee schedule:', err);
-      }
+  const handleDelete = async (schedule) => {
+    const confirmed = await confirm({
+      title: 'Eliminar plan de cuotas',
+      message: `¿Estás seguro de que quieres eliminar el plan "${schedule.description}"? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await feeSchedulesAPI.deleteFeeSchedule(schedule.id);
+      toast.success('Plan de cuotas eliminado correctamente');
+      fetchFeeSchedules();
+    } catch (err) {
+      toast.error('Error al eliminar plan de cuotas');
+      console.error('Error deleting fee schedule:', err);
     }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <PageContainer>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
           Gestión de Planes de Cuotas
@@ -171,15 +193,14 @@ const FeeScheduleManagement = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+                <LoadingSkeleton type="table" rows={5} columns={7} />
               ) : feeSchedules.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    No hay planes de cuotas registrados
+                  <TableCell colSpan={7}>
+                    <EmptyState
+                      title="No hay planes de cuotas registrados"
+                      description="Crea un plan para definir montos y vencimientos."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -206,13 +227,15 @@ const FeeScheduleManagement = () => {
                         <>
                           <IconButton
                             color="primary"
+                            aria-label={`Editar ${schedule.description}`}
                             onClick={() => handleOpenDialog(schedule)}
                           >
                             <EditIcon />
                           </IconButton>
                           <IconButton
                             color="error"
-                            onClick={() => handleDelete(schedule.id)}
+                            aria-label={`Eliminar ${schedule.description}`}
+                            onClick={() => handleDelete(schedule)}
                           >
                             <DeleteIcon />
                           </IconButton>
@@ -228,13 +251,20 @@ const FeeScheduleManagement = () => {
       </Paper>
 
       {/* Dialog for Add/Edit Fee Schedule */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog
+        open={open}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           {editingSchedule ? 'Editar Plan de Cuotas' : 'Nuevo Plan de Cuotas'}
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
             <TextField
+              autoFocus={!isMobile}
               margin="dense"
               label="Descripción"
               fullWidth
@@ -260,9 +290,7 @@ const FeeScheduleManagement = () => {
               required
               value={formData.effective_date}
               onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
-              InputLabelProps={{
-                shrink: true,
-              }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               margin="dense"
@@ -271,9 +299,7 @@ const FeeScheduleManagement = () => {
               fullWidth
               value={formData.end_date}
               onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-              InputLabelProps={{
-                shrink: true,
-              }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               margin="dense"
@@ -287,14 +313,16 @@ const FeeScheduleManagement = () => {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              {editingSchedule ? 'Actualizar' : 'Crear'}
+            <Button onClick={handleCloseDialog} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? 'Guardando...' : editingSchedule ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 };
 
