@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from .config.database import init_db
 from .config.logging import setup_logging
 from .config.settings import settings
+from .services.audit_service import record_request_audit
 from .utils.init_admin import create_initial_admin
 from .routes import users, properties, fees, payments, auth, receipts, fee_schedules, reports, miscellaneous_payments, expenses, dashboard, treasurers, agreements
 
@@ -57,6 +58,7 @@ async def add_request_id(request: Request, call_next):
         "%s %s -> %s (%.1fms) [%s]",
         request.method, request.url.path, response.status_code, duration_ms, request_id
     )
+    await record_request_audit(request, response.status_code, request_id)
     return response
 
 

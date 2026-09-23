@@ -178,6 +178,7 @@ async def mongomock_db():
     from app.models.miscellaneous_payment import MiscellaneousPayment
     from app.models.treasurer import Treasurer
     from app.models.agreement import Agreement, AgreementInstallment
+    from app.models.audit_log import AuditLog
 
     import app.config.database as db_module
 
@@ -224,6 +225,7 @@ async def mongomock_db():
             Treasurer,
             Agreement,
             AgreementInstallment,
+            AuditLog,
         ],
     )
 
