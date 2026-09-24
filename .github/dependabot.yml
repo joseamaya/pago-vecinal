@@ -23,6 +23,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@mui/utils"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "@mui/icons-material"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-router-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@testing-library/user-event"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
