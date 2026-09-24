@@ -50,7 +50,7 @@ frontend/
 - **Static files** mounted at `/static` (serves generated PDFs from `backend/static/receipts/`, etc).
 - **Python ad-hoc tests** in `backend/` — no pytest infra, run with `python backend/test_*.py`.
 - **Frontend proxy** in `package.json`: `"proxy": "http://localhost:8000"` — only active in CRA dev mode.
-- **Deployment**: Railway via `railway.toml` at root, `backend/`, and `frontend/`. Root `railway.toml` health-check at `/docs`.
+- **Deployment**: Render, configured via dashboard (no IaC file in repo). Backend = Web Service from `backend/Dockerfile` (root dir `backend`, health check `/health`); frontend = Static Site (root dir `frontend`, build `npm ci && npm run build`, publish `build`, rewrite `/*` → `/index.html`). `PORT` is injected by Render and respected by both Dockerfiles.
 - **Installed skill**: `frontend-design` (locked in `skills-lock.json`).
 
 ## Database

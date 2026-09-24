@@ -477,18 +477,17 @@ If you encounter issues not covered here:
 3. Ensure you're using compatible Python/Node.js versions
 4. Check the GitHub repository for updates
 
-## 🚀 Deployment to Railway with MongoDB Atlas
+## 🚀 Deployment to Render with MongoDB Atlas
 
 ### Prerequisites
-- Railway account (free tier available)
+- Render account (free tier available)
 - MongoDB Atlas account (free tier available)
-- Railway CLI installed: `npm install -g @railway/cli`
 
 ### Step 1: Set up MongoDB Atlas
 1. Create account at [MongoDB Atlas](https://www.mongodb.com/atlas)
 2. Create a free cluster (M0 Sandbox)
 3. Create database user with read/write permissions
-4. Whitelist IP addresses (0.0.0.0/0 for Railway)
+4. Under Network Access, whitelist `0.0.0.0/0` (Render uses dynamic outbound IPs unless you pay for a static IP)
 5. Get connection string from "Connect" → "Connect your application"
 
 ### Step 2: Configure Environment Variables
@@ -504,47 +503,34 @@ If you encounter issues not covered here:
 
 3. Generate a secure SECRET_KEY for production
 
-### Step 3: Deploy to Railway
-1. **Login to Railway:**
-   ```bash
-   railway login
-   ```
+### Step 3: Deploy the Backend (Web Service)
+1. In the [Render Dashboard](https://dashboard.render.com), click **New → Web Service**
+2. Connect this Git repository
+3. Set **Root Directory** to `backend`
+4. Render detects `backend/Dockerfile` automatically (Runtime: Docker)
+5. Set **Health Check Path** to `/health`
+6. Add the environment variables from your `.env` (MongoDB, JWT, Cloudinary, initial admin, `CORS_ORIGINS`)
+7. Create the service — Render injects `PORT`, which the Dockerfile already respects
 
-2. **Deploy backend:**
-   ```bash
-   cd backend
-   railway init
-   railway up
-   ```
-
-3. **Deploy frontend:**
-   ```bash
-   cd ../frontend
-   railway init
-   railway up
-   ```
-
-4. **Or use the automated script:**
-   ```bash
-   ./deploy.sh
-   ```
-
-### Step 4: Configure Railway Environment Variables
-In Railway dashboard:
-1. Go to your project
-2. Add environment variables from your `.env` file
-3. Update `REACT_APP_API_URL` with your backend Railway URL
+### Step 4: Deploy the Frontend (Static Site)
+1. Click **New → Static Site**
+2. Connect this Git repository
+3. Set **Root Directory** to `frontend`
+4. Set **Build Command** to `npm ci && npm run build`
+5. Set **Publish Directory** to `build`
+6. Add environment variable `REACT_APP_API_URL=https://<your-backend-service>.onrender.com` (CRA bakes this in at build time, so set it before the first build)
+7. Under **Redirects/Rewrites**, add a rewrite from `/*` to `/index.html` so React Router handles client-side routes
 
 ### Step 5: Access Your Application
-- Frontend: Your Railway frontend URL
-- Backend API: Your Railway backend URL
-- API Docs: `https://your-backend-url.railway.app/docs`
+- Frontend: Your Render static site URL
+- Backend API: Your Render web service URL
+- API Docs: `https://<your-backend-service>.onrender.com/docs`
 
 ### Troubleshooting Deployment
-- Ensure Dockerfiles are in correct directories
-- Check Railway build logs for errors
-- Verify MongoDB Atlas connection string format
-- Confirm environment variables are set in Railway dashboard
+- Check the Render build and deploy logs for errors
+- Verify the MongoDB Atlas connection string format
+- Confirm environment variables are set in the Render dashboard
+- Ensure `REACT_APP_API_URL` was set before building the static site
 
 ## License
 

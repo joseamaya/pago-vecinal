@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
@@ -8,6 +9,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from .report_helpers import translate_status
+
+logger = logging.getLogger(__name__)
 
 def generate_receipt_pdf(receipt_data):
     """
@@ -143,7 +146,7 @@ def generate_receipt_pdf(receipt_data):
                 signature_image.hAlign = 'CENTER'
                 content.append(signature_image)
             except Exception as e:
-                print(f"Error loading signature image {signature}: {e}")
+                logger.warning("Error loading signature image %s: %s", signature, e)
                 # Fall back to text centered
                 content.append(Paragraph(signature, ParagraphStyle(
                     'Centered',
@@ -553,7 +556,7 @@ def generate_agreement_pdf(agreement, property_data, fees_data, installments_dat
                 signature_image.hAlign = 'CENTER'
                 content.append(signature_image)
             except Exception as e:
-                print(f"Error loading signature image {signature}: {e}")
+                logger.warning("Error loading signature image %s: %s", signature, e)
                 # Fall back to text centered
                 content.append(Paragraph(signature, ParagraphStyle(
                     'Centered',

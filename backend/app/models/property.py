@@ -1,5 +1,5 @@
 from beanie import Document, Link
-from pydantic import BaseModel
+from pymongo import IndexModel, ASCENDING
 from typing import Optional
 from .user import User
 
@@ -13,26 +13,6 @@ class Property(Document):
 
     class Settings:
         name = "properties"
-
-class PropertyCreate(BaseModel):
-    row_letter: str
-    number: int
-    villa: str
-    owner_name: str
-    owner_phone: Optional[str] = None
-
-class PropertyUpdate(BaseModel):
-    row_letter: Optional[str] = None
-    number: Optional[int] = None
-    villa: Optional[str] = None
-    owner_name: Optional[str] = None
-    owner_phone: Optional[str] = None
-
-class PropertyResponse(BaseModel):
-    id: str
-    row_letter: str
-    number: int
-    villa: str
-    owner_name: str
-    owner_phone: Optional[str] = None
-    owner_id: Optional[str] = None
+        indexes = [
+            IndexModel([("villa", ASCENDING), ("row_letter", ASCENDING), ("number", ASCENDING)]),
+        ]

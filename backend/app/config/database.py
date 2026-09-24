@@ -12,6 +12,7 @@ from ..models.fee import FeeSchedule, Fee
 from ..models.payment import Payment
 from ..models.receipt import Receipt
 from ..models.agreement import Agreement, AgreementInstallment
+from ..models.audit_log import AuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ async def init_db():
     try:
         await init_beanie(
             database=database,
-            document_models=[User, Property, FeeSchedule, Fee, Payment, Receipt, Agreement, AgreementInstallment, MiscellaneousPayment, Expense, Treasurer]
+            document_models=[User, Property, FeeSchedule, Fee, Payment, Receipt, Agreement, AgreementInstallment, MiscellaneousPayment, Expense, Treasurer, AuditLog]
         )
         logger.info("Database initialized successfully")
     except Exception as e:

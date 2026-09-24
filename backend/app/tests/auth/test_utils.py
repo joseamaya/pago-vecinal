@@ -44,7 +44,8 @@ class TestJWT:
 
     def test_verify_tampered_token(self):
         token = create_access_token(data={"sub": "user@example.com"})
-        tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+        header, payload, _ = token.split(".")
+        tampered = f"{header}.{payload}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         result = verify_token(tampered)
         assert result is None
 

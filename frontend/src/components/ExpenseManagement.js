@@ -40,6 +40,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
 import LoadingSkeleton from './common/LoadingSkeleton';
 import EmptyState from './common/EmptyState';
+import { downloadBlob } from '../utils/downloadBlob';
 
 
 
@@ -219,14 +220,16 @@ const ExpenseManagement = () => {
     }
   };
 
-  const handleDownloadTemplate = () => {
-    // Create a sample Excel template
-    const headers = ['Fecha de Gasto', 'Descripción', 'Monto', 'Año', 'Mes'];
-
-    // For now, just show instructions
-    toast.info(
-      `Descarga la plantilla desde: /templates/plantilla_gastos_administrativos.xlsx. Encabezados esperados: ${headers.join(', ')}`
-    );
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await expensesAPI.downloadTemplate();
+      downloadBlob(response.data, 'plantilla_gastos_administrativos.xlsx');
+    } catch (err) {
+      if (!isNetworkError(err)) {
+        toast.error('Error al descargar la plantilla');
+      }
+      console.error('Error downloading expenses template:', err);
+    }
   };
 
 

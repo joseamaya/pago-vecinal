@@ -7,13 +7,15 @@ import os
 import shutil
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
-from ..models.expense import (
-    Expense, ExpenseCreate, ExpenseUpdate,
-    ExpenseResponse
-)
+from ..models.expense import Expense
+from ..schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseResponse
 from ..models.receipt import Receipt
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
+from ..services.expense_service import bulk_import_expense_rows
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BulkImportResponse(BaseModel):
@@ -46,6 +48,18 @@ async def get_expenses(current_user: User = Depends(get_current_user)):
         )
         for expense in expenses
     ]
+
+@router.get("/template")
+async def download_expenses_template(current_user: User = Depends(require_admin)):
+    template_path = os.path.join("static", "plantilla_gastos_administrativos.xlsx")
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    return FileResponse(
+        path=template_path,
+        filename="plantilla_gastos_administrativos.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 
 @router.get("/{expense_id}", response_model=ExpenseResponse)
 async def get_expense(expense_id: str, current_user: User = Depends(get_current_user)):
@@ -230,103 +244,7 @@ async def bulk_import_expenses(
                 detail=f"Invalid Excel format. Expected headers: {', '.join(expected_headers)}"
             )
 
-        results = {
-            "successful_imports": 0,
-            "failed_imports": 0,
-            "errors": []
-        }
-
-        # Process each row starting from row 2
-        for row_idx in range(2, ws.max_row + 1):
-            try:
-                # Extract data
-                expense_date_cell = ws.cell(row=row_idx, column=1).value
-                description = str(ws.cell(row=row_idx, column=2).value or "").strip()
-                amount = ws.cell(row=row_idx, column=3).value
-                year = ws.cell(row=row_idx, column=4).value
-                month = ws.cell(row=row_idx, column=5).value
-
-                # Validate required fields
-                if not all([expense_date_cell is not None, description, amount is not None]):
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": "Missing required fields: Fecha de Gasto, Descripción, Monto"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Convert types
-                try:
-                    amount = float(amount)
-                    if year is not None:
-                        year = int(year)
-                    if month is not None:
-                        month = int(month)
-
-                    if isinstance(expense_date_cell, datetime):
-                        expense_date = expense_date_cell
-                    else:
-                        expense_date = datetime.strptime(str(expense_date_cell), '%Y-%m-%d')
-
-                except (ValueError, TypeError) as e:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": f"Invalid data types: {str(e)}"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Auto-calculate year and month from expense_date if not provided
-                if year is None:
-                    year = expense_date.year
-                if month is None:
-                    month = expense_date.month
-
-                # Validate data ranges
-                if month < 1 or month > 12:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": "Month must be between 1 and 12"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                if amount <= 0:
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": "Amount must be greater than 0"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                if expense_date > datetime.utcnow():
-                    results["errors"].append({
-                        "row": row_idx,
-                        "error": "Expense date cannot be in the future"
-                    })
-                    results["failed_imports"] += 1
-                    continue
-
-                # Create expense
-                expense = Expense(
-                    expense_date=expense_date,
-                    description=description,
-                    amount=amount,
-                    year=year,
-                    month=month
-                )
-                await expense.insert()
-
-                results["successful_imports"] += 1
-
-            except Exception as e:
-                results["errors"].append({
-                    "row": row_idx,
-                    "error": f"Unexpected error: {str(e)}"
-                })
-                results["failed_imports"] += 1
-                continue
-
+        results = await bulk_import_expense_rows(ws)
         return BulkImportResponse(**results)
 
     except InvalidFileException:
@@ -334,8 +252,9 @@ async def bulk_import_expenses(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid Excel file"
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("Error processing expenses import file")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing file: {str(e)}"
+            detail="Error processing file"
         )

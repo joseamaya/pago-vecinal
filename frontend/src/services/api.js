@@ -155,6 +155,7 @@ export const expensesAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
+  downloadTemplate: () => api.get('/expenses/template', { responseType: 'blob' }),
   bulkApproveExpenses: (expenseIds) => api.post('/expenses/bulk-approve', { expense_ids: expenseIds }),
   downloadExpenseReceipt: (id) => api.get(`/expenses/${id}/download-receipt`, { responseType: 'blob' }),
 };

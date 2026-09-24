@@ -221,13 +221,13 @@ class TestBulkImportPayments:
         )
 
         with patch(
-            "app.routes.payments.Fee.find_one", new_callable=AsyncMock, return_value=test_fee
+            "app.services.payment_service.Fee.find_one", new_callable=AsyncMock, return_value=test_fee
         ):
             with patch(
-                "app.routes.payments.create_receipt_on_approval", new_callable=AsyncMock
+                "app.services.payment_service.create_receipt_on_approval", new_callable=AsyncMock
             ):
                 with patch(
-                    "app.routes.payments.update_fee_status_based_on_payments",
+                    "app.services.payment_service.update_fee_status_based_on_payments",
                     new_callable=AsyncMock,
                 ):
                     response = await client.post(
@@ -370,11 +370,11 @@ class TestUpdateMiscellaneousPayment:
         from io import BytesIO
 
         with patch(
-            "app.routes.miscellaneous_payments.generate_receipt_pdf",
+            "app.services.miscellaneous_payment_service.generate_receipt_pdf",
             return_value=BytesIO(b"%PDF-1.4 mock"),
         ):
             with patch(
-                "app.routes.miscellaneous_payments.upload_receipt_pdf",
+                "app.services.miscellaneous_payment_service.upload_receipt_pdf",
                 return_value="https://cloud.test/recibo.pdf",
             ):
                 response = await client.put(
@@ -404,7 +404,7 @@ class TestDownloadMiscellaneousReceipt:
         from io import BytesIO
 
         with patch(
-            "app.routes.miscellaneous_payments.generate_receipt_pdf",
+            "app.services.miscellaneous_payment_service.generate_receipt_pdf",
             return_value=BytesIO(b"%PDF-1.4 mock"),
         ):
             response = await client.get(
@@ -442,11 +442,11 @@ class TestBulkApproveMiscellaneousPayments:
         from io import BytesIO
 
         with patch(
-            "app.routes.miscellaneous_payments.generate_receipt_pdf",
+            "app.services.miscellaneous_payment_service.generate_receipt_pdf",
             return_value=BytesIO(b"%PDF-1.4 mock"),
         ):
             with patch(
-                "app.routes.miscellaneous_payments.upload_receipt_pdf",
+                "app.services.miscellaneous_payment_service.upload_receipt_pdf",
                 return_value="https://cloud.test/recibo.pdf",
             ):
                 response = await client.post(

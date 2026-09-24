@@ -78,3 +78,39 @@ class TestRegister:
             })
             assert response.status_code == 400
             assert "already registered" in response.json()["detail"].lower()
+
+
+class TestLoginRateLimit:
+    @pytest.mark.asyncio
+    async def test_blocks_after_limit(self, client):
+        with patch("app.routes.auth.authenticate_user", new_callable=AsyncMock) as mock_auth:
+            mock_auth.return_value = None
+            for _ in range(5):
+                response = await client.post(
+                    "/auth/login", data={"username": "x@y.com", "password": "bad"}
+                )
+                assert response.status_code == 401
+            response = await client.post(
+                "/auth/login", data={"username": "x@y.com", "password": "bad"}
+            )
+        assert response.status_code == 429
+
+
+class TestRequestAudit:
+    @pytest.mark.asyncio
+    async def test_login_request_is_audited(self, client, mongomock_db):
+        from app.models.audit_log import AuditLog
+
+        await client.post("/auth/login", data={"username": "nobody@test.com", "password": "wrong"})
+
+        logs = await AuditLog.find_all().to_list()
+        assert any(log.path == "/auth/login" and log.method == "POST" for log in logs)
+
+    @pytest.mark.asyncio
+    async def test_get_request_is_not_audited(self, client, mongomock_db):
+        from app.models.audit_log import AuditLog
+
+        await client.get("/")
+
+        logs = await AuditLog.find_all().to_list()
+        assert all(log.method != "GET" for log in logs)
