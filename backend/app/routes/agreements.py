@@ -25,6 +25,13 @@ from ..services.agreement_service import (
     build_installment_response,
     create_agreement_with_installments,
 )
+from ..utils.uploads import (
+    validate_upload,
+    safe_extension,
+    RECEIPT_EXTENSIONS,
+    RECEIPT_CONTENT_TYPES,
+    MAX_RECEIPT_MB,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -463,8 +470,10 @@ async def pay_next_installment(
     # Handle file upload
     receipt_file_path = None
     if receipt_file:
+        await validate_upload(receipt_file, RECEIPT_EXTENSIONS, RECEIPT_CONTENT_TYPES, MAX_RECEIPT_MB)
+
         # Create unique filename
-        file_extension = os.path.splitext(receipt_file.filename)[1]
+        file_extension = safe_extension(receipt_file.filename)
         unique_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user.id}{file_extension}"
         file_path = os.path.join("static", "uploads", unique_filename)
 

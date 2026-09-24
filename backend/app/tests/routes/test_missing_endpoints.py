@@ -259,6 +259,15 @@ class TestBulkImportPayments:
         )
         assert response.status_code == 400
 
+    @pytest.mark.asyncio
+    async def test_rejects_fake_excel(self, client, mongomock_db, auth_headers_admin):
+        response = await client.post(
+            "/payments/bulk-import",
+            files={"file": ("pagos.xlsx", b"not an excel file", XLSX_CT)},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
+
 
 class TestUpdateReceipt:
     @pytest.mark.asyncio
@@ -533,7 +542,7 @@ class TestUploadSignature:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["file_path"].endswith("firma.png")
+        assert data["file_path"].endswith(".png")
 
     @pytest.mark.asyncio
     async def test_owner_forbidden(
@@ -558,3 +567,28 @@ class TestUploadSignature:
             headers=auth_headers_admin,
         )
         assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_rejects_fake_image(
+        self, client, mongomock_db, auth_headers_admin, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        response = await client.post(
+            "/treasurers/upload-signature",
+            files={"file": ("firma.png", b"not really a png", "image/png")},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_rejects_oversized_image(
+        self, client, mongomock_db, auth_headers_admin, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        big = b"\x89PNG\r\n\x1a\n" + b"\x00" * (2 * 1024 * 1024)
+        response = await client.post(
+            "/treasurers/upload-signature",
+            files={"file": ("firma.png", big, "image/png")},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 413
