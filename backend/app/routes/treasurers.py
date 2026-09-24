@@ -9,6 +9,14 @@ from ..schemas.treasurer import TreasurerCreate, TreasurerUpdate, TreasurerRespo
 logger = logging.getLogger(__name__)
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
+from ..utils.uploads import (
+    validate_upload,
+    generate_stored_filename,
+    safe_extension,
+    IMAGE_EXTENSIONS,
+    IMAGE_CONTENT_TYPES,
+    MAX_SIGNATURE_MB,
+)
 
 router = APIRouter()
 
@@ -161,19 +169,16 @@ async def upload_signature(
             detail="Not enough permissions"
         )
 
+    await validate_upload(file, IMAGE_EXTENSIONS, IMAGE_CONTENT_TYPES, MAX_SIGNATURE_MB)
+
     # Ensure signatures directory exists
     signatures_dir = os.path.join("static", "signatures")
     os.makedirs(signatures_dir, exist_ok=True)
 
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an image"
-        )
-
-    # Save file
-    file_path = os.path.join(signatures_dir, file.filename)
+    # Save file with a generated name to avoid path traversal
+    file_path = os.path.join(
+        signatures_dir, generate_stored_filename(safe_extension(file.filename))
+    )
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 

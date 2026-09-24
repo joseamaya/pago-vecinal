@@ -52,6 +52,7 @@ frontend/
 - **Default admin** auto-created on first startup via env vars (`INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`, `INITIAL_ADMIN_NAME`). Default: `admin@pago-vecinal.com` / `AdminPass123!`.
 - **CORS** is configurable via `CORS_ORIGINS` (JSON array, default `["*"]`) in `settings.py`.
 - **No public static mount**: receipts/agreements/signatures are only reachable through authenticated endpoints; the expenses import template is served at `GET /expenses/template` (admin).
+- **Uploads**: validated by extension, content type, magic bytes and size — Excel ≤10 MB, signatures (png/jpg) ≤2 MB, receipts (pdf/png/jpg) ≤10 MB. Signature files are stored under a generated (UUID) name.
 - **Security**: `/auth/login` and `/auth/register` are rate-limited (in-memory per IP); every mutating request is written to the `audit_logs` collection by middleware.
 - **Dependencies**: Beanie is pinned to 1.x (2.x breaks the ODM usage); Dependabot ignores breaking majors for beanie/reportlab/bcrypt/@mui.
 - **Tests**: pytest suite in `backend/app/tests` (`pytest app/tests`), plus legacy ad-hoc scripts.

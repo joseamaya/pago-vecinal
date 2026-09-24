@@ -6,6 +6,12 @@ from ..schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..services.property_service import bulk_import_property_rows
+from ..utils.uploads import (
+    validate_upload,
+    EXCEL_EXTENSIONS,
+    EXCEL_CONTENT_TYPES,
+    MAX_EXCEL_MB,
+)
 import logging
 import openpyxl
 
@@ -246,11 +252,7 @@ async def bulk_import_properties(
             detail="Not enough permissions"
         )
 
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an Excel file (.xlsx or .xls)"
-        )
+    await validate_upload(file, EXCEL_EXTENSIONS, EXCEL_CONTENT_TYPES, MAX_EXCEL_MB)
 
     try:
         workbook = openpyxl.load_workbook(file.file)

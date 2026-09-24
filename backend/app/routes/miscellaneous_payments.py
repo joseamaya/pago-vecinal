@@ -23,6 +23,13 @@ from ..services.miscellaneous_payment_service import (
     create_receipt_for_miscellaneous_payment,
     resolve_treasurer_details,
 )
+from ..utils.uploads import (
+    validate_upload,
+    safe_extension,
+    RECEIPT_EXTENSIONS,
+    RECEIPT_CONTENT_TYPES,
+    MAX_RECEIPT_MB,
+)
 from ..schemas.common import BulkApproveRequest
 
 logger = logging.getLogger(__name__)
@@ -101,12 +108,15 @@ async def create_miscellaneous_payment(
     # Handle file upload
     receipt_file_path = None
     if receipt_file:
+        await validate_upload(receipt_file, RECEIPT_EXTENSIONS, RECEIPT_CONTENT_TYPES, MAX_RECEIPT_MB)
+
         # Create unique filename
-        file_extension = os.path.splitext(receipt_file.filename)[1]
+        file_extension = safe_extension(receipt_file.filename)
         unique_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user.id}{file_extension}"
         file_path = os.path.join("static", "uploads", unique_filename)
 
         # Save file
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(receipt_file.file, buffer)
 
@@ -182,12 +192,15 @@ async def update_miscellaneous_payment(
 
     # Handle file upload
     if receipt_file:
+        await validate_upload(receipt_file, RECEIPT_EXTENSIONS, RECEIPT_CONTENT_TYPES, MAX_RECEIPT_MB)
+
         # Create unique filename
-        file_extension = os.path.splitext(receipt_file.filename)[1]
+        file_extension = safe_extension(receipt_file.filename)
         unique_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{current_user.id}{file_extension}"
         file_path = os.path.join("static", "uploads", unique_filename)
 
         # Save file
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(receipt_file.file, buffer)
 
