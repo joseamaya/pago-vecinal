@@ -5,12 +5,30 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: beanie
+        update-types: ["version-update:semver-major"]
+      - dependency-name: reportlab
+        update-types: ["version-update:semver-major"]
+      - dependency-name: bcrypt
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "@mui/material"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@mui/utils"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@mui/icons-material"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-router-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@testing-library/user-event"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
