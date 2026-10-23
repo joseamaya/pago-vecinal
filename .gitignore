@@ -67,3 +67,12 @@ logs/
 # Static uploads
 backend/static/receipts/
 backend/static/agreements/
+
+# Local AI tooling
+.claude/
+.codegraph/
+.cursor/
+.gemini/
+.mcp.json
+GEMINI.md
+opencode.json
