@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List, Optional
-from pydantic import BaseModel
 from ..models.property import Property
 from ..schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
+from ..schemas.common import PaginatedResponse, PropertyBulkImportResponse
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..services.property_service import bulk_import_property_rows
@@ -19,18 +19,9 @@ import openpyxl
 
 logger = logging.getLogger(__name__)
 
-class BulkImportResponse(BaseModel):
-    imported: int
-    updated: int
-    errors: List[str]
-
-class PaginatedPropertyResponse(BaseModel):
-    data: List[PropertyResponse]
-    pagination: dict
-
 router = APIRouter()
 
-@router.get("/", response_model=PaginatedPropertyResponse)
+@router.get("/", response_model=PaginatedResponse[PropertyResponse])
 async def get_properties(
     page: int = 1,
     limit: int = 20,
@@ -67,7 +58,7 @@ async def get_properties(
         for prop in properties
     ]
 
-    return PaginatedPropertyResponse(
+    return PaginatedResponse[PropertyResponse](
         data=property_responses,
         pagination={
             "page": page,
@@ -98,14 +89,8 @@ async def get_property(property_id: str, current_user: User = Depends(get_curren
 @router.post("/", response_model=PropertyResponse)
 async def create_property(
     property_data: PropertyCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     # Check if property already exists
     existing = await Property.find_one(
         Property.row_letter == property_data.row_letter,
@@ -139,14 +124,8 @@ async def create_property(
 async def update_property(
     property_id: str,
     property_update: PropertyUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     prop = await Property.get(property_id)
     if not prop:
         raise HTTPException(
@@ -171,13 +150,7 @@ async def update_property(
     )
 
 @router.delete("/{property_id}")
-async def delete_property(property_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def delete_property(property_id: str, current_user: User = Depends(require_admin)):
     prop = await Property.get(property_id)
     if not prop:
         raise HTTPException(
@@ -245,17 +218,11 @@ async def get_property_by_letter_number(
         owner_id=link_id(prop.owner)
     )
 
-@router.post("/bulk-import", response_model=BulkImportResponse)
+@router.post("/bulk-import", response_model=PropertyBulkImportResponse)
 async def bulk_import_properties(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     await validate_upload(file, EXCEL_EXTENSIONS, EXCEL_CONTENT_TYPES, MAX_EXCEL_MB)
 
     try:
@@ -263,7 +230,7 @@ async def bulk_import_properties(
         sheet = workbook.active
 
         results = await bulk_import_property_rows(sheet)
-        return BulkImportResponse(**results)
+        return PropertyBulkImportResponse(**results)
 
     except Exception:
         logger.exception("Error processing properties import file")

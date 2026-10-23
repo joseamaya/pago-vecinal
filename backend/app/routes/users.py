@@ -1,19 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
-from ..models.user import User, UserRole
-from ..schemas.user import UserCreate, UserUpdate, UserResponse, PasswordChange
-from ..dependencies.auth import get_current_user, require_admin
+from ..models.user import User
+from ..schemas.user import UserUpdate, UserResponse, PasswordChange
+from ..dependencies.auth import get_current_user, require_admin, require_owner
 from ..auth.utils import get_password_hash, verify_password
 
 router = APIRouter()
 
 @router.get("/", response_model=List[UserResponse])
-async def get_users(current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+async def get_users(current_user: User = Depends(require_admin)):
     users = await User.find_all().to_list()
     return [
         UserResponse(
@@ -40,11 +35,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN and str(current_user.id) != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    require_owner(current_user, user_id)
     user = await User.get(user_id)
     if not user:
         raise HTTPException(
@@ -92,11 +83,7 @@ async def update_user(
     user_update: UserUpdate,
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role != UserRole.ADMIN and str(current_user.id) != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    require_owner(current_user, user_id)
     user = await User.get(user_id)
     if not user:
         raise HTTPException(
@@ -120,12 +107,7 @@ async def update_user(
     )
 
 @router.delete("/{user_id}")
-async def delete_user(user_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+async def delete_user(user_id: str, current_user: User = Depends(require_admin)):
     user = await User.get(user_id)
     if not user:
         raise HTTPException(

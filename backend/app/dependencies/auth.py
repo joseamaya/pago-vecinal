@@ -17,3 +17,16 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="Admin privileges required"
         )
     return current_user
+
+
+def require_owner(
+    current_user: User,
+    owner_id,
+    detail: str = "Not enough permissions",
+) -> User:
+    if current_user.role != UserRole.ADMIN and str(current_user.id) != str(owner_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail,
+        )
+    return current_user

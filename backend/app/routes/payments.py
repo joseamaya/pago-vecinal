@@ -2,7 +2,6 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
-from pydantic import BaseModel
 from datetime import datetime
 import os
 import shutil
@@ -33,12 +32,9 @@ from ..services.payment_service import (
     create_receipt_on_approval,
     bulk_import_payment_rows,
 )
-from ..schemas.common import BulkApproveRequest
+from ..schemas.common import BulkApproveRequest, PaginatedResponse
 
 logger = logging.getLogger(__name__)
-class PaginatedPaymentResponse(BaseModel):
-    data: List[PaymentResponse]
-    pagination: dict
 
 router = APIRouter()
 
@@ -72,7 +68,7 @@ async def _can_access_payment(payment: Payment, current_user: User) -> bool:
     fee = await Fee.get(payment.fee_id)
     return bool(fee and await _can_access_fee(fee, current_user))
 
-@router.get("/", response_model=PaginatedPaymentResponse)
+@router.get("/", response_model=PaginatedResponse[PaymentResponse])
 async def get_payments(
     page: int = 1,
     limit: int = 20,
@@ -230,7 +226,7 @@ async def get_payments(
             )
         )
 
-    return PaginatedPaymentResponse(
+    return PaginatedResponse[PaymentResponse](
         data=payment_responses,
         pagination={
             "page": page,
@@ -440,13 +436,7 @@ async def update_payment(
     )
 
 @router.delete("/{payment_id}")
-async def delete_payment(payment_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def delete_payment(payment_id: str, current_user: User = Depends(require_admin)):
     payment = await Payment.get(payment_id)
     if not payment:
         raise HTTPException(
@@ -560,15 +550,9 @@ async def download_generated_receipt(payment_id: str, current_user: User = Depen
 @router.post("/bulk-import")
 async def bulk_import_payments(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Bulk import payments from Excel file"""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     await validate_upload(file, EXCEL_EXTENSIONS, EXCEL_CONTENT_TYPES, MAX_EXCEL_MB)
 
     try:
@@ -611,16 +595,10 @@ async def bulk_import_payments(
 @router.post("/bulk-approve")
 async def bulk_approve_payments(
     request: BulkApproveRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     payment_ids = request.payment_ids
     """Bulk approve multiple payments"""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     if not payment_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
