@@ -10,7 +10,12 @@ import { useThemeContext } from '../contexts/ThemeContext';
 import { navigationGroups } from '../layout/navigation';
 import UserMenu from './UserMenu';
 
+const EXTRA_PAGES = {
+  '/profile': { group: { label: 'Cuenta' }, item: { text: 'Mi perfil' } },
+};
+
 const findLocation = (pathname) => {
+  if (EXTRA_PAGES[pathname]) return EXTRA_PAGES[pathname];
   for (const group of navigationGroups) {
     const item = group.items.find((entry) => entry.path === pathname);
     if (item) return { group, item };

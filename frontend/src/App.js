@@ -22,6 +22,7 @@ const FeeManagement = React.lazy(() => import('./components/FeeManagement'));
 const FeeScheduleManagement = React.lazy(() => import('./components/FeeScheduleManagement'));
 const ReportsManagement = React.lazy(() => import('./components/ReportsManagement'));
 const TreasurerConfiguration = React.lazy(() => import('./components/TreasurerConfiguration'));
+const Profile = React.lazy(() => import('./components/Profile'));
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -61,6 +62,7 @@ const AppRouter = () => {
                     <Route path="/fee-schedules" element={<FeeScheduleManagement />} />
                     <Route path="/reports" element={<ReportsManagement />} />
                     <Route path="/configuration" element={<TreasurerConfiguration />} />
+                    <Route path="/profile" element={<Profile />} />
                     <Route path="/" element={<Navigate to="/dashboard" />} />
                   </Routes>
                 </Suspense>

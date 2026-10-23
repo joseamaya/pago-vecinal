@@ -50,6 +50,7 @@ export const usersAPI = {
   getUsers: () => api.get('/users/'),
   getUser: (id) => api.get(`/users/${id}`),
   getCurrentUser: () => api.get('/users/me'),
+  changePassword: (data) => api.put('/users/me/password', data),
   createUser: (userData) => api.post('/users/', userData),
   updateUser: (id, userData) => api.put(`/users/${id}`, userData),
   deleteUser: (id) => api.delete(`/users/${id}`),

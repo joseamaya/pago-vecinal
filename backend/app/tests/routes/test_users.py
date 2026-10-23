@@ -109,6 +109,57 @@ class TestUpdateUser:
         assert response.status_code == 404
 
 
+class TestChangePassword:
+    @pytest.mark.asyncio
+    async def test_changes_password(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        from app.auth.utils import verify_password
+        from app.models.user import User
+
+        response = await client.put(
+            "/users/me/password",
+            json={"current_password": "test-password", "new_password": "NewPass123!"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+        user = await User.find_one(User.email == "test@example.com")
+        assert verify_password("NewPass123!", user.password_hash)
+
+    @pytest.mark.asyncio
+    async def test_rejects_wrong_current_password(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        response = await client.put(
+            "/users/me/password",
+            json={"current_password": "wrong", "new_password": "NewPass123!"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_rejects_short_password(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        response = await client.put(
+            "/users/me/password",
+            json={"current_password": "test-password", "new_password": "123"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_rejects_same_password(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        response = await client.put(
+            "/users/me/password",
+            json={"current_password": "test-password", "new_password": "test-password"},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
+
+
 class TestDeleteUser:
     @pytest.mark.asyncio
     async def test_admin_can_delete(
