@@ -42,6 +42,24 @@ class TestListPayments:
                 assert "pagination" in data
 
 
+    @pytest.mark.asyncio
+    async def test_owner_listing_filters_by_user_dbref(
+        self, client, mongomock_db, auth_headers_owner, test_owner_user
+    ):
+        with patch("app.routes.payments.database") as mock_db:
+            fake_collection = MagicMock()
+            fake_collection.aggregate.return_value.to_list = AsyncMock(side_effect=[[], []])
+            mock_db.payments = fake_collection
+
+            with patch("app.routes.payments.Receipt") as MockReceipt:
+                MockReceipt.find_one = AsyncMock(return_value=None)
+                response = await client.get("/payments/?page=1&limit=20", headers=auth_headers_owner)
+
+        assert response.status_code == 200
+        count_pipeline = fake_collection.aggregate.call_args_list[0].args[0]
+        assert count_pipeline[0]["$match"]["$or"] == [{"user.$id": test_owner_user.id}]
+
+
 class TestCreatePayment:
     @pytest.mark.asyncio
     async def test_creates_payment(

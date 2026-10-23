@@ -1,34 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Alert,
+  Box,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Select,
-  MenuItem,
   FormControl,
   InputLabel,
-  Chip,
-  IconButton,
-  Box,
-  Alert,
-  useMediaQuery,
-  useTheme,
+  MenuItem,
+  Select,
+  TextField,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
+  DeleteOutline as DeleteIcon,
+  EditOutlined as EditIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { usersAPI } from '../services/api';
@@ -36,28 +20,27 @@ import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
-import LoadingSkeleton from './common/LoadingSkeleton';
+import PageHeader from './common/PageHeader';
+import ResponsiveTable from './common/ResponsiveTable';
+import StatusChip from './common/StatusChip';
+import ActionMenu from './common/ActionMenu';
+import FormDialog from './common/FormDialog';
 import EmptyState from './common/EmptyState';
+
+const EMPTY_USER = { email: '', full_name: '', phone: '', role: 'owner', password: '' };
 
 const UserManagement = () => {
   const { user: currentUser, isAdmin } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [formData, setFormData] = useState({
-    email: '',
-    full_name: '',
-    phone: '',
-    role: 'OWNER',
-    password: '',
-  });
+  const [formData, setFormData] = useState(EMPTY_USER);
 
   useEffect(() => {
     fetchUsers();
@@ -70,7 +53,7 @@ const UserManagement = () => {
       setUsers(response.data);
       setError('');
     } catch (err) {
-      setError('Error al cargar usuarios');
+      setError('No pudimos cargar los usuarios.');
       console.error('Error fetching users:', err);
     } finally {
       setLoading(false);
@@ -78,24 +61,19 @@ const UserManagement = () => {
   };
 
   const handleOpenDialog = (user = null) => {
+    setFormError('');
     if (user) {
       setEditingUser(user);
       setFormData({
         email: user.email,
         full_name: user.full_name,
         phone: user.phone || '',
-        role: user.role,
+        role: String(user.role || 'owner').toLowerCase(),
         password: '',
       });
     } else {
       setEditingUser(null);
-      setFormData({
-        email: '',
-        full_name: '',
-        phone: '',
-        role: 'OWNER',
-        password: '',
-      });
+      setFormData(EMPTY_USER);
     }
     setOpen(true);
   };
@@ -103,18 +81,14 @@ const UserManagement = () => {
   const handleCloseDialog = () => {
     setOpen(false);
     setEditingUser(null);
-    setFormData({
-      email: '',
-      full_name: '',
-      phone: '',
-      role: 'OWNER',
-      password: '',
-    });
+    setFormError('');
+    setFormData(EMPTY_USER);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setSaving(true);
+    setFormError('');
     try {
       if (editingUser) {
         await usersAPI.updateUser(editingUser.id, formData);
@@ -127,7 +101,7 @@ const UserManagement = () => {
       handleCloseDialog();
     } catch (err) {
       if (!isNetworkError(err)) {
-        toast.error(editingUser ? 'Error al actualizar usuario' : 'Error al crear usuario');
+        setFormError(err.response?.data?.detail || 'No pudimos guardar el usuario.');
       }
       console.error('Error saving user:', err);
     } finally {
@@ -138,7 +112,7 @@ const UserManagement = () => {
   const handleDelete = async (user) => {
     const confirmed = await confirm({
       title: 'Eliminar usuario',
-      message: `¿Estás seguro de que quieres eliminar a ${user.full_name}? Esta acción no se puede deshacer.`,
+      message: `¿Seguro que quieres eliminar a ${user.full_name}? Esta acción no se puede deshacer.`,
       confirmLabel: 'Eliminar',
     });
     if (!confirmed) return;
@@ -149,188 +123,176 @@ const UserManagement = () => {
       fetchUsers();
     } catch (err) {
       if (!isNetworkError(err)) {
-        toast.error('Error al eliminar usuario');
+        toast.error('No pudimos eliminar el usuario');
       }
       console.error('Error deleting user:', err);
     }
   };
 
-  const getRoleColor = (role) => {
-    return role === 'ADMIN' ? 'primary' : 'secondary';
-  };
-
   if (!isAdmin) {
     return (
       <PageContainer>
-        <Alert severity="error">
-          No tienes permisos para acceder a esta página.
-        </Alert>
+        <Alert severity="error">No tienes permisos para acceder a esta página.</Alert>
       </PageContainer>
     );
   }
 
+  const columns = [
+    {
+      key: 'email',
+      label: 'Email',
+      render: (user) => user.email,
+    },
+    {
+      key: 'full_name',
+      label: 'Nombre completo',
+      render: (user) => user.full_name,
+    },
+    {
+      key: 'phone',
+      label: 'Teléfono',
+      render: (user) => user.phone || '—',
+    },
+    {
+      key: 'role',
+      label: 'Rol',
+      render: (user) => (
+        <StatusChip
+          label={String(user.role).toLowerCase() === 'admin' ? 'Administrador' : 'Propietario'}
+          tone={String(user.role).toLowerCase() === 'admin' ? 'primary' : 'secondary'}
+          status={user.role}
+        />
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Estado',
+      render: (user) => (
+        <StatusChip label={user.is_active ? 'Activo' : 'Inactivo'} tone={user.is_active ? 'success' : 'default'} status="active" />
+      ),
+    },
+  ];
+
   return (
-    <PageContainer>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Gestión de Usuarios
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Nuevo Usuario
-        </Button>
-      </Box>
+    <PageContainer maxWidth="xl">
+      <PageHeader
+        eyebrow="Administración"
+        title="Usuarios"
+        subtitle="Administra los accesos de administradores y propietarios."
+        actions={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+            Nuevo usuario
+          </Button>
+        }
+      />
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2.5 }}
+          action={
+            <Button color="inherit" size="small" onClick={fetchUsers}>
+              Reintentar
+            </Button>
+          }
+        >
           {error}
         </Alert>
       )}
 
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Email</TableCell>
-                <TableCell>Nombre Completo</TableCell>
-                <TableCell>Teléfono</TableCell>
-                <TableCell>Rol</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <LoadingSkeleton type="table" rows={5} columns={6} />
-              ) : users.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6}>
-                    <EmptyState
-                      title="No hay usuarios registrados"
-                      description="Crea el primer usuario para empezar."
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.full_name}</TableCell>
-                    <TableCell>{user.phone || '-'}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.role === 'ADMIN' ? 'Administrador' : 'Propietario'}
-                        color={getRoleColor(user.role)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.is_active ? 'Activo' : 'Inactivo'}
-                        color={user.is_active ? 'success' : 'error'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <IconButton
-                        color="primary"
-                        aria-label={`Editar ${user.full_name}`}
-                        onClick={() => handleOpenDialog(user)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        color="error"
-                        aria-label={`Eliminar ${user.full_name}`}
-                        onClick={() => handleDelete(user)}
-                        disabled={user.id === currentUser?.id}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+      <ResponsiveTable
+        columns={columns}
+        rows={users}
+        loading={loading}
+        getRowId={(user) => user.id}
+        mobileTitle={(user) => user.full_name}
+        mobileSubtitle={(user) => user.email}
+        emptyState={
+          <EmptyState
+            title="No hay usuarios registrados"
+            description="Crea el primer usuario para empezar."
+            action={
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+                Nuevo usuario
+              </Button>
+            }
+          />
+        }
+        renderActions={(user) => (
+          <ActionMenu
+            ariaLabel={`Acciones para ${user.full_name}`}
+            items={[
+              { label: 'Editar', icon: <EditIcon fontSize="small" />, onClick: () => handleOpenDialog(user) },
+              {
+                label: 'Eliminar',
+                icon: <DeleteIcon fontSize="small" />,
+                color: 'error',
+                disabled: user.id === currentUser?.id,
+                onClick: () => handleDelete(user),
+              },
+            ]}
+          />
+        )}
+      />
 
-      {/* Dialog for Add/Edit User */}
-      <Dialog
+      <FormDialog
         open={open}
         onClose={handleCloseDialog}
+        onSubmit={handleSubmit}
+        title={editingUser ? 'Editar usuario' : 'Nuevo usuario'}
+        subtitle={editingUser ? editingUser.email : 'Crea un acceso para un administrador o propietario.'}
+        submitLabel={editingUser ? 'Guardar cambios' : 'Crear usuario'}
+        saving={saving}
+        error={formError}
         maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
       >
-        <DialogTitle>
-          {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
-        </DialogTitle>
-        <form onSubmit={handleSubmit}>
-          <DialogContent>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <TextField
+            autoFocus
+            label="Correo electrónico"
+            type="email"
+            fullWidth
+            required
+            value={formData.email}
+            onChange={(event) => setFormData({ ...formData, email: event.target.value })}
+          />
+          <TextField
+            label="Nombre completo"
+            fullWidth
+            required
+            value={formData.full_name}
+            onChange={(event) => setFormData({ ...formData, full_name: event.target.value })}
+          />
+          <TextField
+            label="Teléfono"
+            fullWidth
+            value={formData.phone}
+            onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
+          />
+          <FormControl fullWidth>
+            <InputLabel>Rol</InputLabel>
+            <Select
+              value={formData.role}
+              onChange={(event) => setFormData({ ...formData, role: event.target.value })}
+              label="Rol"
+            >
+              <MenuItem value="owner">Propietario</MenuItem>
+              <MenuItem value="admin">Administrador</MenuItem>
+            </Select>
+          </FormControl>
+          {!editingUser && (
             <TextField
-              autoFocus={!isMobile}
-              margin="dense"
-              label="Email"
-              type="email"
+              label="Contraseña inicial"
+              type="password"
               fullWidth
               required
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              value={formData.password}
+              onChange={(event) => setFormData({ ...formData, password: event.target.value })}
+              helperText="Mínimo 6 caracteres. El usuario podrá cambiarla luego."
             />
-            <TextField
-              margin="dense"
-              label="Nombre Completo"
-              fullWidth
-              required
-              value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-            />
-            <TextField
-              margin="dense"
-              label="Teléfono"
-              fullWidth
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Rol</InputLabel>
-              <Select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                label="Rol"
-              >
-                <MenuItem value="OWNER">Propietario</MenuItem>
-                <MenuItem value="ADMIN">Administrador</MenuItem>
-              </Select>
-            </FormControl>
-            {!editingUser && (
-              <TextField
-                margin="dense"
-                label="Contraseña"
-                type="password"
-                fullWidth
-                required
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              />
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button type="submit" variant="contained" disabled={saving}>
-              {saving ? 'Guardando...' : editingUser ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+          )}
+        </Box>
+      </FormDialog>
     </PageContainer>
   );
 };

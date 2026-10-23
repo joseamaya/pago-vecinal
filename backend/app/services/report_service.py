@@ -1,4 +1,5 @@
 from datetime import datetime
+from bson import DBRef
 
 from beanie import PydanticObjectId
 
@@ -327,7 +328,7 @@ async def get_all_properties_annual_statement_data(year):
 
 async def get_single_property_annual_statement_data(property_obj, year):
     fees = await Fee.find(
-        Fee.property.id == property_obj.id, Fee.year == year
+        {"property": DBRef("properties", property_obj.id), "year": year}
     ).to_list()
 
     fee_ids = [str(f.id) for f in fees]
@@ -447,7 +448,7 @@ async def get_traffic_light_data():
     traffic_light_data = []
     for property_obj in properties:
         overdue = await Fee.find(
-            Fee.property.id == property_obj.id,
+            {"property": DBRef("properties", property_obj.id)},
             Fee.status == FeeStatus.PENDING,
             Fee.due_date < current_date
         ).to_list()

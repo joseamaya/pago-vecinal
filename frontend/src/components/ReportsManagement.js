@@ -1,17 +1,125 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Typography, Paper, Grid, Card, CardContent, CardActions,
-  Button, TextField, MenuItem, FormControl, InputLabel, Select,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  FormControl,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+  alpha,
 } from '@mui/material';
+import {
+  AssessmentOutlined as ReportsIcon,
+  CalendarMonthOutlined as CalendarIcon,
+  DownloadOutlined as DownloadIcon,
+  PictureAsPdfOutlined as PdfIcon,
+  TableChartOutlined as TableIcon,
+} from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { reportsAPI, propertiesAPI } from '../services/api';
 import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import PageContainer from './common/PageContainer';
-import LoadingSpinner from './common/LoadingSpinner';
+import PageHeader from './common/PageHeader';
+import SectionCard from './common/SectionCard';
 import { MONTHS } from '../utils/months';
-import TableChartIcon from '@mui/icons-material/TableChart';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import { formatPropertyLabel } from '../utils/formatters';
+
+const ReportCard = ({ title, description, onClick, disabled, icon, pdf }) => (
+  <Card
+    sx={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      '&:hover': { borderColor: 'primary.light' },
+    }}
+  >
+    <CardContent sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, pb: 1.5 }}>
+      <Box
+        sx={(theme) => ({
+          display: 'grid',
+          placeItems: 'center',
+          width: 40,
+          height: 40,
+          borderRadius: 2.5,
+          mb: 1.75,
+          color: pdf ? theme.palette.error.main : theme.palette.primary.main,
+          bgcolor: alpha(
+            pdf ? theme.palette.error.main : theme.palette.primary.main,
+            theme.palette.mode === 'light' ? 0.1 : 0.16
+          ),
+        })}
+      >
+        {icon || (pdf ? <PdfIcon fontSize="small" /> : <TableIcon fontSize="small" />)}
+      </Box>
+      <Typography variant="h6" sx={{ fontSize: '1rem', mb: 0.5 }}>
+        {title}
+      </Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', flexGrow: 1 }}>
+        {description}
+      </Typography>
+    </CardContent>
+    <Box sx={{ px: 2, pb: 2 }}>
+      <Button fullWidth variant="outlined" startIcon={<DownloadIcon />} onClick={onClick} disabled={disabled}>
+        Descargar
+      </Button>
+    </Box>
+  </Card>
+);
+
+const PeriodRange = ({ startYear, setStartYear, startMonth, setStartMonth, endYear, setEndYear, endMonth, setEndMonth }) => (
+  <Grid container spacing={2}>
+    <Grid size={{ xs: 6, md: 3 }}>
+      <TextField
+        fullWidth
+        label="Año inicial"
+        type="number"
+        value={startYear}
+        onChange={(event) => setStartYear(parseInt(event.target.value, 10) || new Date().getFullYear())}
+        inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
+      />
+    </Grid>
+    <Grid size={{ xs: 6, md: 3 }}>
+      <FormControl fullWidth>
+        <InputLabel>Mes inicial</InputLabel>
+        <Select value={startMonth} onChange={(event) => setStartMonth(event.target.value)} label="Mes inicial">
+          {MONTHS.map((month) => (
+            <MenuItem key={month.value} value={month.value}>
+              {month.label}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Grid>
+    <Grid size={{ xs: 6, md: 3 }}>
+      <TextField
+        fullWidth
+        label="Año final"
+        type="number"
+        value={endYear}
+        onChange={(event) => setEndYear(parseInt(event.target.value, 10) || new Date().getFullYear())}
+        inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
+      />
+    </Grid>
+    <Grid size={{ xs: 6, md: 3 }}>
+      <FormControl fullWidth>
+        <InputLabel>Mes final</InputLabel>
+        <Select value={endMonth} onChange={(event) => setEndMonth(event.target.value)} label="Mes final">
+          {MONTHS.map((month) => (
+            <MenuItem key={month.value} value={month.value}>
+              {month.label}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Grid>
+  </Grid>
+);
 
 const ReportsManagement = () => {
   const { isAdmin } = useAuth();
@@ -38,12 +146,12 @@ const ReportsManagement = () => {
   const [expenseEndMonth, setExpenseEndMonth] = useState(new Date().getMonth() + 1);
 
   useEffect(() => {
-    if (isAdmin) fetchProperties();
-  }, [isAdmin]);
+    fetchProperties();
+  }, []);
 
   const fetchProperties = async () => {
     try {
-      const response = await propertiesAPI.getProperties();
+      const response = await propertiesAPI.getProperties(1, 1000);
       setProperties(response.data.data || []);
     } catch (err) {
       console.error('Error fetching properties:', err);
@@ -69,10 +177,10 @@ const ReportsManagement = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      toast.success('Reporte descargado exitosamente');
+      toast.success('Reporte descargado correctamente');
     } catch (err) {
       if (!isNetworkError(err)) {
-        toast.error('Error al descargar el reporte');
+        toast.error('No pudimos descargar el reporte');
       }
       console.error('Error downloading report:', err);
     } finally {
@@ -80,241 +188,330 @@ const ReportsManagement = () => {
     }
   };
 
-  const ReportCard = ({ title, description, onClick, disabled, icon }) => (
-    <Grid item xs={12} md={6}>
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>{title}</Typography>
-          <Typography variant="body2" color="textSecondary">{description}</Typography>
-        </CardContent>
-        <CardActions>
-          <Button fullWidth variant="contained" onClick={onClick} disabled={disabled || loading}>
-            {loading ? (
-              <LoadingSpinner buttonVariant size={20} message="Generando..." showMessage />
-            ) : (
-              <>{icon || <TableChartIcon sx={{ mr: 1 }} />} Descargar</>
-            )}
-          </Button>
-        </CardActions>
-      </Card>
-    </Grid>
-  );
+  const applyPreset = (preset) => {
+    const now = new Date();
+    let startY = now.getFullYear();
+    let startM = 1;
+    let endY = now.getFullYear();
+    let endM = now.getMonth() + 1;
 
-  const renderReport = (report) => {
-    const canAccess = !report.adminOnly || isAdmin;
+    if (preset === 'month') {
+      startM = endM;
+    } else if (preset === 'quarter') {
+      startM = Math.floor(now.getMonth() / 3) * 3 + 1;
+    }
 
-    const getOnClick = () => {
-      switch (report.type) {
-        case 'property-history':
-          return () => triggerDownload(
-            reportsAPI.getPropertyPaymentHistory(selectedProperty || null, payStartYear, payStartMonth, payEndYear, payEndMonth, 'excel'),
+    const setters = [
+      [setPayStartYear, startY],
+      [setPayStartMonth, startM],
+      [setPayEndYear, endY],
+      [setPayEndMonth, endM],
+      [setStartYear, startY],
+      [setStartMonth, startM],
+      [setEndYear, endY],
+      [setEndMonth, endM],
+      [setExpenseStartYear, startY],
+      [setExpenseStartMonth, startM],
+      [setExpenseEndYear, endY],
+      [setExpenseEndMonth, endM],
+    ];
+    setters.forEach(([setter, value]) => setter(value));
+  };
+
+  const getOnClick = (report) => {
+    switch (report.type) {
+      case 'property-history':
+        return () =>
+          triggerDownload(
+            reportsAPI.getPropertyPaymentHistory(
+              selectedProperty || null,
+              payStartYear,
+              payStartMonth,
+              payEndYear,
+              payEndMonth,
+              'excel'
+            ),
             `historial_pagos_${payStartYear}_${String(payStartMonth).padStart(2, '0')}_a_${payEndYear}_${String(payEndMonth).padStart(2, '0')}`
           );
-        case 'monthly-summary':
-          return () => triggerDownload(
+      case 'monthly-summary':
+        return () =>
+          triggerDownload(
             reportsAPI.getMonthlyPaymentSummary(payStartYear, payStartMonth, payEndYear, payEndMonth),
             `resumen_pagos_${payStartYear}_${String(payStartMonth).padStart(2, '0')}_a_${payEndYear}_${String(payEndMonth).padStart(2, '0')}`
           );
-        case 'payments-summary':
-          return () => triggerDownload(
+      case 'payments-summary':
+        return () =>
+          triggerDownload(
             reportsAPI.getPaymentsSummary(payStartYear, payStartMonth, payEndYear, payEndMonth),
             `resumen_pagos_${payStartYear}_${String(payStartMonth).padStart(2, '0')}_a_${payEndYear}_${String(payEndMonth).padStart(2, '0')}`
           );
-        case 'monthly-fees':
-          return () => triggerDownload(
+      case 'monthly-fees':
+        return () =>
+          triggerDownload(
             reportsAPI.getMonthlyFeesReport(startYear, startMonth, endYear, endMonth),
             `cuotas_mensuales_${startYear}_${String(startMonth).padStart(2, '0')}_a_${endYear}_${String(endMonth).padStart(2, '0')}`
           );
-        case 'paid-fees-summary':
-          return () => triggerDownload(
+      case 'paid-fees-summary':
+        return () =>
+          triggerDownload(
             reportsAPI.getPaidFeesSummary(startYear, startMonth, endYear, endMonth),
             `resumen_cuotas_pagadas_${startYear}_${String(startMonth).padStart(2, '0')}_a_${endYear}_${String(endMonth).padStart(2, '0')}`
           );
-        case 'fee-payment-matrix':
-          return () => triggerDownload(
+      case 'fee-payment-matrix':
+        return () =>
+          triggerDownload(
             reportsAPI.getFeePaymentMatrix(startYear, startMonth, endYear, endMonth),
             `matriz_pagos_cuotas_${startYear}_${String(startMonth).padStart(2, '0')}_a_${endYear}_${String(endMonth).padStart(2, '0')}`
           );
-        case 'fee-contribution-summary':
-          return () => triggerDownload(
+      case 'fee-contribution-summary':
+        return () =>
+          triggerDownload(
             reportsAPI.getFeeContributionSummary(startYear, startMonth, endYear, endMonth),
             `resumen_contribucion_cuotas_${startYear}_${String(startMonth).padStart(2, '0')}_a_${endYear}_${String(endMonth).padStart(2, '0')}`
           );
-        case 'expenses-by-period':
-          return () => triggerDownload(
-            reportsAPI.getExpensesByPeriodRangeReport(expenseStartYear, expenseStartMonth, expenseEndYear, expenseEndMonth),
+      case 'expenses-by-period':
+        return () =>
+          triggerDownload(
+            reportsAPI.getExpensesByPeriodRangeReport(
+              expenseStartYear,
+              expenseStartMonth,
+              expenseEndYear,
+              expenseEndMonth
+            ),
             `reporte_gastos_${expenseStartYear}_${String(expenseStartMonth).padStart(2, '0')}_a_${expenseEndYear}_${String(expenseEndMonth).padStart(2, '0')}`
           );
-        case 'detailed-expenses':
-          return () => triggerDownload(
-            reportsAPI.getDetailedExpensesReport(expenseStartYear, expenseStartMonth, expenseEndYear, expenseEndMonth),
+      case 'detailed-expenses':
+        return () =>
+          triggerDownload(
+            reportsAPI.getDetailedExpensesReport(
+              expenseStartYear,
+              expenseStartMonth,
+              expenseEndYear,
+              expenseEndMonth
+            ),
             `reporte_gastos_detallado_${expenseStartYear}_${String(expenseStartMonth).padStart(2, '0')}_a_${expenseEndYear}_${String(expenseEndMonth).padStart(2, '0')}`
           );
-        case 'outstanding-fees':
-          return () => triggerDownload(reportsAPI.getOutstandingFeesReport(), 'cuotas_pendientes');
-        case 'all-payments':
-          return () => triggerDownload(reportsAPI.getAllPaymentsReport(), 'reporte_pagos_completo');
-        case 'all-expenses':
-          return () => triggerDownload(reportsAPI.getExpensesReport(), 'reporte_gastos_administrativos');
-        case 'traffic-light':
-          return () => triggerDownload(reportsAPI.getTrafficLightReport(), 'reporte_semaforo_cuotas');
-        case 'annual-statement':
-          return () => triggerDownload(
-            reportsAPI.getAnnualPropertyStatement(statementYear, selectedProperty || null),
-            `estado_anual_${statementYear}`
-          );
-        default:
-          return () => {};
-      }
-    };
-
-    return (
-      <ReportCard
-        key={report.type}
-        title={report.title}
-        description={report.description}
-        onClick={getOnClick()}
-        disabled={!canAccess}
-      />
-    );
+      case 'outstanding-fees':
+        return () => triggerDownload(reportsAPI.getOutstandingFeesReport(), 'cuotas_pendientes');
+      case 'all-payments':
+        return () => triggerDownload(reportsAPI.getAllPaymentsReport(), 'reporte_pagos_completo');
+      case 'all-expenses':
+        return () => triggerDownload(reportsAPI.getExpensesReport(), 'reporte_gastos_administrativos');
+      case 'traffic-light':
+        return () => triggerDownload(reportsAPI.getTrafficLightReport(), 'reporte_semaforo_cuotas');
+      default:
+        return () => {};
+    }
   };
 
-  const monthSelect = (value, onChange, label) => (
-    <FormControl fullWidth>
-      <InputLabel>{label}</InputLabel>
-      <Select value={value} onChange={(e) => onChange(e.target.value)} label={label}>
-        {MONTHS.map((m) => (
-          <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  );
+  const paymentReports = [
+    {
+      type: 'property-history',
+      title: 'Historial por propiedad',
+      description: 'Pagos realizados y cuotas pendientes. Sin propiedad seleccionada incluye todas.',
+    },
+    { type: 'monthly-summary', title: 'Pagos por periodo', description: 'Pagos realizados en el rango de periodos.' },
+    { type: 'payments-summary', title: 'Pagos agrupados', description: 'Pagos agrupados por mes y monto.' },
+    { type: 'all-payments', title: 'Todos los pagos', description: 'Lista completa de pagos registrados.' },
+  ];
 
-  const yearField = (value, onChange, label) => (
-    <TextField
-      fullWidth label={label} type="number" value={value}
-      onChange={(e) => onChange(parseInt(e.target.value) || new Date().getFullYear())}
-      inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
-    />
-  );
+  const feeReports = [
+    { type: 'monthly-fees', title: 'Cuotas mensuales', description: 'Cuotas generadas en el rango de periodos.' },
+    { type: 'paid-fees-summary', title: 'Cuotas pagadas', description: 'Cuotas pagadas vs gastos, con ingreso neto.' },
+    { type: 'fee-payment-matrix', title: 'Matriz de pagos', description: 'Pagos por propiedad y mes con código de colores.' },
+    { type: 'fee-contribution-summary', title: 'Contribución por cuota', description: 'Porcentaje de aporte por propiedad.' },
+    { type: 'outstanding-fees', title: 'Cuotas pendientes', description: 'Todas las cuotas pendientes del condominio.' },
+    { type: 'traffic-light', title: 'Semáforo de cuotas', description: 'Estado de morosidad: verde, amarillo y rojo.' },
+  ];
+
+  const expenseReports = [
+    { type: 'expenses-by-period', title: 'Gastos por periodo', description: 'Gastos administrativos en el rango.' },
+    { type: 'detailed-expenses', title: 'Gastos detallados', description: 'Resumen mensual con detalle de cada gasto.' },
+    { type: 'all-expenses', title: 'Todos los gastos', description: 'Lista completa de gastos registrados.' },
+  ];
 
   return (
-    <PageContainer>
-      <Typography variant="h4" component="h1" gutterBottom>Gestión de Reportes</Typography>
+    <PageContainer maxWidth="xl">
+      <PageHeader
+        eyebrow="Finanzas"
+        title="Reportes"
+        subtitle="Descarga reportes en Excel o PDF para el periodo que necesites."
+        actions={
+          <Button
+            variant="outlined"
+            startIcon={<CalendarIcon />}
+            onClick={() => applyPreset('month')}
+          >
+            Este mes
+          </Button>
+        }
+      />
 
-      {/* Payment Reports */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" component="h2" gutterBottom>Reportes de Pagos</Typography>
-        <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Filtros por Período de Cuota</Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={3}>{yearField(payStartYear, setPayStartYear, 'Año Inicial')}</Grid>
-          <Grid item xs={12} md={3}>{monthSelect(payStartMonth, setPayStartMonth, 'Mes Inicial')}</Grid>
-          <Grid item xs={12} md={3}>{yearField(payEndYear, setPayEndYear, 'Año Final')}</Grid>
-          <Grid item xs={12} md={3}>{monthSelect(payEndMonth, setPayEndMonth, 'Mes Final')}</Grid>
-          <Grid item xs={12} md={4}>
+      <SectionCard
+        title="Rango rápido"
+        subtitle="Aplica el mismo periodo a todos los reportes."
+        icon={<CalendarIcon />}
+        sx={{ mb: 3 }}
+        contentSx={{ display: 'flex', gap: 1, flexWrap: 'wrap', py: 2 }}
+      >
+        <Button variant="outlined" size="small" onClick={() => applyPreset('month')}>
+          Este mes
+        </Button>
+        <Button variant="outlined" size="small" onClick={() => applyPreset('quarter')}>
+          Este trimestre
+        </Button>
+        <Button variant="outlined" size="small" onClick={() => applyPreset('year')}>
+          Este año
+        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto', color: 'text.secondary' }}>
+          <ReportsIcon fontSize="small" />
+          <Typography variant="caption">Los reportes se descargan al instante</Typography>
+        </Box>
+      </SectionCard>
+
+      <SectionCard
+        title="Reportes de pagos"
+        subtitle="Filtra por periodo de cuota y propiedad."
+        icon={<ReportsIcon />}
+        sx={{ mb: 3 }}
+      >
+        <PeriodRange
+          startYear={payStartYear}
+          setStartYear={setPayStartYear}
+          startMonth={payStartMonth}
+          setStartMonth={setPayStartMonth}
+          endYear={payEndYear}
+          setEndYear={setPayEndYear}
+          endMonth={payEndMonth}
+          setEndMonth={setPayEndMonth}
+        />
+        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <FormControl fullWidth>
               <InputLabel>Propiedad</InputLabel>
-              <Select value={selectedProperty} onChange={(e) => setSelectedProperty(e.target.value)} label="Propiedad">
-                <MenuItem value=""><em>Todas</em></MenuItem>
-                {properties.map((p) => (
-                  <MenuItem key={p.id} value={p.id}>
-                    Villa {p.villa} - {p.row_letter}{p.number} - {p.owner_name}
+              <Select
+                value={selectedProperty}
+                onChange={(event) => setSelectedProperty(event.target.value)}
+                label="Propiedad"
+              >
+                <MenuItem value="">
+                  <em>Todas las propiedades</em>
+                </MenuItem>
+                {properties.map((property) => (
+                  <MenuItem key={property.id} value={property.id}>
+                    {formatPropertyLabel(property)} · {property.owner_name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} md={4}>
-            {yearField(statementYear, setStatementYear, 'Año Estado Anual')}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              fullWidth
+              label="Año del estado anual"
+              type="number"
+              value={statementYear}
+              onChange={(event) => setStatementYear(parseInt(event.target.value, 10) || new Date().getFullYear())}
+              inputProps={{ min: 2020, max: new Date().getFullYear() + 1 }}
+            />
           </Grid>
         </Grid>
 
-        <Grid container spacing={3} sx={{ mt: 2 }}>
-          {[
-            { type: 'property-history', title: 'Historial de Pagos por Propiedad', description: 'Pagos realizados y cuotas pendientes. Sin selección = todas las propiedades.' },
-            { type: 'monthly-summary', title: 'Resumen de Pagos por Período', description: 'Todos los pagos realizados para cuotas de un rango de períodos.' },
-            { type: 'payments-summary', title: 'Resumen de Pagos Agrupado', description: 'Pagos agrupados por mes y monto en el rango de períodos.' },
-            { type: 'all-payments', title: 'Todos los Pagos', description: 'Lista completa de todos los pagos registrados.' },
-            { type: 'annual-statement', title: 'Estado Anual por Propiedad', description: 'Resumen anual de cuotas y pagos. Sin selección = todas las propiedades (admin).' },
-          ].map((r) => {
-            if (r.type === 'annual-statement') {
-              const canAccess = isAdmin || (!isAdmin && selectedProperty);
-              return (
+        <Grid container spacing={2} sx={{ mt: 1 }}>
+          {isAdmin &&
+            paymentReports.map((report) => (
+              <Grid key={report.type} size={{ xs: 12, sm: 6, lg: 3 }}>
                 <ReportCard
-                  key={r.type}
-                  title={r.title}
-                  description={r.description}
-                  onClick={() => triggerDownload(
-                    reportsAPI.getAnnualPropertyStatement(statementYear, selectedProperty || null),
-                    `estado_anual_${statementYear}`
-                  )}
-                  disabled={!canAccess || loading}
-                  icon={<PictureAsPdfIcon sx={{ mr: 1 }} />}
+                  title={report.title}
+                  description={report.description}
+                  onClick={getOnClick(report)}
+                  disabled={loading}
                 />
-              );
-            }
-            return renderReport({ ...r, adminOnly: true });
+              </Grid>
+            ))}
+          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+            <ReportCard
+              title="Estado anual por propiedad"
+              description="Resumen anual de cuotas y pagos. Sin propiedad incluye todas."
+              pdf
+              onClick={() =>
+                triggerDownload(
+                  reportsAPI.getAnnualPropertyStatement(statementYear, selectedProperty || null),
+                  `estado_anual_${statementYear}`
+                )
+              }
+              disabled={loading || (!isAdmin && !selectedProperty)}
+            />
+          </Grid>
+        </Grid>
+      </SectionCard>
+
+      {isAdmin && (
+      <SectionCard
+        title="Reportes de cuotas"
+        subtitle="Analiza la emisión y el avance de cobranza."
+        icon={<TableIcon />}
+        sx={{ mb: 3 }}
+      >
+        <PeriodRange
+          startYear={startYear}
+          setStartYear={setStartYear}
+          startMonth={startMonth}
+          setStartMonth={setStartMonth}
+          endYear={endYear}
+          setEndYear={setEndYear}
+          endMonth={endMonth}
+          setEndMonth={setEndMonth}
+        />
+        <Grid container spacing={2} sx={{ mt: 1 }}>
+          {feeReports.map((report) => {
+            const adminOnly = ['outstanding-fees', 'traffic-light', 'fee-payment-matrix'].includes(report.type);
+            return (
+              <Grid key={report.type} size={{ xs: 12, sm: 6, lg: 4 }}>
+                <ReportCard
+                  title={report.title}
+                  description={report.description}
+                  onClick={getOnClick(report)}
+                  disabled={loading || (adminOnly && !isAdmin)}
+                />
+              </Grid>
+            );
           })}
         </Grid>
-      </Paper>
+      </SectionCard>
 
-      {/* Fee Reports */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" component="h2" gutterBottom>Reportes de Cuotas</Typography>
-        <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Filtros</Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={3}>{yearField(startYear, setStartYear, 'Año Inicial')}</Grid>
-          <Grid item xs={12} md={3}>{monthSelect(startMonth, setStartMonth, 'Mes Inicial')}</Grid>
-          <Grid item xs={12} md={3}>{yearField(endYear, setEndYear, 'Año Final')}</Grid>
-          <Grid item xs={12} md={3}>{monthSelect(endMonth, setEndMonth, 'Mes Final')}</Grid>
-        </Grid>
+      )}
 
-        <Grid container spacing={3} sx={{ mt: 2 }}>
-          {[
-            { type: 'monthly-fees', title: 'Cuotas Mensuales', description: 'Lista de cuotas generadas en un rango de períodos.' },
-            { type: 'paid-fees-summary', title: 'Resumen de Cuotas Pagadas', description: 'Cuotas pagadas vs gastos por período, con ingreso neto.' },
-            { type: 'fee-payment-matrix', title: 'Matriz de Pagos', description: 'Matriz de pagos por propiedad y mes con código de colores.' },
-            { type: 'fee-contribution-summary', title: 'Contribución de Cuotas', description: '% de aporte por propiedad en el período.' },
-            { type: 'outstanding-fees', title: 'Cuotas Pendientes', description: 'Todas las cuotas pendientes de pago en todo el condominio.' },
-            { type: 'traffic-light', title: 'Semáforo de Cuotas', description: 'Estado de morosidad: verde (0-1), amarillo (2), rojo (3+).' },
-          ].map((r) => (
-            r.type === 'outstanding-fees' || r.type === 'traffic-light'
-              ? <ReportCard key={r.type} title={r.title} description={r.description}
-                  onClick={() => triggerDownload(
-                    r.type === 'outstanding-fees' ? reportsAPI.getOutstandingFeesReport() : reportsAPI.getTrafficLightReport(),
-                    r.type === 'outstanding-fees' ? 'cuotas_pendientes' : 'reporte_semaforo_cuotas'
-                  )}
-                  disabled={!isAdmin} />
-              : renderReport({ ...r, adminOnly: true })
+      {isAdmin && (
+      <SectionCard
+        title="Reportes de gastos"
+        subtitle="Revisa los gastos administrativos de la comunidad."
+        icon={<TableIcon />}
+      >
+        <PeriodRange
+          startYear={expenseStartYear}
+          setStartYear={setExpenseStartYear}
+          startMonth={expenseStartMonth}
+          setStartMonth={setExpenseStartMonth}
+          endYear={expenseEndYear}
+          setEndYear={setExpenseEndYear}
+          endMonth={expenseEndMonth}
+          setEndMonth={setExpenseEndMonth}
+        />
+        <Grid container spacing={2} sx={{ mt: 1 }}>
+          {expenseReports.map((report) => (
+            <Grid key={report.type} size={{ xs: 12, sm: 6, lg: 4 }}>
+              <ReportCard
+                title={report.title}
+                description={report.description}
+                onClick={getOnClick(report)}
+                disabled={loading || !isAdmin}
+              />
+            </Grid>
           ))}
         </Grid>
-      </Paper>
-
-      {/* Expense Reports */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" component="h2" gutterBottom>Reportes de Gastos Administrativos</Typography>
-        <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Filtros</Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={3}>{yearField(expenseStartYear, setExpenseStartYear, 'Año Inicial')}</Grid>
-          <Grid item xs={12} md={3}>{monthSelect(expenseStartMonth, setExpenseStartMonth, 'Mes Inicial')}</Grid>
-          <Grid item xs={12} md={3}>{yearField(expenseEndYear, setExpenseEndYear, 'Año Final')}</Grid>
-          <Grid item xs={12} md={3}>{monthSelect(expenseEndMonth, setExpenseEndMonth, 'Mes Final')}</Grid>
-        </Grid>
-
-        <Grid container spacing={3} sx={{ mt: 2 }}>
-          {[
-            { type: 'expenses-by-period', title: 'Gastos por Rango de Períodos', description: 'Lista de gastos administrativos en un rango.' },
-            { type: 'detailed-expenses', title: 'Gastos Detallados por Mes', description: 'Resumen mensual con detalle individual de gastos.' },
-            { type: 'all-expenses', title: 'Todos los Gastos', description: 'Lista completa de todos los gastos registrados.' },
-          ].map((r) => (
-            r.type === 'all-expenses'
-              ? <ReportCard key={r.type} title={r.title} description={r.description}
-                  onClick={() => triggerDownload(reportsAPI.getExpensesReport(), 'reporte_gastos_administrativos')}
-                  disabled={!isAdmin} />
-              : renderReport({ ...r, adminOnly: true })
-          ))}
-        </Grid>
-      </Paper>
+      </SectionCard>
+      )}
     </PageContainer>
   );
 };

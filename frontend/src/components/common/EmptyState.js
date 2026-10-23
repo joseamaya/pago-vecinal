@@ -4,31 +4,45 @@ import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 
 const EmptyState = ({ icon, title, description, action, sx }) => (
   <Box
-    sx={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      textAlign: 'center',
-      py: 6,
-      px: 2,
-      ...sx,
-    }}
+    sx={[
+      {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        py: 6,
+        px: 2,
+      },
+      ...(Array.isArray(sx) ? sx : [sx]),
+    ]}
   >
-    <Box sx={{ color: 'text.secondary', mb: 1.5, display: 'flex' }}>
-      {icon || <InboxOutlinedIcon sx={{ fontSize: 48, opacity: 0.5 }} />}
+    <Box
+      sx={{
+        display: 'grid',
+        placeItems: 'center',
+        width: 64,
+        height: 64,
+        borderRadius: '50%',
+        bgcolor: 'action.hover',
+        color: 'text.secondary',
+        mb: 2,
+        '& svg': { fontSize: 30, opacity: 0.7 },
+      }}
+    >
+      {icon || <InboxOutlinedIcon />}
     </Box>
     {title && (
-      <Typography variant="subtitle1" color="textPrimary" gutterBottom>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
         {title}
       </Typography>
     )}
     {description && (
-      <Typography variant="body2" color="textSecondary">
+      <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 380 }}>
         {description}
       </Typography>
     )}
-    {action && <Box sx={{ mt: 2 }}>{action}</Box>}
+    {action && <Box sx={{ mt: 2.5 }}>{action}</Box>}
   </Box>
 );
 
