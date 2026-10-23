@@ -19,6 +19,7 @@ npm install
 npm start                     # dev server on :3000, proxies API to :8000
 CI=true npm test -- --watchAll=false
 npm run build
+npm run test:e2e              # Playwright; needs MongoDB (default localhost:27017)
 ```
 
 ### Docker (from repo root)

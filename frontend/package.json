@@ -26,6 +26,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -47,5 +49,8 @@
     ]
   },
   "proxy": "http://localhost:8000",
-  "packageManager": "npm@10.8.2"
+  "packageManager": "npm@10.8.2",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
 }

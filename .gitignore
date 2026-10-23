@@ -76,3 +76,9 @@ backend/static/agreements/
 .mcp.json
 GEMINI.md
 opencode.json
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+frontend/.playwright/

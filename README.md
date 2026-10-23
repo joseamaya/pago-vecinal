@@ -215,6 +215,23 @@ python test_admin_creation.py
 
 This script will check your database and confirm if the initial admin user was created successfully.
 
+## Testing
+
+```bash
+# Backend
+cd backend && pytest app/tests
+
+# Frontend unit tests
+cd frontend && CI=true npm test -- --watchAll=false
+
+# End-to-end (requires MongoDB; starts the API on :8100 and the app on :3100)
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
+Set `E2E_MONGODB_URL` if MongoDB is not available at `mongodb://127.0.0.1:27017`.
+
 The API will be available at `http://localhost:8000`
 
 ## API Documentation
