@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import {
   Logout as LogoutIcon,
+  PersonOutline as PersonIcon,
   SettingsOutlined as SettingsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -78,6 +79,17 @@ const UserMenu = ({ compact = false }) => {
           </Box>
         </Box>
         <Divider />
+        <MenuItem
+          onClick={() => {
+            setAnchorEl(null);
+            navigate('/profile');
+          }}
+        >
+          <ListItemIcon>
+            <PersonIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Mi perfil" primaryTypographyProps={{ variant: 'body2' }} />
+        </MenuItem>
         {isAdmin && (
           <MenuItem
             onClick={() => {

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from ..models.user import User, UserRole
-from ..schemas.user import UserCreate, UserUpdate, UserResponse
+from ..schemas.user import UserCreate, UserUpdate, UserResponse, PasswordChange
 from ..dependencies.auth import get_current_user, require_admin
-from ..auth.utils import get_password_hash
+from ..auth.utils import get_password_hash, verify_password
 
 router = APIRouter()
 
@@ -59,6 +59,32 @@ async def get_user(user_id: str, current_user: User = Depends(get_current_user))
         phone=user.phone,
         is_active=user.is_active
     )
+
+@router.put("/me/password")
+async def change_password(
+    password_data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(password_data.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual no es correcta",
+        )
+    if len(password_data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La nueva contraseña debe tener al menos 6 caracteres",
+        )
+    if password_data.current_password == password_data.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La nueva contraseña debe ser diferente a la actual",
+        )
+
+    current_user.password_hash = get_password_hash(password_data.new_password)
+    await current_user.save()
+    return {"message": "Contraseña actualizada correctamente"}
+
 
 @router.put("/{user_id}", response_model=UserResponse)
 async def update_user(

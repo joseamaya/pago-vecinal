@@ -93,6 +93,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const refreshUser = async () => {
+    const response = await api.get('/users/me');
+    setUser(response.data);
+    localStorage.setItem('user', JSON.stringify(response.data));
+    return response.data;
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -103,6 +110,7 @@ export const AuthProvider = ({ children }) => {
     user,
     login,
     register,
+    refreshUser,
     logout,
     loading,
     isAuthenticated: !!user,
