@@ -112,6 +112,40 @@ class TestListProperties:
         assert [item["number"] for item in response.json()["data"]] == [2, 1]
 
     @pytest.mark.asyncio
+    async def test_owner_search_keeps_owner_scoping(
+        self,
+        client,
+        mongomock_db,
+        test_property,
+        test_owner_user,
+        test_other_owner_user,
+        auth_headers_owner,
+    ):
+        from app.models.property import Property
+
+        own_property = Property(
+            row_letter="B",
+            number=2,
+            villa="Villa Shared",
+            owner_name="Owner User",
+            owner=test_owner_user,
+        )
+        await own_property.insert()
+        await Property(
+            row_letter="C",
+            number=3,
+            villa="Villa Shared",
+            owner_name="Other Owner",
+            owner=test_other_owner_user,
+        ).insert()
+
+        response = await client.get(
+            "/properties/?search=Villa%20Shared", headers=auth_headers_owner
+        )
+        assert response.status_code == 200
+        assert [item["id"] for item in response.json()["data"]] == [str(own_property.id)]
+
+    @pytest.mark.asyncio
     async def test_invalid_sort_is_rejected(
         self, client, mongomock_db, auth_headers_admin
     ):

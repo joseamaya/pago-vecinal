@@ -98,6 +98,28 @@ class TestListPayments:
         response = await client.get("/payments/?sort_by=unknown")
         assert response.status_code == 422
 
+    @pytest.mark.asyncio
+    async def test_owner_search_keeps_owner_scoping(
+        self, client, mongomock_db, auth_headers_owner, test_owner_user
+    ):
+        with patch("app.routes.payments.database") as mock_db:
+            fake_collection = MagicMock()
+            fake_collection.aggregate.return_value.to_list = AsyncMock(return_value=[])
+            mock_db.payments = fake_collection
+
+            response = await client.get(
+                "/payments/?search=Villa", headers=auth_headers_owner
+            )
+            assert response.status_code == 200
+
+        count_pipeline = fake_collection.aggregate.call_args_list[0].args[0]
+        owner_match = count_pipeline[0]["$match"]
+        assert owner_match["$or"] == [{"user.$id": test_owner_user.id}]
+        assert any(
+            "$match" in stage and "$or" in stage["$match"]
+            for stage in count_pipeline
+        )
+
 
 class TestCreatePayment:
     @pytest.mark.asyncio

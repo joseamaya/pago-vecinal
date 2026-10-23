@@ -15,7 +15,7 @@ from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..models.receipt import Receipt
 from ..utils.links import link_id, link_ref_id
-from ..utils.query import sort_spec, text_search_clauses
+from ..utils.query import sort_document, sort_spec, text_search_clauses
 from bson import DBRef
 from ..schemas.receipt import ReceiptResponse
 from ..models.property import Property
@@ -226,7 +226,7 @@ async def get_payments(
     else:
         spec = [("status_priority", 1), ("payment_date", -1)]
 
-    pipeline.append({"$sort": dict(spec)})
+    pipeline.append({"$sort": sort_document(spec)})
     pipeline.append({"$skip": skip})
     pipeline.append({"$limit": limit})
 

@@ -69,6 +69,27 @@ class TestListReceipts:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
+    async def test_owner_search_keeps_owner_scoping(
+        self, client, mongomock_db, auth_headers_owner
+    ):
+        with patch("app.routes.receipts.Receipt") as MockReceipt:
+            query = MockReceipt.find.return_value
+            query.count = AsyncMock(return_value=0)
+            query.sort.return_value.skip.return_value.limit.return_value.to_list = AsyncMock(
+                return_value=[]
+            )
+
+            response = await client.get(
+                "/receipts/?search=Villa", headers=auth_headers_owner
+            )
+            assert response.status_code == 200
+
+        find_filter = MockReceipt.find.call_args.args[0]
+        assert "$and" in find_filter
+        assert {"_id": None} in find_filter["$and"]
+        assert any("$or" in clause for clause in find_filter["$and"])
+
+    @pytest.mark.asyncio
     async def test_owner_query_targets_payment_and_misc_links(self, mongomock_db):
         from types import SimpleNamespace
         from beanie import PydanticObjectId

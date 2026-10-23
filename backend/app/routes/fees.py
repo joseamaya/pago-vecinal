@@ -11,7 +11,7 @@ from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
 from ..utils.links import link_id, link_ref_id
-from ..utils.query import sort_spec, text_search_clauses
+from ..utils.query import sort_document, sort_spec, text_search_clauses
 from bson import DBRef
 
 class GenerateFeesRequest(BaseModel):
@@ -174,7 +174,7 @@ async def get_fees(
         ]
 
     pipeline.extend([
-        {"$sort": dict(spec)},
+        {"$sort": sort_document(spec)},
         {"$skip": skip},
         {"$limit": limit},
     ])

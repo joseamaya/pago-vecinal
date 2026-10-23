@@ -98,6 +98,45 @@ class TestListFees:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
+    async def test_owner_search_keeps_owner_scoping(
+        self, client, mongomock_db, auth_headers_owner, test_owner_user
+    ):
+        with patch("app.routes.fees.database") as mock_db:
+            fake_collection = MagicMock()
+            fake_collection.aggregate.return_value.to_list = AsyncMock(return_value=[])
+            mock_db.fees = fake_collection
+
+            response = await client.get("/fees/?search=Villa", headers=auth_headers_owner)
+            assert response.status_code == 200
+
+        count_pipeline = fake_collection.aggregate.call_args_list[0].args[0]
+        owner_match = count_pipeline[0]["$match"]
+        assert owner_match["$or"] == [{"user.$id": test_owner_user.id}]
+        assert any(
+            "$match" in stage and "$or" in stage["$match"]
+            for stage in count_pipeline
+        )
+
+    @pytest.mark.asyncio
+    async def test_property_sort_keeps_requested_direction(
+        self, client, override_auth_as_admin
+    ):
+        with patch("app.routes.fees.database") as mock_db:
+            fake_collection = MagicMock()
+            fake_collection.aggregate.return_value.to_list = AsyncMock(return_value=[])
+            mock_db.fees = fake_collection
+
+            response = await client.get(
+                "/fees/?sort_by=property&sort_dir=desc"
+            )
+            assert response.status_code == 200
+
+        data_pipeline = fake_collection.aggregate.call_args_list[1].args[0]
+        sort_stage = next(stage["$sort"] for stage in data_pipeline if "$sort" in stage)
+        assert sort_stage["property_data.row_letter"] == -1
+        assert sort_stage["property_data.number"] == -1
+
+    @pytest.mark.asyncio
     async def test_owner_cannot_generate_fees(self, client, mock_owner_user):
         async def override():
             return mock_owner_user

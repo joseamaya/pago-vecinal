@@ -11,7 +11,12 @@ def text_search_clauses(term, text_fields, numeric_field=None):
     pattern = re.compile(re.escape(value), re.IGNORECASE)
     clauses = [{field: pattern} for field in text_fields]
 
-    if numeric_field and value.isdigit():
+    if (
+        numeric_field
+        and value.isascii()
+        and value.isdigit()
+        and len(value) <= 18
+    ):
         clauses.append({numeric_field: int(value)})
 
     return clauses
@@ -27,6 +32,13 @@ def sort_spec(sort_by, sort_dir, allowed, default_dir="asc"):
 
     direction = DESCENDING if (sort_dir or default_dir) == "desc" else ASCENDING
     return [(field, direction) for field in fields]
+
+
+def sort_document(spec):
+    document = {}
+    for field, direction in spec:
+        document.setdefault(field, direction)
+    return document
 
 
 def combine_filters(*filters):

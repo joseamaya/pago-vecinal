@@ -1,6 +1,11 @@
 import re
 
-from app.utils.query import combine_filters, sort_spec, text_search_clauses
+from app.utils.query import (
+    combine_filters,
+    sort_document,
+    sort_spec,
+    text_search_clauses,
+)
 
 
 class TestTextSearchClauses:
@@ -31,6 +36,15 @@ class TestTextSearchClauses:
         clauses = text_search_clauses("A12", ["villa"], numeric_field="number")
         assert {"number": 12} not in clauses
 
+    def test_ignores_non_ascii_and_oversized_digits(self):
+        non_ascii = text_search_clauses("²", ["villa"], numeric_field="number")
+        assert len(non_ascii) == 1
+        assert "villa" in non_ascii[0]
+
+        oversized = text_search_clauses("9" * 19, ["villa"], numeric_field="number")
+        assert len(oversized) == 1
+        assert "villa" in oversized[0]
+
 
 class TestSortSpec:
     def test_returns_none_without_sort_field(self):
@@ -50,6 +64,22 @@ class TestSortSpec:
             ("year", 1),
             ("month", 1),
         ]
+
+
+class TestSortDocument:
+    def test_preserves_first_direction_for_duplicate_fields(self):
+        spec = [
+            ("villa", -1),
+            ("row_letter", -1),
+            ("row_letter", 1),
+            ("number", -1),
+            ("number", 1),
+        ]
+        assert sort_document(spec) == {
+            "villa": -1,
+            "row_letter": -1,
+            "number": -1,
+        }
 
 
 class TestCombineFilters:
