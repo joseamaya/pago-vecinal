@@ -274,6 +274,8 @@ export const treasurersAPI = {
 // Dashboard Stats API
 export const dashboardAPI = {
   getStats: () => api.get('/dashboard/stats'),
+  getTrends: (months = 6) => api.get('/dashboard/trends', { params: { months } }),
+  getRecentActivity: (limit = 8) => api.get('/dashboard/recent-activity', { params: { limit } }),
   getOwnerDebtSummary: () => api.get('/dashboard/owner/debt-summary'),
   getOwnerPropertyReport: () => api.get('/dashboard/owner/property-report'),
   getOwnerExpensesReport: () => api.get('/dashboard/owner/expenses-report'),

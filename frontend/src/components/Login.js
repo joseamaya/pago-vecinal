@@ -1,144 +1,338 @@
 import React, { useState } from 'react';
 import {
-  Container,
-  Paper,
-  TextField,
-  Button,
-  Typography,
-  Box,
   Alert,
+  Box,
+  Button,
+  IconButton,
+  InputAdornment,
+  Link,
   Tab,
   Tabs,
+  TextField,
+  Typography,
 } from '@mui/material';
+import {
+  AccountCircleOutlined as AccountIcon,
+  CheckCircleOutlined as CheckIcon,
+  EmailOutlined as EmailIcon,
+  LockOutlined as LockIcon,
+  VisibilityOffOutlined as VisibilityOffIcon,
+  VisibilityOutlined as VisibilityIcon,
+} from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import LoadingSpinner from './common/LoadingSpinner';
+
+const FEATURES = [
+  'Cuotas y pagos siempre al día',
+  'Recibos disponibles al instante',
+  'Reportes claros para toda la comunidad',
+];
+
+const initialState = {
+  email: '',
+  password: '',
+  fullName: '',
+  phone: '',
+  role: 'owner',
+};
 
 const Login = () => {
   const [tabValue, setTabValue] = useState(0);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    fullName: '',
-    phone: '',
-    role: 'owner',
-  });
+  const [formData, setFormData] = useState(initialState);
+  const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { login, register } = useAuth();
+  const isRegister = tabValue === 1;
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
     setError('');
+    setErrors({});
   };
 
-  const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((current) => ({ ...current, [name]: value }));
+    setErrors((current) => ({ ...current, [name]: undefined }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const validate = () => {
+    const nextErrors = {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      nextErrors.email = 'Ingresa un correo electrónico válido.';
+    }
+    if (formData.password.length < 6) {
+      nextErrors.password = 'La contraseña debe tener al menos 6 caracteres.';
+    }
+    if (isRegister && formData.fullName.trim().length < 3) {
+      nextErrors.fullName = 'Ingresa tu nombre completo.';
+    }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError('');
-    setLoading(true);
+    if (!validate()) return;
 
+    setLoading(true);
     try {
-      let result;
-      if (tabValue === 0) {
-        // Login
-        result = await login(formData.email, formData.password);
-      } else {
-        // Register
-        result = await register(formData);
-      }
+      const result = isRegister
+        ? await register(formData)
+        : await login(formData.email.trim(), formData.password);
 
       if (!result.success) {
-        setError(result.error);
+        setError(result.error || 'No pudimos iniciar sesión. Inténtalo nuevamente.');
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      setError('Ocurrió un error inesperado. Inténtalo nuevamente.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container component="main" maxWidth="sm">
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.05fr 1fr' }, minHeight: '100vh' }}>
+      <Box
+        sx={(theme) => ({
+          display: { xs: 'none', md: 'flex' },
+          position: 'relative',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          p: 6,
+          overflow: 'hidden',
+          color: '#FFF6EF',
+          background: `linear-gradient(150deg, ${theme.palette.primary.dark} 0%, #6E2F1B 52%, #3E2116 100%)`,
+        })}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            width: 520,
+            height: 520,
+            borderRadius: '50%',
+            border: '1px solid rgba(255, 235, 220, 0.18)',
+            top: -180,
+            right: -160,
+          }}
+        />
+        <Box
+          sx={{
+            position: 'absolute',
+            width: 380,
+            height: 380,
+            borderRadius: '50%',
+            border: '1px solid rgba(255, 235, 220, 0.12)',
+            bottom: -140,
+            left: -120,
+          }}
+        />
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage:
+              'radial-gradient(rgba(255,255,255,0.09) 1px, transparent 1px)',
+            backgroundSize: '22px 22px',
+            maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.55), transparent 70%)',
+            pointerEvents: 'none',
+          }}
+        />
+
+        <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              placeItems: 'center',
+              width: 46,
+              height: 46,
+              borderRadius: 2.5,
+              bgcolor: 'rgba(255, 246, 239, 0.14)',
+              border: '1px solid rgba(255, 246, 239, 0.28)',
+              fontFamily: '"Fraunces", serif',
+              fontWeight: 600,
+              fontSize: '1.15rem',
+            }}
+          >
+            PV
+          </Box>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+              Pago Vecinal
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,246,239,0.7)' }}>
+              Gestión condominal
+            </Typography>
+          </Box>
+        </Box>
+
+        <Box sx={{ position: 'relative', maxWidth: 520 }}>
+          <Typography variant="h2" sx={{ fontSize: { md: '2.9rem', lg: '3.4rem' }, mb: 2 }}>
+            La comunidad,
+            <br />
+            en orden.
+          </Typography>
+          <Typography variant="body1" sx={{ color: 'rgba(255,246,239,0.78)', maxWidth: 420, mb: 4 }}>
+            Administra cuotas, pagos y recibos sin planillas sueltas ni dudas a fin de mes.
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {FEATURES.map((feature) => (
+              <Box key={feature} sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                <CheckIcon sx={{ fontSize: 19, color: 'rgba(255,246,239,0.85)' }} />
+                <Typography variant="body2" sx={{ color: 'rgba(255,246,239,0.85)' }}>
+                  {feature}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+
+        <Typography variant="caption" sx={{ position: 'relative', color: 'rgba(255,246,239,0.55)' }}>
+          © {new Date().getFullYear()} Pago Vecinal
+        </Typography>
+      </Box>
+
       <Box
         sx={{
-          marginTop: 8,
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
+          px: { xs: 2.5, sm: 5 },
+          py: { xs: 4, sm: 6 },
         }}
       >
-        <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
-          <Typography component="h1" variant="h4" align="center" gutterBottom>
-            Pago Vecinal
-          </Typography>
-          <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
-            Sistema de Gestión de Cuotas de Condominio
-          </Typography>
-
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', marginBottom: 3 }}>
-            <Tabs value={tabValue} onChange={handleTabChange} aria-label="auth tabs">
-              <Tab label="Iniciar Sesión" />
-              <Tab label="Registrarse" />
-            </Tabs>
+        <Box sx={{ width: '100%', maxWidth: 420 }}>
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.25, mb: 4 }}>
+            <Box
+              sx={(theme) => ({
+                display: 'grid',
+                placeItems: 'center',
+                width: 42,
+                height: 42,
+                borderRadius: 2.5,
+                bgcolor: theme.palette.primary.main,
+                color: '#FFF',
+                fontFamily: '"Fraunces", serif',
+                fontWeight: 600,
+              })}
+            >
+              PV
+            </Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Pago Vecinal
+            </Typography>
           </Box>
 
+          <Typography variant="h3" sx={{ mb: 1 }}>
+            {isRegister ? 'Crea tu cuenta' : 'Bienvenido de vuelta'}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+            {isRegister
+              ? 'Regístrate para consultar tus cuotas y pagos.'
+              : 'Ingresa con tu correo para gestionar tu comunidad.'}
+          </Typography>
+
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab label="Iniciar sesión" />
+            <Tab label="Registrarme" />
+          </Tabs>
+
           {error && (
-            <Alert severity="error" sx={{ marginBottom: 2 }}>
+            <Alert severity="error" sx={{ mb: 2.5 }}>
               {error}
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+          <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
-              margin="normal"
-              required
               fullWidth
               id="email"
-              label="Correo Electrónico"
               name="email"
+              label="Correo electrónico"
+              type="email"
               autoComplete="email"
               autoFocus
+              margin="normal"
               value={formData.email}
               onChange={handleInputChange}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Contraseña"
-              type="password"
-              id="password"
-              autoComplete="current-password"
-              value={formData.password}
-              onChange={handleInputChange}
+              error={Boolean(errors.email)}
+              helperText={errors.email}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                  </InputAdornment>
+                ),
+              }}
             />
 
-            {tabValue === 1 && (
+            <TextField
+              fullWidth
+              id="password"
+              name="password"
+              label="Contraseña"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              margin="normal"
+              value={formData.password}
+              onChange={handleInputChange}
+              error={Boolean(errors.password)}
+              helperText={errors.password}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword((current) => !current)}
+                      edge="end"
+                      size="small"
+                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    >
+                      {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            {isRegister && (
               <>
                 <TextField
-                  margin="normal"
-                  required
                   fullWidth
                   name="fullName"
-                  label="Nombre Completo"
-                  id="fullName"
+                  label="Nombre completo"
+                  margin="normal"
+                  autoComplete="name"
                   value={formData.fullName}
                   onChange={handleInputChange}
+                  error={Boolean(errors.fullName)}
+                  helperText={errors.fullName}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AccountIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                      </InputAdornment>
+                    ),
+                  }}
                 />
                 <TextField
-                  margin="normal"
                   fullWidth
                   name="phone"
-                  label="Teléfono"
-                  id="phone"
+                  label="Teléfono (opcional)"
+                  margin="normal"
+                  autoComplete="tel"
                   value={formData.phone}
                   onChange={handleInputChange}
                 />
@@ -149,19 +343,32 @@ const Login = () => {
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              size="large"
               disabled={loading}
+              sx={{ mt: 3, mb: 2, height: 48 }}
             >
-              {loading ? (
-                <LoadingSpinner buttonVariant size={20} message="Cargando..." showMessage />
-              ) : (
-                tabValue === 0 ? 'Iniciar Sesión' : 'Registrarse'
-              )}
+              {loading ? 'Procesando…' : isRegister ? 'Crear cuenta' : 'Entrar'}
             </Button>
           </Box>
-        </Paper>
+
+          <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', color: 'text.secondary', mt: 1 }}>
+            ¿Problemas para ingresar? Contacta al administrador de tu villa.
+          </Typography>
+          <Box sx={{ textAlign: 'center', mt: 3 }}>
+            <Link
+              component="button"
+              type="button"
+              variant="caption"
+              underline="hover"
+              onClick={() => handleTabChange(null, isRegister ? 0 : 1)}
+              sx={{ color: 'text.secondary' }}
+            >
+              {isRegister ? 'Ya tengo una cuenta' : '¿Aún no tienes cuenta? Regístrate'}
+            </Link>
+          </Box>
+        </Box>
       </Box>
-    </Container>
+    </Box>
   );
 };
 

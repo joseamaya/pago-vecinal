@@ -1,33 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Typography,
-  Chip,
-  IconButton,
-  Box,
-  Alert,
-  useMediaQuery,
-  useTheme,
-} from '@mui/material';
-import {
-  Download as DownloadIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Download as DownloadIcon } from '@mui/icons-material';
 import { paymentsAPI } from '../services/api';
-import LoadingSkeleton from './common/LoadingSkeleton';
+import ResponsiveTable from './common/ResponsiveTable';
+import StatusChip from './common/StatusChip';
+import MoneyText from './common/MoneyText';
 import EmptyState from './common/EmptyState';
-import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
+import { formatCurrency, formatDate, formatPropertyLabel } from '../utils/formatters';
 
 const PaymentsModal = ({ open, onClose, fee }) => {
   const theme = useTheme();
@@ -43,7 +22,7 @@ const PaymentsModal = ({ open, onClose, fee }) => {
       const response = await paymentsAPI.getPayments(1, 100, { fee_id: fee.id });
       setPayments(response.data.data);
     } catch (err) {
-      setError('Error al cargar los pagos');
+      setError('No pudimos cargar los pagos.');
       console.error('Error fetching payments:', err);
     } finally {
       setLoading(false);
@@ -51,9 +30,7 @@ const PaymentsModal = ({ open, onClose, fee }) => {
   }, [fee]);
 
   useEffect(() => {
-    if (open && fee) {
-      fetchPayments();
-    }
+    if (open && fee) fetchPayments();
   }, [open, fee, fetchPayments]);
 
   const handleDownload = async (payment) => {
@@ -62,31 +39,48 @@ const PaymentsModal = ({ open, onClose, fee }) => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      const correlative = payment.receipt_correlative_number || `REC-${new Date().getFullYear()}-${payment.id.slice(-5).toUpperCase()}`;
+      const correlative =
+        payment.receipt_correlative_number || `REC-${new Date().getFullYear()}-${payment.id.slice(-5).toUpperCase()}`;
       link.setAttribute('download', `recibo_${correlative}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Error al descargar el recibo');
+      setError('No pudimos descargar el recibo.');
       console.error('Error downloading receipt:', err);
     }
   };
 
+  const columns = [
+    { key: 'payment_date', label: 'Fecha', render: (payment) => formatDate(payment.payment_date) },
+    {
+      key: 'amount',
+      label: 'Monto',
+      render: (payment) => <MoneyText value={payment.amount} variant="body2" />,
+    },
+    { key: 'status', label: 'Estado', render: (payment) => <StatusChip status={payment.status} /> },
+    { key: 'notes', label: 'Notas', render: (payment) => payment.notes || '—' },
+  ];
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth fullScreen={isMobile}>
-      <DialogTitle>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h6">
-            Pagos de la Cuota - {fee ? `${fee.year}/${fee.month}` : ''}
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
+      <DialogTitle component="div">
+        <Typography variant="h5" component="h2">
+          Pagos de la cuota
+        </Typography>
+        {fee && (
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+            {formatPropertyLabel({
+              villa: fee.property_villa,
+              row_letter: fee.property_row_letter,
+              number: fee.property_number,
+            })}{' '}
+            · {fee.month}/{fee.year}
           </Typography>
-          <IconButton onClick={onClose} aria-label="Cerrar">
-            <CloseIcon />
-          </IconButton>
-        </Box>
+        )}
       </DialogTitle>
-      <DialogContent>
+      <DialogContent dividers={isMobile}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -94,78 +88,78 @@ const PaymentsModal = ({ open, onClose, fee }) => {
         )}
 
         {fee && (
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" color="textSecondary">
-              <strong>Propiedad:</strong> {fee.property_villa} {fee.property_row_letter}{fee.property_number} - {fee.property_owner_name}
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              <strong>Monto Total:</strong> S/ {fee.amount.toFixed(2)}
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              <strong>Monto Pagado:</strong> S/ {(fee.paid_amount || 0).toFixed(2)}
-            </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: { xs: 2, sm: 4 },
+              mb: 2.5,
+              p: 2,
+              borderRadius: 3,
+              bgcolor: 'action.hover',
+            }}
+          >
+            <Box>
+              <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                Propietario
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {fee.property_owner_name || '—'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                Monto total
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {formatCurrency(fee.amount)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                Pagado
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {formatCurrency(fee.paid_amount || 0)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                Pendiente
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {formatCurrency(fee.remaining_amount ?? Math.max((fee.amount || 0) - (fee.paid_amount || 0), 0))}
+              </Typography>
+            </Box>
           </Box>
         )}
 
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Fecha de Pago</TableCell>
-                <TableCell>Monto</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Notas</TableCell>
-                <TableCell>Descargar Recibo PDF</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <LoadingSkeleton type="table" rows={3} columns={5} />
-              ) : payments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <EmptyState
-                      title="No hay pagos registrados para esta cuota"
-                      description="Los pagos aprobados o completados aparecerán aquí."
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                payments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell>
-                      {new Date(payment.payment_date).toLocaleDateString('es-ES')}
-                    </TableCell>
-                    <TableCell>S/ {payment.amount.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getStatusLabel(payment.status)}
-                        color={getStatusColor(payment.status)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{payment.notes || '-'}</TableCell>
-                    <TableCell>
-                      {(payment.status === 'approved' || payment.status === 'completed') && (
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleDownload(payment)}
-                          aria-label="Descargar recibo PDF"
-                          title="Descargar Recibo PDF"
-                        >
-                          <DownloadIcon />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <ResponsiveTable
+          columns={columns}
+          rows={payments}
+          loading={loading}
+          getRowId={(payment) => payment.id}
+          mobileTitle={(payment) => formatCurrency(payment.amount)}
+          mobileSubtitle={(payment) => formatDate(payment.payment_date)}
+          emptyState={
+            <EmptyState
+              title="No hay pagos registrados"
+              description="Los pagos aprobados o completados aparecerán aquí."
+            />
+          }
+          renderActions={(payment) =>
+            (payment.status === 'approved' || payment.status === 'completed') && (
+              <Button size="small" startIcon={<DownloadIcon />} onClick={() => handleDownload(payment)}>
+                Recibo
+              </Button>
+            )
+          }
+        />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cerrar</Button>
+        <Button onClick={onClose} color="inherit">
+          Cerrar
+        </Button>
       </DialogActions>
     </Dialog>
   );

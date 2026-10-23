@@ -1,35 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Alert,
+  Box,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Select,
-  MenuItem,
   FormControl,
   InputLabel,
-  IconButton,
-  Box,
-  Alert,
-  TablePagination,
-  useMediaQuery,
-  useTheme,
+  MenuItem,
+  Pagination,
+  Select,
+  TextField,
+  Typography,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Download as DownloadIcon,
+  DeleteOutline as DeleteIcon,
+  DownloadOutlined as DownloadIcon,
+  EditOutlined as EditIcon,
   Refresh as RefreshIcon,
   Sync as SyncIcon,
 } from '@mui/icons-material';
@@ -39,33 +25,30 @@ import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
-import LoadingSkeleton from './common/LoadingSkeleton';
+import PageHeader from './common/PageHeader';
+import ResponsiveTable from './common/ResponsiveTable';
+import ActionMenu from './common/ActionMenu';
+import FormDialog from './common/FormDialog';
+import MoneyText from './common/MoneyText';
 import EmptyState from './common/EmptyState';
+import { formatCurrency, formatDate, formatPeriod } from '../utils/formatters';
+
+const EMPTY_RECEIPT = { payment_id: '', fee_period: '', notes: '' };
 
 const ReceiptManagement = () => {
   const { isAdmin } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState(null);
-  const [pagination, setPagination] = useState({
-    page: 0,
-    limit: 20,
-    total_count: 0,
-    total_pages: 0,
-  });
-  const [formData, setFormData] = useState({
-    payment_id: '',
-    fee_period: '',
-    notes: '',
-  });
+  const [pagination, setPagination] = useState({ page: 0, limit: 20, total_count: 0, total_pages: 0 });
+  const [formData, setFormData] = useState(EMPTY_RECEIPT);
 
   useEffect(() => {
     fetchReceipts();
@@ -78,14 +61,14 @@ const ReceiptManagement = () => {
       const response = await receiptsAPI.getReceipts(page, limit);
       setReceipts(response.data.data);
       setPagination({
-        page: response.data.pagination.page - 1, // Material-UI uses 0-based indexing
+        page: response.data.pagination.page - 1,
         limit: response.data.pagination.limit,
         total_count: response.data.pagination.total_count,
         total_pages: response.data.pagination.total_pages,
       });
       setError('');
     } catch (err) {
-      setError('Error al cargar recibos');
+      setError('No pudimos cargar los recibos.');
       console.error('Error fetching receipts:', err);
     } finally {
       setLoading(false);
@@ -94,7 +77,7 @@ const ReceiptManagement = () => {
 
   const fetchPayments = async () => {
     try {
-      const response = await paymentsAPI.getPayments();
+      const response = await paymentsAPI.getPayments(1, 1000);
       setPayments(response.data.data || []);
     } catch (err) {
       console.error('Error fetching payments:', err);
@@ -102,17 +85,8 @@ const ReceiptManagement = () => {
     }
   };
 
-  const handlePageChange = (event, newPage) => {
-    fetchReceipts(newPage + 1, pagination.limit); // Convert back to 1-based indexing
-  };
-
-  const handleRowsPerPageChange = (event) => {
-    const newLimit = parseInt(event.target.value, 10);
-    setPagination(prev => ({ ...prev, limit: newLimit, page: 0 }));
-    fetchReceipts(1, newLimit);
-  };
-
   const handleOpenDialog = (receipt = null) => {
+    setFormError('');
     if (receipt) {
       setEditingReceipt(receipt);
       setFormData({
@@ -122,11 +96,7 @@ const ReceiptManagement = () => {
       });
     } else {
       setEditingReceipt(null);
-      setFormData({
-        payment_id: '',
-        fee_period: '',
-        notes: '',
-      });
+      setFormData(EMPTY_RECEIPT);
     }
     setOpen(true);
   };
@@ -134,16 +104,14 @@ const ReceiptManagement = () => {
   const handleCloseDialog = () => {
     setOpen(false);
     setEditingReceipt(null);
-    setFormData({
-      payment_id: '',
-      fee_period: '',
-      notes: '',
-    });
+    setFormError('');
+    setFormData(EMPTY_RECEIPT);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setSaving(true);
+    setFormError('');
     try {
       if (editingReceipt) {
         await receiptsAPI.updateReceipt(editingReceipt.id, formData);
@@ -156,7 +124,7 @@ const ReceiptManagement = () => {
       handleCloseDialog();
     } catch (err) {
       if (!isNetworkError(err)) {
-        toast.error(editingReceipt ? 'Error al actualizar recibo' : 'Error al crear recibo');
+        setFormError(err.response?.data?.detail || 'No pudimos guardar el recibo.');
       }
       console.error('Error saving receipt:', err);
     } finally {
@@ -167,7 +135,7 @@ const ReceiptManagement = () => {
   const handleDelete = async (receipt) => {
     const confirmed = await confirm({
       title: 'Eliminar recibo',
-      message: `¿Estás seguro de que quieres eliminar el recibo ${receipt.correlative_number}? Esta acción no se puede deshacer.`,
+      message: `¿Seguro que quieres eliminar el recibo ${receipt.correlative_number}? Esta acción no se puede deshacer.`,
       confirmLabel: 'Eliminar',
     });
     if (!confirmed) return;
@@ -178,7 +146,7 @@ const ReceiptManagement = () => {
       fetchReceipts();
     } catch (err) {
       if (!isNetworkError(err)) {
-        toast.error('Error al eliminar recibo');
+        toast.error('No pudimos eliminar el recibo');
       }
       console.error('Error deleting receipt:', err);
     }
@@ -197,7 +165,7 @@ const ReceiptManagement = () => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       if (!isNetworkError(err)) {
-        toast.error('Error al descargar el recibo');
+        toast.error('No pudimos descargar el recibo');
       }
       console.error('Error downloading receipt:', err);
     }
@@ -206,7 +174,7 @@ const ReceiptManagement = () => {
   const handleRegenerate = async (receipt) => {
     const confirmed = await confirm({
       title: 'Regenerar PDF',
-      message: '¿Estás seguro de que quieres regenerar el PDF de este recibo? Esto sobreescribirá el archivo existente.',
+      message: '¿Quieres regenerar el PDF de este recibo? Se sobrescribirá el archivo existente.',
       confirmLabel: 'Regenerar',
       destructive: false,
     });
@@ -214,10 +182,10 @@ const ReceiptManagement = () => {
 
     try {
       await receiptsAPI.regenerateReceiptPDF(receipt.id);
-      toast.success('PDF regenerado exitosamente');
+      toast.success('PDF regenerado correctamente');
     } catch (err) {
       if (!isNetworkError(err)) {
-        toast.error('Error al regenerar el PDF del recibo');
+        toast.error('No pudimos regenerar el PDF');
       }
       console.error('Error regenerating receipt PDF:', err);
     }
@@ -226,7 +194,7 @@ const ReceiptManagement = () => {
   const handleRegenerateAll = async () => {
     const confirmed = await confirm({
       title: 'Regenerar todos los PDFs',
-      message: '¿Estás seguro de que quieres regenerar TODOS los PDFs de recibos? Esto sobreescribirá todos los archivos existentes y puede tomar tiempo.',
+      message: 'Se regenerarán todos los recibos. Esto puede tardar unos minutos.',
       confirmLabel: 'Regenerar todos',
       destructive: false,
     });
@@ -235,14 +203,13 @@ const ReceiptManagement = () => {
     try {
       setLoading(true);
       const response = await receiptsAPI.regenerateAllReceiptPDFs();
-      toast.success(`PDFs regenerados exitosamente: ${response.data.updated_count} recibos actualizados`);
-      if (response.data.errors && response.data.errors.length > 0) {
-        console.warn('Errores durante la regeneración:', response.data.errors);
-        toast.warning(`Hubo ${response.data.errors.length} errores. Revisa la consola para más detalles.`);
+      toast.success(`PDFs regenerados: ${response.data.updated_count} recibos actualizados`);
+      if (response.data.errors?.length > 0) {
+        toast.warning(`Hubo ${response.data.errors.length} errores. Revisa la consola.`);
       }
     } catch (err) {
       if (!isNetworkError(err)) {
-        toast.error('Error al regenerar los PDFs de los recibos');
+        toast.error('No pudimos regenerar los PDFs');
       }
       console.error('Error regenerating all receipt PDFs:', err);
     } finally {
@@ -250,191 +217,187 @@ const ReceiptManagement = () => {
     }
   };
 
+  const columns = [
+    { key: 'correlative_number', label: 'Recibo', mobile: false },
+    { key: 'issue_date', label: 'Emisión', render: (receipt) => formatDate(receipt.issue_date) },
+    {
+      key: 'total_amount',
+      label: 'Monto',
+      render: (receipt) => <MoneyText value={receipt.total_amount} variant="body2" />,
+    },
+    {
+      key: 'property',
+      label: 'Propiedad',
+      render: (receipt) =>
+        receipt.property_details
+          ? `${receipt.property_details.villa || ''} ${receipt.property_details.row_letter || ''}${receipt.property_details.number ?? ''}`.trim()
+          : '—',
+    },
+    {
+      key: 'owner',
+      label: 'Propietario',
+      render: (receipt) => receipt.owner_details?.name || '—',
+    },
+    {
+      key: 'fee_period',
+      label: 'Periodo',
+      render: (receipt) => receipt.fee_period || '—',
+    },
+  ];
+
+  const footer = pagination.total_pages > 1 && (
+    <Box
+      sx={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 1,
+        px: 2.5,
+        py: 1.75,
+      }}
+    >
+      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        Mostrando {pagination.page * pagination.limit + 1}–
+        {Math.min((pagination.page + 1) * pagination.limit, pagination.total_count)} de {pagination.total_count}
+      </Typography>
+      <Pagination
+        count={pagination.total_pages}
+        page={pagination.page + 1}
+        onChange={(event, page) => fetchReceipts(page, pagination.limit)}
+        color="primary"
+        size="small"
+      />
+    </Box>
+  );
 
   return (
-    <PageContainer>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Gestión de Recibos
-        </Typography>
-        <Box>
-          {isAdmin && (
-            <Button
-              variant="outlined"
-              startIcon={<SyncIcon />}
-              onClick={handleRegenerateAll}
-              disabled={loading}
-              sx={{ mr: 2 }}
-            >
-              Regenerar Todos los PDFs
+    <PageContainer maxWidth="xl">
+      <PageHeader
+        eyebrow="Cobranzas"
+        title="Recibos"
+        subtitle="Consulta, descarga y regenera los recibos emitidos."
+        actions={
+          <>
+            {isAdmin && (
+              <Button variant="outlined" startIcon={<SyncIcon />} onClick={handleRegenerateAll} disabled={loading}>
+                Regenerar PDFs
+              </Button>
+            )}
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+              Nuevo recibo
             </Button>
-          )}
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nuevo Recibo
-          </Button>
-        </Box>
-      </Box>
+          </>
+        }
+      />
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2.5 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => fetchReceipts()}>
+              Reintentar
+            </Button>
+          }
+        >
           {error}
         </Alert>
       )}
 
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Número de Recibo</TableCell>
-                <TableCell>Fecha de Emisión</TableCell>
-                <TableCell>Monto</TableCell>
-                <TableCell>Propiedad</TableCell>
-                <TableCell>Propietario</TableCell>
-                <TableCell>Período</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <LoadingSkeleton type="table" rows={5} columns={7} />
-              ) : receipts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <EmptyState
-                      title="No hay recibos registrados"
-                      description="Los recibos generados aparecerán aquí."
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                receipts.map((receipt) => (
-                  <TableRow key={receipt.id}>
-                    <TableCell>{receipt.correlative_number}</TableCell>
-                    <TableCell>
-                      {new Date(receipt.issue_date).toLocaleDateString('es-ES')}
-                    </TableCell>
-                    <TableCell>S/ {receipt.total_amount.toFixed(2)}</TableCell>
-                    <TableCell>
-                      {receipt.property_details?.villa} {receipt.property_details?.row_letter}{receipt.property_details?.number}
-                    </TableCell>
-                    <TableCell>{receipt.owner_details?.name}</TableCell>
-                    <TableCell>{receipt.fee_period || '-'}</TableCell>
-                    <TableCell>
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleDownload(receipt)}
-                        aria-label={`Descargar recibo ${receipt.correlative_number}`}
-                        title="Descargar Recibo PDF"
-                      >
-                        <DownloadIcon />
-                      </IconButton>
-                      <IconButton
-                        color="secondary"
-                        onClick={() => handleRegenerate(receipt)}
-                        aria-label={`Regenerar PDF del recibo ${receipt.correlative_number}`}
-                        title="Regenerar PDF"
-                      >
-                        <RefreshIcon />
-                      </IconButton>
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleOpenDialog(receipt)}
-                        aria-label={`Editar recibo ${receipt.correlative_number}`}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      {isAdmin && (
-                        <IconButton
-                          color="error"
-                          onClick={() => handleDelete(receipt)}
-                          aria-label={`Eliminar recibo ${receipt.correlative_number}`}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={pagination.total_count}
-          page={pagination.page}
-          onPageChange={handlePageChange}
-          rowsPerPage={pagination.limit}
-          onRowsPerPageChange={handleRowsPerPageChange}
-          rowsPerPageOptions={[10, 20, 50]}
-          labelRowsPerPage="Filas por página"
-          labelDisplayedRows={({ from, to, count }) =>
-            `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`
-          }
-        />
-      </Paper>
+      <ResponsiveTable
+        columns={columns}
+        rows={receipts}
+        loading={loading}
+        getRowId={(receipt) => receipt.id}
+        mobileTitle={(receipt) => `Recibo ${receipt.correlative_number}`}
+        mobileSubtitle={(receipt) =>
+          `${receipt.property_details?.villa || ''} ${receipt.owner_details?.name ? `· ${receipt.owner_details.name}` : ''}`
+        }
+        emptyState={
+          <EmptyState
+            title="No hay recibos registrados"
+            description="Los recibos generados aparecerán aquí."
+            action={
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+                Nuevo recibo
+              </Button>
+            }
+          />
+        }
+        renderActions={(receipt) => (
+          <ActionMenu
+            ariaLabel={`Acciones para el recibo ${receipt.correlative_number}`}
+            items={[
+              {
+                label: 'Descargar PDF',
+                icon: <DownloadIcon fontSize="small" />,
+                onClick: () => handleDownload(receipt),
+              },
+              {
+                label: 'Regenerar PDF',
+                icon: <RefreshIcon fontSize="small" />,
+                onClick: () => handleRegenerate(receipt),
+              },
+              { label: 'Editar', icon: <EditIcon fontSize="small" />, onClick: () => handleOpenDialog(receipt) },
+              isAdmin && {
+                label: 'Eliminar',
+                icon: <DeleteIcon fontSize="small" />,
+                color: 'error',
+                onClick: () => handleDelete(receipt),
+              },
+            ].filter(Boolean)}
+          />
+        )}
+        footer={footer}
+      />
 
-      {/* Dialog for Add/Edit Receipt */}
-      <Dialog
+      <FormDialog
         open={open}
         onClose={handleCloseDialog}
+        onSubmit={handleSubmit}
+        title={editingReceipt ? 'Editar recibo' : 'Nuevo recibo'}
+        subtitle={editingReceipt ? editingReceipt.correlative_number : 'Asocia un pago para emitir el recibo.'}
+        submitLabel={editingReceipt ? 'Guardar cambios' : 'Crear recibo'}
+        saving={saving}
+        error={formError}
         maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
       >
-        <DialogTitle>
-          {editingReceipt ? 'Editar Recibo' : 'Nuevo Recibo'}
-        </DialogTitle>
-        <form onSubmit={handleSubmit}>
-          <DialogContent>
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Pago</InputLabel>
-              <Select
-                value={formData.payment_id}
-                onChange={(e) => setFormData({ ...formData, payment_id: e.target.value })}
-                label="Pago"
-                required
-              >
-                {payments.map((payment) => (
-                  <MenuItem key={payment.id} value={payment.id}>
-                    Pago S/ {payment.amount.toFixed(2)} - {new Date(payment.due_date).toLocaleDateString('es-ES')}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              margin="dense"
-              label="Período de Cuota"
-              fullWidth
-              value={formData.fee_period}
-              onChange={(e) => setFormData({ ...formData, fee_period: e.target.value })}
-              placeholder="Ej: Enero 2024"
-            />
-            <TextField
-              margin="dense"
-              label="Notas"
-              fullWidth
-              multiline
-              rows={3}
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button type="submit" variant="contained" disabled={saving}>
-              {saving ? 'Guardando...' : editingReceipt ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <FormControl fullWidth>
+            <InputLabel>Pago</InputLabel>
+            <Select
+              value={formData.payment_id}
+              onChange={(event) => setFormData({ ...formData, payment_id: event.target.value })}
+              label="Pago"
+              required
+            >
+              {payments.map((payment) => (
+                <MenuItem key={payment.id} value={payment.id}>
+                  {formatCurrency(payment.amount)}
+                  {payment.property_row_letter ? ` · ${payment.property_row_letter}${payment.property_number}` : ''}
+                  {payment.fee_month ? ` · ${formatPeriod(payment.fee_month, payment.fee_year)}` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Periodo de cuota"
+            fullWidth
+            value={formData.fee_period}
+            onChange={(event) => setFormData({ ...formData, fee_period: event.target.value })}
+            placeholder="Ej. Enero 2026"
+          />
+          <TextField
+            label="Notas"
+            fullWidth
+            multiline
+            rows={3}
+            value={formData.notes}
+            onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
+          />
+        </Box>
+      </FormDialog>
     </PageContainer>
   );
 };

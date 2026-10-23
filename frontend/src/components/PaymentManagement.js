@@ -1,43 +1,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Chip,
-  IconButton,
-  Box,
   Alert,
+  Box,
+  Button,
+  Checkbox,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
   List,
   ListItem,
   ListItemText,
-  Checkbox,
+  MenuItem,
   Pagination,
-  FormControlLabel,
-  useMediaQuery,
-  useTheme,
+  Paper,
+  Select,
+  TextField,
+  Typography,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
+  CheckCircleOutline as ApproveIcon,
+  DeleteOutline as DeleteIcon,
   Download as DownloadIcon,
+  EditOutlined as EditIcon,
+  HighlightOffOutlined as RejectIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentsAPI, feesAPI, propertiesAPI, reportsAPI } from '../services/api';
@@ -45,18 +33,21 @@ import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
-import LoadingSkeleton from './common/LoadingSkeleton';
-import LoadingSpinner from './common/LoadingSpinner';
+import PageHeader from './common/PageHeader';
+import ResponsiveTable from './common/ResponsiveTable';
+import FilterBar from './common/FilterBar';
+import ActionMenu from './common/ActionMenu';
+import FormDialog from './common/FormDialog';
+import StatusChip from './common/StatusChip';
+import MoneyText from './common/MoneyText';
 import EmptyState from './common/EmptyState';
-import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
 import { MONTHS } from '../utils/months';
+import { formatCurrency, formatDate, formatPeriod, formatPropertyLabel, toInputDate } from '../utils/formatters';
 
 const PaymentManagement = () => {
   const { isAdmin } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -74,7 +65,6 @@ const PaymentManagement = () => {
   const [bulkResults, setBulkResults] = useState(null);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [selectedPayments, setSelectedPayments] = useState([]);
-  const [selectAll, setSelectAll] = useState(false);
   const [properties, setProperties] = useState([]);
   const [selectedVilla, setSelectedVilla] = useState('');
   const [selectedRow, setSelectedRow] = useState('');
@@ -168,7 +158,7 @@ const PaymentManagement = () => {
         fee_id: payment.fee_id,
         amount: payment.amount.toString(),
         notes: payment.notes || '',
-        payment_date: new Date(payment.payment_date).toISOString().split('T')[0],
+        payment_date: toInputDate(payment.payment_date),
       });
 
       try {
@@ -240,7 +230,7 @@ const PaymentManagement = () => {
         fee_id: '',
         amount: '',
         notes: '',
-        payment_date: new Date().toISOString().split('T')[0],
+        payment_date: toInputDate(new Date()),
       });
       setSelectedVilla('');
       setSelectedRow('');
@@ -474,14 +464,9 @@ const PaymentManagement = () => {
   };
 
   const handleSelectAll = () => {
-    if (selectAll) {
-      setSelectedPayments([]);
-      setSelectAll(false);
-    } else {
-      const pendingPayments = filteredPayments.filter(p => p.status === 'pending').map(p => p.id);
-      setSelectedPayments(pendingPayments);
-      setSelectAll(true);
-    }
+    const pendingIds = filteredPayments.filter((payment) => payment.status === 'pending').map((payment) => payment.id);
+    const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selectedPayments.includes(id));
+    setSelectedPayments(allSelected ? [] : pendingIds);
   };
 
   const applyFilters = () => {
@@ -493,7 +478,6 @@ const PaymentManagement = () => {
 
     fetchPayments(1, filters); // Reset to first page when filters change
     setSelectedPayments([]);
-    setSelectAll(false);
   };
 
   const clearFilters = () => {
@@ -503,7 +487,6 @@ const PaymentManagement = () => {
     setFilterProperty('');
     fetchPayments(1, {}); // Fetch without filters and reset to first page
     setSelectedPayments([]);
-    setSelectAll(false);
   };
 
   const handleExportExcel = async () => {
@@ -717,7 +700,6 @@ const PaymentManagement = () => {
 
       // Reset selection
       setSelectedPayments([]);
-      setSelectAll(false);
 
       // Show success message
       setError('');
@@ -763,557 +745,521 @@ const PaymentManagement = () => {
   };
 
 
+  const activeFilterChips = [
+    filterYear && {
+      key: 'year',
+      label: `Año ${filterYear}`,
+      onRemove: () => setFilterYear(''),
+    },
+    filterMonth && {
+      key: 'month',
+      label: MONTHS.find((month) => month.value.toString() === filterMonth.toString())?.label,
+      onRemove: () => setFilterMonth(''),
+    },
+    filterStatus && {
+      key: 'status',
+      label: filterStatus,
+      onRemove: () => setFilterStatus(''),
+    },
+    filterProperty && {
+      key: 'property',
+      label: (() => {
+        const property = properties.find((item) => item.id === filterProperty);
+        return property ? formatPropertyLabel(property) : 'Propiedad';
+      })(),
+      onRemove: () => setFilterProperty(''),
+    },
+  ].filter(Boolean);
+
+  const columns = [
+    {
+      key: 'fee',
+      label: 'Cuota',
+      mobile: false,
+      render: (payment) =>
+        payment.property_row_letter && payment.property_number && payment.fee_month
+          ? `${payment.property_row_letter}${payment.property_number} · ${formatPeriod(payment.fee_month, payment.fee_year)}`
+          : '—',
+    },
+    {
+      key: 'amount',
+      label: 'Monto',
+      render: (payment) => <MoneyText value={payment.amount} variant="body2" />,
+    },
+    {
+      key: 'payment_date',
+      label: 'Fecha de pago',
+      render: (payment) => formatDate(payment.payment_date),
+    },
+    {
+      key: 'status',
+      label: 'Estado',
+      render: (payment) => <StatusChip status={payment.status} />,
+    },
+    {
+      key: 'receipt',
+      label: 'Recibo',
+      render: (payment) =>
+        payment.status === 'approved' || payment.status === 'completed' ? (
+          <Button size="small" variant="text" startIcon={<DownloadIcon />} onClick={() => handleDownload(payment)}>
+            PDF
+          </Button>
+        ) : (
+          '—'
+        ),
+    },
+  ];
+
   return (
-    <PageContainer>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Gestión de Pagos de Cuotas Condominales
-        </Typography>
-        <Box>
-          {isAdmin && selectedPayments.length > 0 && (
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleBulkApprove}
-              sx={{ mr: 2 }}
-            >
-              Aprobar Seleccionados ({selectedPayments.length})
+    <PageContainer maxWidth="xl">
+      <PageHeader
+        eyebrow="Cobranzas"
+        title="Pagos"
+        subtitle="Registra pagos, revisa comprobantes y aprueba los pendientes."
+        actions={
+          <>
+            {isAdmin && (
+              <Button variant="outlined" startIcon={<CloudUploadIcon />} onClick={handleBulkUploadOpen}>
+                Importar
+              </Button>
+            )}
+            <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={handleExportExcel}>
+              Exportar
             </Button>
-          )}
-          {isAdmin && (
-            <Button
-              variant="outlined"
-              startIcon={<CloudUploadIcon />}
-              onClick={handleBulkUploadOpen}
-              sx={{ mr: 2 }}
-            >
-              Subida Masiva
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+              Nuevo pago
             </Button>
-          )}
-          <Button
-            variant="outlined"
-            startIcon={<FileDownloadIcon />}
-            onClick={handleExportExcel}
-            sx={{ mr: 2 }}
-          >
-            Exportar Excel
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nuevo Pago
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Filters */}
-      <Paper sx={{ p: 3, mb: 2 }}>
-        <Typography variant="h6" component="h2" gutterBottom>
-          Filtros
-        </Typography>
-        <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
-          <FormControl sx={{ minWidth: 120 }}>
-            <InputLabel>Año</InputLabel>
-            <Select
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-              label="Año"
-            >
-              <MenuItem value="">
-                <em>Todos</em>
-              </MenuItem>
-              {availableYears.map(year => (
-                <MenuItem key={year} value={year.toString()}>
-                  {year}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl sx={{ minWidth: 120 }}>
-            <InputLabel>Mes</InputLabel>
-            <Select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              label="Mes"
-            >
-              <MenuItem value="">
-                <em>Todos</em>
-              </MenuItem>
-              {MONTHS.map(month => (
-                <MenuItem key={month.value} value={month.value.toString()}>
-                  {month.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl sx={{ minWidth: 120 }}>
-            <InputLabel>Estado</InputLabel>
-            <Select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              label="Estado"
-            >
-              <MenuItem value="">
-                <em>Todos</em>
-              </MenuItem>
-              <MenuItem value="pending">Pendiente</MenuItem>
-              <MenuItem value="approved">Aprobado</MenuItem>
-              <MenuItem value="completed">Completado</MenuItem>
-              <MenuItem value="partially_paid">Pago Parcial</MenuItem>
-              <MenuItem value="rejected">Rechazado</MenuItem>
-              <MenuItem value="failed">Fallido</MenuItem>
-              <MenuItem value="cancelled">Cancelado</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel>Propiedad</InputLabel>
-            <Select
-              value={filterProperty}
-              onChange={(e) => setFilterProperty(e.target.value)}
-              label="Propiedad"
-            >
-              <MenuItem value="">
-                <em>Todas las Propiedades</em>
-              </MenuItem>
-              {properties.map((property) => (
-                <MenuItem key={property.id} value={property.id}>
-                  {property.villa} - {property.row_letter}{property.number} ({property.owner_name})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <Button variant="outlined" onClick={clearFilters}>
-            Limpiar
-          </Button>
-        </Box>
-      </Paper>
+          </>
+        }
+      />
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2.5 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => fetchPayments(currentPage)}>
+              Reintentar
+            </Button>
+          }
+        >
           {error}
         </Alert>
       )}
 
-      <Paper>
-        {/* Pagination Info */}
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="body2" color="textSecondary">
-            Mostrando {filteredPayments.length > 0 ? ((currentPage - 1) * pageSize) + 1 : 0} - {Math.min(currentPage * pageSize, totalCount)} de {totalCount} pagos
+      {isAdmin && selectedPayments.length > 0 && (
+        <Paper
+          sx={{
+            p: 1.5,
+            pl: 2.5,
+            mb: 2.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            flexWrap: 'wrap',
+            borderColor: 'success.main',
+            bgcolor: (theme) => (theme.palette.mode === 'light' ? 'rgba(94, 125, 69, 0.08)' : 'rgba(157, 178, 132, 0.12)'),
+          }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+            {selectedPayments.length} {selectedPayments.length === 1 ? 'pago seleccionado' : 'pagos seleccionados'}
           </Typography>
-        </Box>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell padding="checkbox">
-                  {isAdmin && filteredPayments.some(p => p.status === 'pending') && (
-                    <Checkbox
-                      checked={selectAll}
-                      onChange={handleSelectAll}
-                      inputProps={{ 'aria-label': 'Seleccionar todos los pagos pendientes' }}
-                      indeterminate={selectedPayments.length > 0 && selectedPayments.length < filteredPayments.filter(p => p.status === 'pending').length}
-                    />
-                  )}
-                </TableCell>
-                <TableCell>Cuota</TableCell>
-                <TableCell>Monto</TableCell>
-                <TableCell>Fecha de Pago</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Recibo</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <LoadingSkeleton type="table" rows={5} columns={7} />
-              ) : filteredPayments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <EmptyState
-                      title="No hay pagos registrados"
-                      description="Registra un pago o ajusta los filtros."
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredPayments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell padding="checkbox">
-                      {isAdmin && payment.status === 'pending' && (
-                        <Checkbox
-                          checked={selectedPayments.includes(payment.id)}
-                          onChange={() => handleSelectPayment(payment.id)}
-                          inputProps={{ 'aria-label': 'Seleccionar pago' }}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {payment.property_row_letter && payment.property_number && payment.fee_month && payment.fee_year
-                        ? `${payment.property_row_letter}${payment.property_number} - ${payment.fee_month}/${payment.fee_year}`
-                        : 'N/A'}
-                    </TableCell>
-                    <TableCell>S/ {payment.amount.toFixed(2)}</TableCell>
-                    <TableCell>
-                      {new Date(payment.payment_date).toLocaleDateString('es-ES')}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getStatusLabel(payment.status)}
-                        color={getStatusColor(payment.status)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {(payment.status === 'approved' || payment.status === 'completed') ? (
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          onClick={() => handleDownload(payment)}
-                          aria-label="Descargar recibo PDF"
-                          title="Descargar Recibo PDF"
-                        >
-                          <DownloadIcon fontSize="small" />
-                        </IconButton>
-                      ) : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleOpenDialog(payment)}
-                        aria-label="Editar pago"
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      {isAdmin && payment.status === 'pending' && (
-                        <>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="success"
-                            onClick={() => handleApprove(payment)}
-                            sx={{ ml: 1 }}
-                          >
-                            Aprobar
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="error"
-                            onClick={() => handleReject(payment)}
-                            sx={{ ml: 1 }}
-                          >
-                            Rechazar
-                          </Button>
-                        </>
-                      )}
-                      {isAdmin && (
-                        <IconButton
-                          color="error"
-                          onClick={() => handleDelete(payment)}
-                          aria-label="Eliminar pago"
-                          sx={{ ml: 1 }}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <Box display="flex" justifyContent="center" mt={2}>
-          <Pagination
-            count={totalPages}
-            page={currentPage}
-            onChange={(event, page) => handlePageChange(page)}
-            color="primary"
-            size="large"
-          />
-        </Box>
+          <Button size="small" color="inherit" onClick={() => setSelectedPayments([])}>
+            Cancelar
+          </Button>
+          <Button variant="contained" color="success" size="small" startIcon={<ApproveIcon />} onClick={handleBulkApprove}>
+            Aprobar seleccionados
+          </Button>
+        </Paper>
       )}
 
-      {/* Dialog for Add/Edit Payment */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
-        <DialogTitle>
-          {editingPayment ? 'Editar Pago' : 'Nuevo Pago'}
-        </DialogTitle>
-        <form onSubmit={handleSubmit}>
-          <DialogContent>
-            <Box display="flex" gap={2} sx={{ mb: 2 }}>
-              <FormControl sx={{ flex: 1 }}>
-                <InputLabel>Villa</InputLabel>
-                <Select
-                  value={selectedVilla}
-                  onChange={(e) => handleVillaChange(e.target.value)}
-                  label="Villa"
-                  required
-                >
-                  <MenuItem value="">
-                    <em>Seleccionar Villa</em>
-                  </MenuItem>
-                  {[...new Set(properties.map(p => p.villa))].sort().map((villa) => (
-                    <MenuItem key={villa} value={villa}>
-                      {villa}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+      <FilterBar chips={activeFilterChips} onClear={clearFilters}>
+        <FormControl fullWidth>
+          <InputLabel>Año</InputLabel>
+          <Select value={filterYear} onChange={(event) => setFilterYear(event.target.value)} label="Año">
+            <MenuItem value="">
+              <em>Todos</em>
+            </MenuItem>
+            {availableYears.map((year) => (
+              <MenuItem key={year} value={year.toString()}>
+                {year}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl fullWidth>
+          <InputLabel>Mes</InputLabel>
+          <Select value={filterMonth} onChange={(event) => setFilterMonth(event.target.value)} label="Mes">
+            <MenuItem value="">
+              <em>Todos</em>
+            </MenuItem>
+            {MONTHS.map((month) => (
+              <MenuItem key={month.value} value={month.value.toString()}>
+                {month.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl fullWidth>
+          <InputLabel>Estado</InputLabel>
+          <Select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} label="Estado">
+            <MenuItem value="">
+              <em>Todos</em>
+            </MenuItem>
+            <MenuItem value="pending">Pendiente</MenuItem>
+            <MenuItem value="approved">Aprobado</MenuItem>
+            <MenuItem value="completed">Completado</MenuItem>
+            <MenuItem value="partially_paid">Pago parcial</MenuItem>
+            <MenuItem value="rejected">Rechazado</MenuItem>
+            <MenuItem value="failed">Fallido</MenuItem>
+            <MenuItem value="cancelled">Cancelado</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl fullWidth>
+          <InputLabel>Propiedad</InputLabel>
+          <Select
+            value={filterProperty}
+            onChange={(event) => setFilterProperty(event.target.value)}
+            label="Propiedad"
+          >
+            <MenuItem value="">
+              <em>Todas</em>
+            </MenuItem>
+            {properties.map((property) => (
+              <MenuItem key={property.id} value={property.id}>
+                {formatPropertyLabel(property)} · {property.owner_name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </FilterBar>
 
-              <FormControl sx={{ flex: 1 }} disabled={!selectedVilla}>
-                <InputLabel>Fila</InputLabel>
-                <Select
-                  value={selectedRow}
-                  onChange={(e) => handleRowChange(e.target.value)}
-                  label="Fila"
-                  required
-                >
-                  <MenuItem value="">
-                    <em>Seleccionar Fila</em>
-                  </MenuItem>
-                  {availableRows.map((row) => (
-                    <MenuItem key={row} value={row}>
-                      {row}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl sx={{ flex: 1 }} disabled={!selectedRow}>
-                <InputLabel>Casa</InputLabel>
-                <Select
-                  value={selectedHouse}
-                  onChange={(e) => handleHouseChange(e.target.value)}
-                  label="Casa"
-                  required
-                >
-                  <MenuItem value="">
-                    <em>Seleccionar Casa</em>
-                  </MenuItem>
-                  {availableHouses.map((house) => (
-                    <MenuItem key={house.id} value={house.id}>
-                      {house.number}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-
-            {availableFees.length > 0 && (
-              <FormControl sx={{ mt: 2 }} fullWidth>
-                <InputLabel>Seleccionar Cuota (Pendiente o Parcial)</InputLabel>
-                <Select
-                  value={selectedFeeId}
-                  onChange={(e) => handleFeeChange(e.target.value)}
-                  label="Seleccionar Cuota (Pendiente o Parcial)"
-                  required
-                >
-                  <MenuItem value="">
-                    <em>Seleccionar Cuota</em>
-                  </MenuItem>
-                  {availableFees.map((fee) => (
-                    <MenuItem key={fee.id} value={fee.id}>
-                      {fee.status === 'partially_paid'
-                        ? `Cuota ${fee.month}/${fee.year} - Pagado: S/ ${fee.paid_amount.toFixed(2)} - Restante: S/ ${fee.remaining_amount.toFixed(2)} - Vence: ${new Date(fee.due_date).toLocaleDateString('es-ES')}`
-                        : `Cuota ${fee.month}/${fee.year} - S/ ${fee.amount.toFixed(2)} - Vence: ${new Date(fee.due_date).toLocaleDateString('es-ES')}`
-                      }
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+      <ResponsiveTable
+        columns={columns}
+        rows={filteredPayments}
+        loading={loading}
+        getRowId={(payment) => payment.id}
+        selectable={isAdmin}
+        selectedIds={selectedPayments}
+        onToggleSelect={handleSelectPayment}
+        onToggleSelectAll={handleSelectAll}
+        isSelectable={(payment) => payment.status === 'pending'}
+        mobileTitle={(payment) =>
+          payment.property_row_letter && payment.property_number && payment.fee_month
+            ? `${payment.property_row_letter}${payment.property_number} · ${formatPeriod(payment.fee_month, payment.fee_year)}`
+            : 'Pago'
+        }
+        mobileSubtitle={(payment) => `${formatCurrency(payment.amount)} · ${formatDate(payment.payment_date)}`}
+        emptyState={
+          <EmptyState
+            title="No hay pagos registrados"
+            description="Registra un pago o ajusta los filtros."
+            action={
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+                Nuevo pago
+              </Button>
+            }
+          />
+        }
+        renderActions={(payment) => (
+          <ActionMenu
+            ariaLabel={`Acciones para el pago de ${formatCurrency(payment.amount)}`}
+            items={[
+              (payment.status === 'approved' || payment.status === 'completed') && {
+                label: 'Descargar recibo',
+                icon: <DownloadIcon fontSize="small" />,
+                onClick: () => handleDownload(payment),
+              },
+              { label: 'Editar', icon: <EditIcon fontSize="small" />, onClick: () => handleOpenDialog(payment) },
+              isAdmin &&
+                payment.status === 'pending' && {
+                  label: 'Aprobar',
+                  icon: <ApproveIcon fontSize="small" />,
+                  color: 'success',
+                  onClick: () => handleApprove(payment),
+                },
+              isAdmin &&
+                payment.status === 'pending' && {
+                  label: 'Rechazar',
+                  icon: <RejectIcon fontSize="small" />,
+                  color: 'error',
+                  onClick: () => handleReject(payment),
+                },
+              isAdmin && { divider: true },
+              isAdmin && {
+                label: 'Eliminar',
+                icon: <DeleteIcon fontSize="small" />,
+                color: 'error',
+                onClick: () => handleDelete(payment),
+              },
+            ].filter(Boolean)}
+          />
+        )}
+        header={
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Mostrando {filteredPayments.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}–
+              {Math.min(currentPage * pageSize, totalCount)} de {totalCount} pagos
+            </Typography>
+            {isAdmin && selectedPayments.length > 0 && (
+              <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                {selectedPayments.length} seleccionados
+              </Typography>
             )}
-
-            {availableFees.length === 0 && selectedHouse && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                No hay cuotas pendientes o parcialmente pagadas para esta propiedad.
-              </Alert>
-            )}
-
-            {selectedFeeInfo && (
-              <>
-                <TextField
-                  margin="dense"
-                  label="Propietario"
-                  fullWidth
-                  value={selectedFeeInfo.ownerName}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                />
-                <Box display="flex" gap={2} sx={{ mb: 2 }}>
-                  <TextField
-                    sx={{ flex: 1 }}
-                    label="Período"
-                    value={`${selectedFeeInfo.month}/${selectedFeeInfo.year}`}
-                    InputProps={{
-                      readOnly: true,
-                    }}
-                  />
-                  <TextField
-                    sx={{ flex: 1 }}
-
-                    label="Fecha de Vencimiento"
-                    value={new Date(selectedFeeInfo.dueDate).toLocaleDateString('es-ES')}
-                    InputProps={{
-                      readOnly: true,
-                    }}
-                  />
-                  {selectedFeeInfo.status === 'partially_paid' && (
-                    <>
-                      <TextField
-                        sx={{ flex: 1 }}
-                        label="Monto Total"
-                        value={`S/ ${selectedFeeInfo.totalAmount.toFixed(2)}`}
-                        InputProps={{
-                          readOnly: true,
-                        }}
-                      />
-                      <TextField
-                        sx={{ flex: 1 }}
-                        label="Monto Pagado"
-                        value={`S/ ${selectedFeeInfo.paidAmount.toFixed(2)}`}
-                        InputProps={{
-                          readOnly: true,
-                        }}
-                      />
-                    </>
-                  )}
-                  <TextField
-                    sx={{ flex: selectedFeeInfo.status === 'partially_paid' ? 1 : 2 }}
-                    label={selectedFeeInfo.status === 'partially_paid' ? "Monto Restante (S/)" : "Monto (S/)"}
-                    type="number"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    inputProps={{ min: 0, step: 0.01 }}
-                    helperText={
-                      editingPayment
-                        ? "Editar monto del pago"
-                        : selectedFeeInfo.status === 'partially_paid'
-                          ? `Pago restante (máx. S/ ${selectedFeeAmount.toFixed(2)})`
-                          : `Pagos parciales permitidos (máx. S/ ${selectedFeeAmount.toFixed(2)})`
-                    }
-                    required
-                  />
-                </Box>
-              </>
-            )}
-            <TextField
-              margin="dense"
-              label="Fecha de Pago"
-              type="date"
-              fullWidth
-              value={formData.payment_date}
-              onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-              slotProps={{ inputLabel: { shrink: true } }}
-              required
-            />
-            <TextField
-              margin="dense"
-              label="Notas"
-              fullWidth
-              multiline
-              rows={3}
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            />
-            {isAdmin && !editingPayment && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={approveDirectly}
-                    onChange={(e) => setApproveDirectly(e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label="Marcar como Aprobado directamente"
+          </Box>
+        }
+        footer={
+          totalPages > 1 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Pagination
+                count={totalPages}
+                page={currentPage}
+                onChange={(event, page) => handlePageChange(page)}
+                color="primary"
               />
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog} disabled={saving}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={saving}>
-              {saving ? 'Guardando...' : editingPayment ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+            </Box>
+          ) : null
+        }
+      />
 
-      {/* Bulk Upload Dialog */}
-      <Dialog open={bulkUploadOpen} onClose={handleBulkUploadClose} maxWidth="md" fullWidth fullScreen={isMobile}>
-        <DialogTitle>Subida Masiva de Pagos</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            Sube un archivo Excel con los pagos. El formato debe incluir las columnas: Villa, Fila, Número, Año, Mes, Monto, Fecha de Pago, Notas.
-          </Typography>
+      <FormDialog
+        open={open}
+        onClose={handleCloseDialog}
+        onSubmit={handleSubmit}
+        title={editingPayment ? 'Editar pago' : 'Nuevo pago'}
+        subtitle="Selecciona la propiedad, la cuota y el monto del pago."
+        submitLabel={editingPayment ? 'Guardar cambios' : 'Registrar pago'}
+        saving={saving}
+        maxWidth="md"
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Villa</InputLabel>
+              <Select
+                value={selectedVilla}
+                onChange={(event) => handleVillaChange(event.target.value)}
+                label="Villa"
+                required
+              >
+                <MenuItem value="">
+                  <em>Seleccionar villa</em>
+                </MenuItem>
+                {[...new Set(properties.map((property) => property.villa))].sort().map((villa) => (
+                  <MenuItem key={villa} value={villa}>
+                    {villa}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth disabled={!selectedVilla}>
+              <InputLabel>Fila</InputLabel>
+              <Select
+                value={selectedRow}
+                onChange={(event) => handleRowChange(event.target.value)}
+                label="Fila"
+                required
+              >
+                <MenuItem value="">
+                  <em>Seleccionar fila</em>
+                </MenuItem>
+                {availableRows.map((row) => (
+                  <MenuItem key={row} value={row}>
+                    {row}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth disabled={!selectedRow}>
+              <InputLabel>Casa</InputLabel>
+              <Select
+                value={selectedHouse}
+                onChange={(event) => handleHouseChange(event.target.value)}
+                label="Casa"
+                required
+              >
+                <MenuItem value="">
+                  <em>Seleccionar casa</em>
+                </MenuItem>
+                {availableHouses.map((house) => (
+                  <MenuItem key={house.id} value={house.id}>
+                    {house.number}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
 
+          {availableFees.length > 0 && (
+            <FormControl fullWidth>
+              <InputLabel>Cuota pendiente o parcial</InputLabel>
+              <Select
+                value={selectedFeeId}
+                onChange={(event) => handleFeeChange(event.target.value)}
+                label="Cuota pendiente o parcial"
+                required
+              >
+                <MenuItem value="">
+                  <em>Seleccionar cuota</em>
+                </MenuItem>
+                {availableFees.map((fee) => (
+                  <MenuItem key={fee.id} value={fee.id}>
+                    {fee.status === 'partially_paid'
+                      ? `${formatPeriod(fee.month, fee.year)} · Pagado ${formatCurrency(fee.paid_amount)} · Resta ${formatCurrency(fee.remaining_amount)}`
+                      : `${formatPeriod(fee.month, fee.year)} · ${formatCurrency(fee.amount)}`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          {availableFees.length === 0 && selectedHouse && (
+            <Alert severity="info">
+              No hay cuotas pendientes o parcialmente pagadas para esta propiedad.
+            </Alert>
+          )}
+
+          {selectedFeeId && (
+            <>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <TextField label="Propietario" fullWidth value={selectedFeeInfo.ownerName} InputProps={{ readOnly: true }} />
+                <TextField
+                  label="Fecha de vencimiento"
+                  fullWidth
+                  value={selectedFeeInfo.dueDate ? formatDate(selectedFeeInfo.dueDate) : '—'}
+                  InputProps={{ readOnly: true }}
+                />
+                {selectedFeeInfo.status === 'partially_paid' && (
+                  <>
+                    <TextField
+                      label="Monto total"
+                      fullWidth
+                      value={formatCurrency(selectedFeeInfo.totalAmount)}
+                      InputProps={{ readOnly: true }}
+                    />
+                    <TextField
+                      label="Monto pagado"
+                      fullWidth
+                      value={formatCurrency(selectedFeeInfo.paidAmount)}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </>
+                )}
+              </Box>
+              <TextField
+                label={selectedFeeInfo.status === 'partially_paid' ? 'Monto restante (S/)' : 'Monto (S/)'}
+                type="number"
+                fullWidth
+                value={formData.amount}
+                onChange={(event) => setFormData({ ...formData, amount: event.target.value })}
+                inputProps={{ min: 0, step: 0.01 }}
+                helperText={
+                  editingPayment
+                    ? 'Edita el monto del pago'
+                    : `Máximo ${formatCurrency(selectedFeeAmount)}`
+                }
+                required
+              />
+            </>
+          )}
+
+          <TextField
+            label="Fecha de pago"
+            type="date"
+            fullWidth
+            value={formData.payment_date}
+            onChange={(event) => setFormData({ ...formData, payment_date: event.target.value })}
+            slotProps={{ inputLabel: { shrink: true } }}
+            required
+          />
+          <TextField
+            label="Notas"
+            fullWidth
+            multiline
+            rows={3}
+            value={formData.notes}
+            onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
+          />
+          {isAdmin && !editingPayment && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={approveDirectly}
+                  onChange={(event) => setApproveDirectly(event.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Marcar como aprobado directamente"
+            />
+          )}
+        </Box>
+      </FormDialog>
+
+      <FormDialog
+        open={bulkUploadOpen}
+        onClose={handleBulkUploadClose}
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleBulkUpload();
+        }}
+        title="Importar pagos desde Excel"
+        subtitle="El archivo debe incluir Villa, Fila, Número, Año, Mes, Monto, Fecha de pago y Notas."
+        submitLabel="Subir archivo"
+        savingLabel="Subiendo…"
+        saving={bulkUploading}
+        submitDisabled={!bulkFile}
+        maxWidth="md"
+      >
+        <Box sx={{ pt: 1 }}>
           <Button variant="outlined" component="label" startIcon={<CloudUploadIcon />}>
             Seleccionar archivo
-            <input
-              type="file"
-              hidden
-              accept=".xlsx,.xls"
-              onChange={handleBulkFileChange}
-            />
+            <input type="file" hidden accept=".xlsx,.xls" onChange={handleBulkFileChange} />
           </Button>
 
           {bulkFile && (
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              Archivo seleccionado: {bulkFile.name}
+            <Typography variant="body2" sx={{ mt: 2 }}>
+              Archivo seleccionado: <strong>{bulkFile.name}</strong>
             </Typography>
           )}
 
           {bulkResults && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" color="success.main">
-                Pagos exitosos: {bulkResults.successful_imports}
-              </Typography>
-              <Typography variant="h6" color="error.main">
-                Pagos fallidos: {bulkResults.failed_imports}
-              </Typography>
-
-              {bulkResults.errors && bulkResults.errors.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="h6">Errores:</Typography>
-                  <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
-                    {bulkResults.errors.map((error, index) => (
+            <Box sx={{ mt: 3 }}>
+              <Box sx={{ display: 'flex', gap: 3, mb: 2 }}>
+                <Box>
+                  <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                    Exitosos
+                  </Typography>
+                  <Typography variant="h5" sx={{ color: 'success.main' }}>
+                    {bulkResults.successful_imports}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                    Fallidos
+                  </Typography>
+                  <Typography variant="h5" sx={{ color: 'error.main' }}>
+                    {bulkResults.failed_imports}
+                  </Typography>
+                </Box>
+              </Box>
+              {bulkResults.errors?.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Errores
+                  </Typography>
+                  <List dense sx={{ maxHeight: 220, overflow: 'auto', bgcolor: 'action.hover', borderRadius: 2, py: 0.5 }}>
+                    {bulkResults.errors.map((item, index) => (
                       <ListItem key={index}>
-                        <ListItemText
-                          primary={`Fila ${error.row}: ${error.error}`}
-                        />
+                        <ListItemText primary={`Fila ${item.row}: ${item.error}`} primaryTypographyProps={{ variant: 'body2' }} />
                       </ListItem>
                     ))}
                   </List>
-                </Box>
+                </>
               )}
             </Box>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleBulkUploadClose}>Cerrar</Button>
-          <Button
-            onClick={handleBulkUpload}
-            variant="contained"
-            disabled={!bulkFile || bulkUploading}
-          >
-            {bulkUploading ? (
-              <LoadingSpinner buttonVariant size={20} message="Subiendo..." showMessage />
-            ) : (
-              'Subir Archivo'
-            )}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </Box>
+      </FormDialog>
     </PageContainer>
   );
 };

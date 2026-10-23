@@ -1,407 +1,567 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Grid,
-  Paper,
-  Typography,
+  Alert,
   Box,
   Button,
+  Divider,
+  Grid,
+  LinearProgress,
+  List,
+  ListItem,
+  Skeleton,
+  Typography,
+  alpha,
+  useTheme,
 } from '@mui/material';
 import {
-  People as PeopleIcon,
-  Home as HomeIcon,
-  Payment as PaymentIcon,
-  Receipt as ReceiptIcon,
-  MonetizationOn as FeeIcon,
-  Schedule as ScheduleIcon,
-  Assessment as ReportsIcon,
+  ArrowForward as ArrowForwardIcon,
+  AssessmentOutlined as ReportsIcon,
+  EventRepeatOutlined as ScheduleIcon,
+  HomeOutlined as HomeIcon,
+  MonetizationOnOutlined as FeeIcon,
+  PaymentsOutlined as PaymentIcon,
+  ReceiptLongOutlined as ReceiptIcon,
+  StorefrontOutlined as StoreIcon,
 } from '@mui/icons-material';
+import { BarChart } from '@mui/x-charts/BarChart';
+import { PieChart } from '@mui/x-charts/PieChart';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI } from '../services/api';
-import LoadingSpinner from './common/LoadingSpinner';
-import StatCard from './common/StatCard';
 import PageContainer from './common/PageContainer';
+import PageHeader from './common/PageHeader';
+import SectionCard from './common/SectionCard';
+import StatCard from './common/StatCard';
+import StatusChip from './common/StatusChip';
+import MoneyText from './common/MoneyText';
+import EmptyState from './common/EmptyState';
+import { formatCurrency, formatDate, formatLongDate, formatPeriod, formatMonth, formatNumber, formatPropertyLabel } from '../utils/formatters';
+
+const PIE_COLORS = ['#A9502F', '#3D7382', '#5E7D45', '#A8761F', '#6E5A43'];
 
 const Dashboard = () => {
   const { user, isAdmin, isOwner } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    properties: 0,
-    fees: 0,
-    payments: 0,
-    receipts: 0,
-    total_debt: 0,
-    pending_fees: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const theme = useTheme();
+  const [stats, setStats] = useState(null);
+  const [trends, setTrends] = useState([]);
+  const [recent, setRecent] = useState([]);
   const [ownerData, setOwnerData] = useState({
     debtSummary: null,
     propertyReport: null,
     expensesReport: null,
   });
-  const [ownerDataLoading, setOwnerDataLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [ownerLoading, setOwnerLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchStats();
-    if (isOwner) {
-      fetchOwnerData();
-    }
-  }, [isOwner]);
-
-  const fetchStats = async () => {
+  const fetchDashboard = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      const statsRes = await dashboardAPI.getStats();
-
-      setStats({
-        properties: statsRes.data.properties || 0,
-        fees: statsRes.data.fees || 0,
-        payments: statsRes.data.payments || 0,
-        receipts: statsRes.data.receipts || 0,
-        total_debt: statsRes.data.total_debt || 0,
-        pending_fees: statsRes.data.pending_fees || 0,
-        agreements: statsRes.data.agreements || 0,
-      });
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-      // Keep default values on error
+      const [statsRes, trendsRes, recentRes] = await Promise.all([
+        dashboardAPI.getStats(),
+        dashboardAPI.getTrends(6),
+        dashboardAPI.getRecentActivity(6),
+      ]);
+      setStats(statsRes.data);
+      setTrends(trendsRes.data.series || []);
+      setRecent(recentRes.data.activity || []);
+    } catch (err) {
+      console.error('Error fetching dashboard:', err);
+      setError('No pudimos cargar el resumen. Vuelve a intentarlo en unos segundos.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchOwnerData = async () => {
+  const fetchOwnerData = useCallback(async () => {
+    setOwnerLoading(true);
     try {
-      setOwnerDataLoading(true);
       const [debtRes, propertyRes, expensesRes] = await Promise.all([
         dashboardAPI.getOwnerDebtSummary(),
         dashboardAPI.getOwnerPropertyReport(),
         dashboardAPI.getOwnerExpensesReport(),
       ]);
-
       setOwnerData({
         debtSummary: debtRes.data,
         propertyReport: propertyRes.data,
         expensesReport: expensesRes.data,
       });
-    } catch (error) {
-      console.error('Error fetching owner data:', error);
+    } catch (err) {
+      console.error('Error fetching owner data:', err);
     } finally {
-      setOwnerDataLoading(false);
+      setOwnerLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchDashboard();
+    if (isOwner) fetchOwnerData();
+  }, [fetchDashboard, fetchOwnerData, isOwner]);
+
+  const firstName = user?.full_name?.trim().split(' ')[0] || 'vecino';
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Buenos días';
+    if (hour < 19) return 'Buenas tardes';
+    return 'Buenas noches';
+  }, []);
+
+  const chartLabels = trends.map((item) => `${formatMonth(item.month).slice(0, 3)} ${String(item.year).slice(2)}`);
+  const collectedSeries = trends.map((item) => item.collected);
+  const expensesSeries = trends.map((item) => item.expenses);
+
+  const expensePie = useMemo(() => {
+    const entries = Object.entries(ownerData.expensesReport?.expense_types || {});
+    return entries
+      .map(([label, data], index) => ({
+        id: label,
+        label,
+        value: Number(data.total_amount) || 0,
+        color: PIE_COLORS[index % PIE_COLORS.length],
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [ownerData.expensesReport]);
+
+  const properties = ownerData.propertyReport?.properties || [];
+  const debtByProperty = useMemo(() => {
+    const map = new Map();
+    (ownerData.debtSummary?.properties || []).forEach((entry) => {
+      map.set(entry.property.id, entry);
+    });
+    return map;
+  }, [ownerData.debtSummary]);
+
+  const quickActions = isAdmin
+    ? [
+        { label: 'Registrar pago', icon: PaymentIcon, path: '/payments' },
+        { label: 'Generar cuotas', icon: ScheduleIcon, path: '/fees' },
+        { label: 'Propiedades', icon: HomeIcon, path: '/properties' },
+        { label: 'Reportes', icon: ReportsIcon, path: '/reports' },
+      ]
+    : [
+        { label: 'Mis cuotas', icon: FeeIcon, path: '/fees' },
+        { label: 'Mis pagos', icon: PaymentIcon, path: '/payments' },
+        { label: 'Mis recibos', icon: ReceiptIcon, path: '/receipts' },
+        { label: 'Reportes', icon: ReportsIcon, path: '/reports' },
+      ];
+
+  if (!isAdmin && !isOwner) {
+    return (
+      <PageContainer>
+        <Alert severity="warning">No tienes un rol asignado para ver el dashboard.</Alert>
+      </PageContainer>
+    );
+  }
 
   return (
-    <PageContainer>
-      {/* Header */}
-      <Box mb={4}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Dashboard
-        </Typography>
-        <Typography variant="subtitle1" color="textSecondary">
-          Bienvenido de vuelta, {user?.full_name}
-        </Typography>
-      </Box>
-
-      {/* Stats Grid */}
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Propiedades"
-            value={stats.properties}
-            icon={<HomeIcon color="primary" fontSize="large" />}
-            color="primary.main"
-            loading={loading}
-            onClick={() => navigate('/properties')}
-          />
-        </Grid>
-        {isAdmin && (
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Cuotas"
-              value={stats.fees}
-              icon={<FeeIcon color="warning" fontSize="large" />}
-              color="warning.main"
-              loading={loading}
-              onClick={() => navigate('/fees')}
-            />
-          </Grid>
-        )}
-        {isOwner && (
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Deuda Pendiente"
-              value={`S/ ${stats.total_debt?.toFixed(2) || '0.00'}`}
-              icon={<FeeIcon color="error" fontSize="large" />}
-              color="error.main"
-              loading={loading}
-            />
-          </Grid>
-        )}
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Pagos"
-            value={stats.payments}
-            icon={<PaymentIcon color="secondary" fontSize="large" />}
-            color="secondary.main"
-            loading={loading}
-            onClick={() => navigate('/payments')}
-          />
-        </Grid>
-        {isAdmin && (
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Recibos"
-              value={stats.receipts}
-              icon={<ReceiptIcon color="success" fontSize="large" />}
-              color="success.main"
-              loading={loading}
-              onClick={() => navigate('/receipts')}
-            />
-          </Grid>
-        )}
-        
-      </Grid>
-
-      {/* Quick Actions */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" component="h2" gutterBottom>
-          Acciones Rápidas
-        </Typography>
-        <Grid container spacing={2}>
-          {isAdmin && (
-            <>
-              <Grid item xs={12} sm={6} md={3}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  startIcon={<PeopleIcon />}
-                  sx={{ height: 80, flexDirection: 'column' }}
-                  onClick={() => navigate('/users')}
-                >
-                  Gestionar Usuarios
-                </Button>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  startIcon={<HomeIcon />}
-                  sx={{ height: 80, flexDirection: 'column' }}
-                  onClick={() => navigate('/properties')}
-                >
-                  Gestionar Propiedades
-                </Button>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Button
-                  variant="contained"
-                  color="info"
-                  fullWidth
-                  startIcon={<ScheduleIcon />}
-                  sx={{ height: 80, flexDirection: 'column' }}
-                  onClick={() => navigate('/fee-schedules')}
-                >
-                  Planes de Cuotas
-                </Button>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Button
-                  variant="contained"
-                  color="warning"
-                  fullWidth
-                  startIcon={<FeeIcon />}
-                  sx={{ height: 80, flexDirection: 'column' }}
-                  onClick={() => navigate('/fees')}
-                >
-                  Gestionar Cuotas
-                </Button>
-              </Grid>
-            </>
-          )}
-          {isOwner && (
-            <>
-              <Grid item xs={12} sm={6} md={3}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  startIcon={<HomeIcon />}
-                  sx={{ height: 80, flexDirection: 'column' }}
-                  onClick={() => navigate('/properties')}
-                >
-                  Mis Propiedades
-                </Button>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Button
-                  variant="contained"
-                  color="warning"
-                  fullWidth
-                  startIcon={<FeeIcon />}
-                  sx={{ height: 80, flexDirection: 'column' }}
-                  onClick={() => navigate('/fees')}
-                >
-                  Mis Cuotas
-                </Button>
-              </Grid>
-            </>
-          )}
-          <Grid item xs={12} sm={6} md={3}>
-            <Button
-              variant="contained"
-              color="secondary"
-              fullWidth
-              startIcon={<PaymentIcon />}
-              sx={{ height: 80, flexDirection: 'column' }}
-              onClick={() => navigate('/payments')}
-            >
-              {isOwner ? 'Mis Pagos' : 'Ver Pagos'}
-            </Button>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Button
-              variant="contained"
-              color="success"
-              fullWidth
-              startIcon={<ReceiptIcon />}
-              sx={{ height: 80, flexDirection: 'column' }}
-              onClick={() => navigate('/receipts')}
-            >
-              {isOwner ? 'Mis Recibos' : 'Ver Recibos'}
-            </Button>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Button
-              variant="contained"
-              color="info"
-              fullWidth
-              startIcon={<ReportsIcon />}
-              sx={{ height: 80, flexDirection: 'column' }}
-              onClick={() => navigate('/reports')}
-            >
+    <PageContainer maxWidth="xl">
+      <PageHeader
+        eyebrow={greeting}
+        title={`Hola, ${firstName}`}
+        subtitle={`Este es el estado de tu comunidad al ${formatLongDate(new Date())}.`}
+        actions={
+          <>
+            <Button variant="outlined" startIcon={<ReportsIcon />} onClick={() => navigate('/reports')}>
               Reportes
             </Button>
+            <Button
+              variant="contained"
+              startIcon={isAdmin ? <PaymentIcon /> : <FeeIcon />}
+              onClick={() => navigate(isAdmin ? '/payments' : '/fees')}
+            >
+              {isAdmin ? 'Registrar pago' : 'Ver mis cuotas'}
+            </Button>
+          </>
+        }
+      />
+
+      {error && (
+        <Alert
+          severity="error"
+          sx={{ mb: 2.5 }}
+          action={
+            <Button color="inherit" size="small" onClick={fetchDashboard}>
+              Reintentar
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      )}
+
+      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        {(isAdmin
+          ? [
+              {
+                title: 'Recaudado este mes',
+                value: formatCurrency(stats?.collected_this_month),
+                icon: <PaymentIcon />,
+                color: 'primary',
+                helper: formatPeriod(stats?.period?.month, stats?.period?.year),
+              },
+              {
+                title: 'Pendiente de cobro',
+                value: formatCurrency(stats?.total_debt),
+                icon: <FeeIcon />,
+                color: 'warning',
+                helper: `${stats?.pending_fees ?? 0} cuotas por cobrar`,
+              },
+              {
+                title: 'Tasa de recaudación',
+                value: `${(stats?.collection_rate ?? 0).toFixed(1)}%`,
+                icon: <ReportsIcon />,
+                color: 'success',
+                helper: 'del total emitido',
+              },
+              {
+                title: 'Propiedades',
+                value: stats?.properties ?? 0,
+                icon: <HomeIcon />,
+                color: 'info',
+                helper: 'en administración',
+              },
+            ]
+          : [
+              {
+                title: 'Deuda pendiente',
+                value: formatCurrency(stats?.total_debt),
+                icon: <FeeIcon />,
+                color: 'error',
+                helper: `${stats?.pending_fees ?? 0} cuotas pendientes`,
+              },
+              {
+                title: 'Pagado este mes',
+                value: formatCurrency(stats?.collected_this_month),
+                icon: <PaymentIcon />,
+                color: 'success',
+                helper: formatPeriod(stats?.period?.month, stats?.period?.year),
+              },
+              {
+                title: 'Tasa de pago',
+                value: `${(stats?.collection_rate ?? 0).toFixed(1)}%`,
+                icon: <ReportsIcon />,
+                color: 'info',
+                helper: 'de tus cuotas emitidas',
+              },
+              {
+                title: 'Propiedades',
+                value: stats?.properties ?? 0,
+                icon: <HomeIcon />,
+                color: 'secondary',
+                helper: 'a tu nombre',
+              },
+            ]
+        ).map((item) => (
+          <Grid key={item.title} size={{ xs: 6, md: 3 }}>
+            <StatCard {...item} loading={loading} />
+          </Grid>
+        ))}
+      </Grid>
+
+      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <SectionCard
+            title="Ingresos y gastos"
+            subtitle="Últimos 6 meses"
+            action={
+              <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/reports')}>
+                Ver reportes
+              </Button>
+            }
+            contentSx={{ px: { xs: 1, sm: 2 }, py: 2 }}
+          >
+            {loading ? (
+              <Skeleton variant="rounded" height={300} />
+            ) : trends.length === 0 ? (
+              <EmptyState
+                title="Todavía no hay movimientos"
+                description="Cuando se registren pagos y gastos verás la evolución mensual aquí."
+              />
+            ) : (
+              <BarChart
+                height={300}
+                series={[
+                  { data: collectedSeries, label: 'Recaudado', color: theme.palette.primary.main },
+                  { data: expensesSeries, label: 'Gastos', color: alpha(theme.palette.info.main, 0.85) },
+                ]}
+                xAxis={[{ scaleType: 'band', data: chartLabels, tickLabelStyle: { fontSize: 11 } }]}
+                yAxis={[
+                  {
+                    valueFormatter: (value) =>
+                      value >= 1000 ? `S/ ${formatNumber(value / 1000)}k` : `S/ ${formatNumber(value)}`,
+                    tickLabelStyle: { fontSize: 11 },
+                  },
+                ]}
+                grid={{ horizontal: true }}
+                margin={{ left: 68, right: 16, top: 24, bottom: 36 }}
+                borderRadius={6}
+                slotProps={{ legend: { direction: 'row', position: { vertical: 'top', horizontal: 'right' } } }}
+              />
+            )}
+          </SectionCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <SectionCard title="Estado de cobranza" subtitle="Acumulado del condominio">
+            {loading ? (
+              <Skeleton variant="rounded" height={240} />
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+                  <Typography variant="h2" sx={{ lineHeight: 1 }}>
+                    {(stats?.collection_rate ?? 0).toFixed(0)}%
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', pb: 0.5 }}>
+                    cobrado
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(stats?.collection_rate ?? 0, 100)}
+                  sx={{ height: 10, borderRadius: 6, bgcolor: 'action.hover' }}
+                />
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Pendiente de cobro
+                    </Typography>
+                    <MoneyText value={stats?.total_debt} variant="body2" />
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Cuotas por cobrar
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {stats?.pending_fees ?? 0}
+                    </Typography>
+                  </Box>
+                  <Divider />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Gastos del mes
+                    </Typography>
+                    <MoneyText value={stats?.expenses_this_month} variant="body2" />
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </SectionCard>
+        </Grid>
+      </Grid>
+
+      {isOwner && (
+        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+          <Grid size={{ xs: 12, lg: 7 }}>
+            <SectionCard
+              title="Tus propiedades"
+              subtitle="Avance de pago y próxima cuota"
+              action={
+                isAdmin && (
+                  <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/properties')}>
+                    Ver todas
+                  </Button>
+                )
+              }
+              contentSx={{ py: 1 }}
+            >
+              {ownerLoading ? (
+                <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Skeleton variant="rounded" height={76} />
+                  <Skeleton variant="rounded" height={76} />
+                </Box>
+              ) : properties.length === 0 ? (
+                <EmptyState
+                  title="Sin propiedades asignadas"
+                  description="Cuando el administrador registre tu propiedad, aparecerá aquí."
+                />
+              ) : (
+                properties.map((entry) => {
+                  const debt = debtByProperty.get(entry.property.id);
+                  const nextFee = [...(debt?.fees || [])].sort(
+                    (a, b) => new Date(a.due_date) - new Date(b.due_date)
+                  )[0];
+                  const total = entry.fees_summary.total_amount || 0;
+                  const paid = entry.fees_summary.paid_amount || 0;
+                  const progress = total > 0 ? Math.min((paid / total) * 100, 100) : 0;
+
+                  return (
+                    <Box key={entry.property.id} sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'flex-start' }}>
+                        <Box>
+                          <Typography variant="subtitle2">
+                            {formatPropertyLabel(entry.property)}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {entry.fees_summary.pending_fees} cuotas pendientes
+                            {nextFee ? ` · vence ${formatDate(nextFee.due_date)}` : ''}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                            Pendiente
+                          </Typography>
+                          <MoneyText value={entry.fees_summary.pending_amount} variant="body2" sx={{ color: 'error.main' }} />
+                        </Box>
+                      </Box>
+                      <Box sx={{ mt: 1.5 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={progress}
+                          sx={{ height: 6, borderRadius: 4, bgcolor: 'action.hover' }}
+                        />
+                        <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
+                          {formatCurrency(paid)} pagado de {formatCurrency(total)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })
+              )}
+            </SectionCard>
+          </Grid>
+
+          <Grid size={{ xs: 12, lg: 5 }}>
+            <SectionCard title="Gastos comunitarios" subtitle="Distribución por categoría">
+              {ownerLoading ? (
+                <Skeleton variant="rounded" height={260} />
+              ) : expensePie.length === 0 ? (
+                <EmptyState
+                  title="Sin gastos registrados"
+                  description="Los gastos de la comunidad se mostrarán aquí."
+                  icon={<StoreIcon />}
+                />
+              ) : (
+                <>
+                  <PieChart
+                    height={200}
+                    series={[
+                      {
+                        data: expensePie,
+                        innerRadius: 52,
+                        paddingAngle: 2,
+                        cornerRadius: 4,
+                        highlightScope: { highlight: 'item', fade: 'global' },
+                      },
+                    ]}
+                    slotProps={{ legend: { direction: 'column', position: { vertical: 'middle', horizontal: 'right' } } }}
+                    margin={{ right: 120 }}
+                  />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      Total del periodo
+                    </Typography>
+                    <MoneyText value={ownerData.expensesReport?.total_expenses} variant="body2" />
+                  </Box>
+                </>
+              )}
+            </SectionCard>
           </Grid>
         </Grid>
-      </Paper>
-
-      {/* Owner Sections */}
-      {isOwner && (
-        <>
-          {/* Debt Summary */}
-          <Paper sx={{ p: 3, mt: 4 }}>
-            <Typography variant="h6" component="h2" gutterBottom>
-              Resumen de Deuda
-            </Typography>
-            {ownerDataLoading ? (
-              <LoadingSpinner message="Cargando resumen de deuda..." />
-            ) : ownerData.debtSummary ? (
-              <Box>
-                <Typography variant="h5" color="error" gutterBottom>
-                  Deuda Total: S/ {ownerData.debtSummary.total_debt?.toFixed(2) || '0.00'}
-                </Typography>
-                {ownerData.debtSummary.properties?.map((prop, index) => (
-                  <Box key={index} mb={2} p={2} border={1} borderColor="divider" borderRadius={1}>
-                    <Typography variant="subtitle1">
-                      Propiedad: {prop.property.villa} {prop.property.row_letter}{prop.property.number}
-                    </Typography>
-                    <Typography variant="body2">
-                      Cuotas pendientes: {prop.pending_fees} | Monto: S/ {prop.debt_amount?.toFixed(2)}
-                    </Typography>
-                    {prop.fees?.length > 0 && (
-                      <Box mt={1}>
-                        <Typography variant="body2" fontWeight="bold">Detalles:</Typography>
-                        {prop.fees.map((fee, feeIndex) => (
-                          <Typography key={feeIndex} variant="body2" sx={{ ml: 2 }}>
-                            {fee.month}/{fee.year}: S/ {fee.amount?.toFixed(2)} - Vence: {new Date(fee.due_date).toLocaleDateString()}
-                          </Typography>
-                        ))}
-                      </Box>
-                    )}
-                  </Box>
-                ))}
-              </Box>
-            ) : (
-              <Typography>No hay información de deuda disponible.</Typography>
-            )}
-          </Paper>
-
-          {/* Property Report */}
-          <Paper sx={{ p: 3, mt: 4 }}>
-            <Typography variant="h6" component="h2" gutterBottom>
-              Reporte de Propiedades
-            </Typography>
-            {ownerDataLoading ? (
-              <LoadingSpinner message="Cargando reporte de propiedades..." />
-            ) : ownerData.propertyReport ? (
-              <Box>
-                {ownerData.propertyReport.properties?.map((prop, index) => (
-                  <Box key={index} mb={2} p={2} border={1} borderColor="divider" borderRadius={1}>
-                    <Typography variant="subtitle1">
-                      {prop.property.villa} {prop.property.row_letter}{prop.property.number}
-                    </Typography>
-                    <Typography variant="body2">
-                      Total cuotas: {prop.fees_summary.total_fees} | Pagado: S/ {prop.fees_summary.paid_amount?.toFixed(2)} | Pendiente: S/ {prop.fees_summary.pending_amount?.toFixed(2)}
-                    </Typography>
-                    <Typography variant="body2">
-                      Pagos realizados: {prop.payments}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            ) : (
-              <Typography>No hay información de propiedades disponible.</Typography>
-            )}
-          </Paper>
-
-          {/* Expenses Report */}
-          <Paper sx={{ p: 3, mt: 4 }}>
-            <Typography variant="h6" component="h2" gutterBottom>
-              Reporte de Gastos Comunitarios
-            </Typography>
-            {ownerDataLoading ? (
-              <LoadingSpinner message="Cargando reporte de gastos..." />
-            ) : ownerData.expensesReport ? (
-              <Box>
-                <Typography variant="h5" gutterBottom>
-                  Total Gastos: S/ {ownerData.expensesReport.total_expenses?.toFixed(2) || '0.00'}
-                </Typography>
-                {Object.entries(ownerData.expensesReport.expense_types || {}).map(([type, data]) => (
-                  <Box key={type} mb={2} p={2} border={1} borderColor="divider" borderRadius={1}>
-                    <Typography variant="subtitle1" sx={{ textTransform: 'capitalize' }}>
-                      {type.replace('_', ' ')}: {data.count} gastos | Total: S/ {data.total_amount?.toFixed(2)}
-                    </Typography>
-                    {data.expenses?.slice(0, 3).map((expense, expIndex) => (
-                      <Typography key={expIndex} variant="body2" sx={{ ml: 2 }}>
-                        {expense.description}: S/ {expense.amount?.toFixed(2)} - {new Date(expense.expense_date).toLocaleDateString()}
-                      </Typography>
-                    ))}
-                    {data.expenses?.length > 3 && (
-                      <Typography variant="body2" sx={{ ml: 2, fontStyle: 'italic' }}>
-                        ... y {data.expenses.length - 3} más
-                      </Typography>
-                    )}
-                  </Box>
-                ))}
-              </Box>
-            ) : (
-              <Typography>No hay información de gastos disponible.</Typography>
-            )}
-          </Paper>
-        </>
       )}
 
-      {/* Recent Activity - Only for Admin */}
-      {isAdmin && (
-        <Paper sx={{ p: 3, mt: 4 }}>
-          <Typography variant="h6" component="h2" gutterBottom>
-            Actividad Reciente
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Aquí se mostrarán las actividades recientes del sistema...
-          </Typography>
-        </Paper>
-      )}
+      <Grid container spacing={2.5}>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <SectionCard
+            title="Movimientos recientes"
+            subtitle="Últimos pagos registrados"
+            action={
+              <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/payments')}>
+                Ver todos
+              </Button>
+            }
+            contentSx={{ py: 0.5 }}
+          >
+            {loading ? (
+              <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Skeleton variant="text" height={52} />
+                <Skeleton variant="text" height={52} />
+                <Skeleton variant="text" height={52} />
+              </Box>
+            ) : recent.length === 0 ? (
+              <EmptyState
+                title="Sin movimientos recientes"
+                description="Los pagos confirmados aparecerán en esta sección."
+              />
+            ) : (
+              <List disablePadding>
+                {recent.map((item) => (
+                  <ListItem
+                    key={item.id}
+                    divider
+                    sx={{ px: 0, py: 1.5, gap: 1.5, '&:last-of-type': { borderBottom: 0 } }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        placeItems: 'center',
+                        width: 38,
+                        height: 38,
+                        borderRadius: 2.5,
+                        bgcolor: 'action.hover',
+                        color: 'primary.main',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <PaymentIcon fontSize="small" />
+                    </Box>
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                        {formatPropertyLabel(item.property, 'Pago de cuota')}
+                        {item.period ? ` · ${formatPeriod(item.period.month, item.period.year)}` : ''}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {formatDate(item.date)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                      <StatusChip status={item.status} />
+                    </Box>
+                    <MoneyText value={item.amount} variant="body2" sx={{ minWidth: { xs: 70, sm: 90 }, textAlign: 'right' }} />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </SectionCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <SectionCard title="Accesos rápidos" contentSx={{ pt: 2 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.5 }}>
+              {quickActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <Button
+                    key={action.label}
+                    variant="outlined"
+                    color="inherit"
+                    onClick={() => navigate(action.path)}
+                    sx={(theme) => ({
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 1,
+                      py: 1.75,
+                      px: 1.75,
+                      minHeight: 88,
+                      borderRadius: 2.5,
+                      borderColor: theme.palette.divider,
+                      color: 'text.primary',
+                      '&:hover': { borderColor: theme.palette.primary.light, bgcolor: theme.palette.action.hover },
+                    })}
+                  >
+                    <Icon fontSize="small" sx={{ color: 'primary.main' }} />
+                    <Typography variant="caption" sx={{ fontWeight: 600, textAlign: 'left' }}>
+                      {action.label}
+                    </Typography>
+                  </Button>
+                );
+              })}
+            </Box>
+          </SectionCard>
+        </Grid>
+      </Grid>
     </PageContainer>
   );
 };

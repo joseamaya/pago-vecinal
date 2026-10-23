@@ -50,6 +50,17 @@ const STATUS_LABELS = {
   [AGREEMENT_STATUS.DEFAULTED]: 'Incumplido',
 };
 
+const STATUS_TONES = {
+  success: 'success',
+  warning: 'warning',
+  error: 'error',
+  info: 'info',
+  secondary: 'secondary',
+  default: 'default',
+};
+
 export const getStatusColor = (status) => STATUS_COLORS[status] || 'default';
+
+export const getStatusTone = (status) => STATUS_TONES[getStatusColor(status)] || 'default';
 
 export const getStatusLabel = (status) => STATUS_LABELS[status] || status || 'Desconocido';
