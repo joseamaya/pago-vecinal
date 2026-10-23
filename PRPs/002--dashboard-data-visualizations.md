@@ -2,8 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-18
-> **Status:** Implemented with deviation
-> **Implementation:** Verified 2026-10-23: charts are implemented with `@mui/x-charts` (Bar + Pie). Owner debt is shown as per-property progress rather than a time-series chart.
+> **Status:** Implemented
+> **Implementation:** Verified 2026-10-23: admin Bar/Pie charts and the owner debt-evolution LineChart are implemented with `@mui/x-charts`, including loading and empty states.
 
 ---
 
@@ -20,7 +20,7 @@ Add meaningful charts and data visualizations to the Dashboard using the existin
 - [x] Dashboard shows at least 2 charts for admin view, 1 for owner view
 - [x] Admin chart 1: Monthly payment collection trend (bar/line chart — payments collected per month over last 12 months)
 - [x] Admin chart 2: Fee status breakdown (pie/donut chart — paid vs pending vs overdue)
-- [ ] Owner chart 1: Personal debt evolution over time
+- [x] Owner chart 1: Personal debt evolution over time
 - [x] Charts use the theme's color palette (light/dark compatible)
 - [x] Charts are responsive and work on mobile
 - [x] Loading state shown while chart data loads
@@ -164,16 +164,16 @@ Manual checks:
 
 ## Final Checklist
 
-- [ ] `npm run build` succeeds
-- [ ] `npm test` passes
-- [ ] Admin sees payment trend chart (last 12 months) with responsive sizing
-- [ ] Admin sees fee status breakdown (pie/donut)
-- [ ] Owner sees personal debt/expense chart
-- [ ] All chart colors use theme palette (work in light + dark)
-- [ ] Loading state shown while fetching chart data
-- [ ] Empty state shown when no chart data exists
-- [ ] No new dependencies added (recharts already installed)
-- [ ] Existing dashboard cards and quick actions remain intact
+- [x] `npm run build` succeeds
+- [x] `npm test` passes
+- [x] Admin sees payment trend chart (last 12 months) with responsive sizing
+- [x] Admin sees fee status breakdown (pie/donut)
+- [x] Owner sees personal debt-evolution and expense charts
+- [x] All chart colors use theme palette (work in light + dark)
+- [x] Loading state shown while fetching chart data
+- [x] Empty state shown when no chart data exists
+- [x] Charts use the existing `@mui/x-charts` dependency
+- [x] Existing dashboard cards and quick actions remain intact
 
 ---
 

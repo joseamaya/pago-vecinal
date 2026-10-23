@@ -160,15 +160,15 @@ Manual checks:
 
 ## Final Checklist
 
-- [ ] `npm run build` succeeds
-- [ ] `npm test` passes
-- [ ] Custom palette applied (no MUI defaults remain)
-- [ ] Custom font pair loaded and applied
-- [ ] `index.html` has proper lang, title, meta, favicon
-- [ ] Dead CRA CSS removed from `App.css` and `index.css`
-- [ ] Dark mode looks good — not a default MUI dark
-- [ ] All existing functionality works (login, navigation, CRUD)
-- [ ] Responsive layout unaffected
+- [x] `npm run build` succeeds
+- [x] `npm test` passes
+- [x] Custom palette applied (no MUI defaults remain)
+- [x] Custom font pair loaded and applied
+- [x] `index.html` has proper lang, title, meta, favicon
+- [x] Dead CRA CSS removed from `App.css` and `index.css`
+- [x] Dark mode looks good — not a default MUI dark
+- [x] All existing functionality works (login, navigation, CRUD)
+- [x] Responsive layout unaffected
 
 ---
 

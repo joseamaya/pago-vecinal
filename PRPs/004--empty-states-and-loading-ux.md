@@ -187,15 +187,15 @@ Manual checks:
 
 ## Final Checklist
 
-- [ ] `npm run build` succeeds
-- [ ] `npm test` passes
-- [ ] `EmptyState` component created in `common/`
-- [ ] All 7+ management pages use LoadingSkeleton during fetch
-- [ ] All management pages show contextual EmptyState when list is empty
-- [ ] Error states include retry action
-- [ ] Empty states include CTA button for users who can create
-- [ ] No flash-of-empty-content during loading
-- [ ] Existing functionality unchanged
+- [x] `npm run build` succeeds
+- [x] `npm test` passes
+- [x] `EmptyState` component created in `common/`
+- [x] All 7+ management pages use LoadingSkeleton during fetch
+- [x] All management pages show contextual EmptyState when list is empty
+- [x] Error states include retry action
+- [x] Empty states include CTA button for users who can create
+- [x] No flash-of-empty-content during loading
+- [x] Existing functionality unchanged
 
 ---
 

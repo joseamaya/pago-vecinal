@@ -223,16 +223,16 @@ Manual checks:
 
 ## Final Checklist
 
-- [ ] `npm run build` succeeds
-- [ ] `npm test` passes
-- [ ] NotificationContext created with stacked snackbar support
-- [ ] `useNotification()` hook provides success/error/info/warning
-- [ ] PaymentManagement native `alert()` replaced
-- [ ] Mutation success/failure feedback uses snackbar across all management pages
-- [ ] Form-level validation errors still show as inline Alert (unchanged)
-- [ ] Toasts auto-dismiss after 4 seconds
-- [ ] Multiple toasts stack correctly
-- [ ] Dark/light mode works for toasts
+- [x] `npm run build` succeeds
+- [x] `npm test` passes
+- [x] ToastContext created with stacked snackbar support
+- [x] `useToast()` hook provides success/error/info/warning
+- [x] PaymentManagement native `alert()` replaced
+- [x] Mutation success/failure feedback uses snackbar across all management pages
+- [x] Form-level validation errors still show as inline Alert (unchanged)
+- [x] Toasts auto-dismiss after 4 seconds
+- [x] Multiple toasts stack correctly
+- [x] Dark/light mode works for toasts
 
 ---
 

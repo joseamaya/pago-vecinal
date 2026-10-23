@@ -201,16 +201,16 @@ Manual checks:
 
 ## Final Checklist
 
-- [ ] `npm run build` succeeds
-- [ ] `npm test` passes
-- [ ] `PaymentManagement.js` reduced from 1341 to <400 lines
-- [ ] All 5 extracted modules created
-- [ ] All existing CRUD operations work identically
-- [ ] Cascade selectors work (Villa → Fila → Casa → Cuota)
-- [ ] Bulk operations work (approve, upload, export)
-- [ ] Filters + pagination work
-- [ ] Receipt download works
-- [ ] No regressions in any payment workflow
+- [x] `npm run build` succeeds
+- [x] `npm test` passes
+- [x] `PaymentManagement.js` reduced from 1341 to <400 lines
+- [x] All 5 extracted modules created
+- [x] All existing CRUD operations work identically
+- [x] Cascade selectors work (Villa → Fila → Casa → Cuota)
+- [x] Bulk operations work (approve, upload, export)
+- [x] Filters + pagination work
+- [x] Receipt download works
+- [x] No regressions in any payment workflow
 
 ---
 

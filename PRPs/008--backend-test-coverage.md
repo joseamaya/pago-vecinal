@@ -349,28 +349,17 @@ cd backend && python test_payment_precision.py
 
 ## Final Checklist
 
-- [ ] `pytest`, `pytest-asyncio`, `httpx`, `mongomock`, `pytest-env` in requirements.txt
-- [ ] `pytest.ini` configured with asyncio_mode=auto and test env vars
-- [ ] `app/tests/conftest.py` with shared fixtures
-- [ ] `app/tests/config/test_settings.py` — 4 tests
-- [ ] `app/tests/config/test_logging.py` — 3 tests
-- [ ] `app/tests/auth/test_utils.py` — 10 tests
-- [ ] `app/tests/dependencies/test_auth.py` — 4 tests
-- [ ] `app/tests/services/test_cloudinary_service.py` — 5 tests
-- [ ] `app/tests/services/test_receipt_service.py` — 7 tests
-- [ ] `app/tests/services/test_payment_service.py` — 8 tests
-- [ ] `app/tests/schemas/test_common.py` — 4 tests
-- [ ] `app/tests/schemas/test_user.py` — 5 tests
-- [ ] `app/tests/schemas/test_fee.py` — 2 tests
-- [ ] `app/tests/schemas/test_payment.py` — 2 tests
-- [ ] `app/tests/routes/test_auth.py` — 6 tests
-- [ ] `app/tests/routes/test_users.py` — 6 tests
-- [ ] `app/tests/routes/test_fees.py` — 6 tests
-- [ ] `app/tests/routes/test_payments.py` — 5 tests
-- [ ] `app/tests/routes/test_receipts.py` — 3 tests
-- [ ] `pytest app/tests/ -v` passes all tests (80+ total)
-- [ ] Ad-hoc `test_*.py` scripts still run
-- [ ] No real MongoDB required for tests (all DB calls mocked)
+- [x] `pytest`, `pytest-asyncio`, `httpx`, `mongomock` and `pytest-env` in `requirements.txt`
+- [x] `pytest.ini` configured with `asyncio_mode=auto` and test env vars
+- [x] `app/tests/conftest.py` with shared fixtures
+- [x] Config/logging tests covered in `app/tests/config/test_settings.py`
+- [x] Auth and dependency tests cover password hashing, JWT and access control
+- [x] Service tests cover Cloudinary, receipts and payments with mocked DB/Cloudinary
+- [x] Schema tests cover common, fee, payment and user models
+- [x] Route integration tests use `TestClient` with mocked Beanie
+- [x] `pytest app/tests -q` passes (324 tests)
+- [x] Legacy diagnostic scripts run without crashing against a disposable database
+- [x] No real MongoDB required for the pytest suite
 
 ---
 

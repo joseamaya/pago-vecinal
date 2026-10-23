@@ -357,26 +357,26 @@ cd frontend && npx source-map-explorer build/static/js/main.*.js --no-border-che
 
 ## Final Checklist
 
-- [ ] `src/hooks/` con `useApi.js`, `usePagination.js`, `useDialog.js`, `useDownload.js`
-- [ ] `src/utils/` con `constants.js`, `months.js`, `statusMappings.js`, `downloadBlob.js`
-- [ ] `src/components/common/StatCard.js`, `ErrorBoundary.js`, `PageContainer.js`
-- [ ] `App.js` con `React.lazy()` + `<Suspense>` + `<ErrorBoundary>`
-- [ ] Bug `generation_day` → `due_day` corregido en FeeScheduleManagement
-- [ ] MIME type dinámico en ReportsManagement
-- [ ] LoadingSpinner sin spread de props
-- [ ] ReceiptManagement usa LoadingSkeleton
-- [ ] `console.log` eliminados de producción
-- [ ] Array meses unificado en `utils/months.js`, usado en 4 componentes
-- [ ] Status mappings unificados en `utils/statusMappings.js`, usado en 4 componentes
-- [ ] `Container` reemplazado por `<PageContainer>` en todas las páginas
-- [ ] `recharts` eliminado de `package.json`
-- [ ] `index.html` con lang="es", title="Pago Vecinal", meta description real
-- [ ] Skip-to-content link en Layout
-- [ ] aria-label en IconButtons de acciones
-- [ ] role="navigation" en Sidebar
-- [ ] `npm run build` succeeds
-- [ ] `npm test` passes (nuevos tests para utils + ErrorBoundary + StatCard)
-- [ ] Bundle size reducido (sin recharts, con code splitting)
+- [x] `src/hooks/` con `useApi.js`, `usePagination.js`, `useDialog.js`, `useDownload.js`
+- [x] `src/utils/` con `constants.js`, `months.js`, `statusMappings.js`, `downloadBlob.js`
+- [x] `src/components/common/StatCard.js`, `ErrorBoundary.js`, `PageContainer.js`
+- [x] `App.js` con `React.lazy()` + `<Suspense>` + `<ErrorBoundary>`
+- [x] Bug `generation_day` → `due_day` corregido en FeeScheduleManagement
+- [x] MIME type dinámico en ReportsManagement
+- [x] LoadingSpinner sin spread de props
+- [x] ReceiptManagement usa LoadingSkeleton
+- [x] `console.log` eliminados de producción
+- [x] Array meses unificado en `utils/months.js`, usado en 4 componentes
+- [x] Status mappings unificados en `utils/statusMappings.js`, usado en 4 componentes
+- [x] `Container` reemplazado por `<PageContainer>` en todas las páginas
+- [x] `recharts` eliminado de `package.json`
+- [x] `index.html` con lang="es", title="Pago Vecinal", meta description real
+- [x] Skip-to-content link en Layout
+- [x] aria-label en IconButtons de acciones
+- [x] role="navigation" en Sidebar
+- [x] `npm run build` succeeds
+- [x] `npm test` passes (nuevos tests para utils + ErrorBoundary + StatCard)
+- [x] Bundle size reducido (sin recharts, con code splitting)
 
 ---
 
