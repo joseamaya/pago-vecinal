@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
@@ -9,7 +8,6 @@ import {
   ListItemText,
   MenuItem,
   OutlinedInput,
-  Pagination,
   Select,
   TextField,
   Typography,
@@ -36,7 +34,11 @@ import FormDialog from './common/FormDialog';
 import StatusChip from './common/StatusChip';
 import MoneyText from './common/MoneyText';
 import EmptyState from './common/EmptyState';
+import DataToolbar from './common/DataToolbar';
+import TablePagination from './common/TablePagination';
+import ErrorState from './common/ErrorState';
 import PaymentsModal from './PaymentsModal';
+import { useTableState } from '../hooks/useTableState';
 import { MONTHS } from '../utils/months';
 import { formatDate, formatPeriod, formatPropertyLabel, toInputDate } from '../utils/formatters';
 
@@ -70,15 +72,14 @@ const FeeManagement = () => {
     status: '',
     property: '',
   });
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [pageSize] = useState(20);
   const [paymentsModalOpen, setPaymentsModalOpen] = useState(false);
   const [selectedFeeForPayments, setSelectedFeeForPayments] = useState(null);
   const [generatingFees, setGeneratingFees] = useState(false);
+  const table = useTableState({ defaultSortBy: 'period', defaultSortDir: 'desc' });
 
-  const fetchFees = useCallback(async (page = 1) => {
+  const fetchFees = useCallback(async (page = table.page) => {
     try {
       setLoading(true);
       const filterParams = {};
@@ -86,13 +87,14 @@ const FeeManagement = () => {
       if (filters.month) filterParams.month = parseInt(filters.month);
       if (filters.status) filterParams.status = filters.status;
       if (filters.property) filterParams.property_id = filters.property;
-      filterParams.sort_by_period = true; // Always sort by period
+      if (table.search) filterParams.search = table.search;
+      filterParams.sort_by = table.sortBy || 'period';
+      filterParams.sort_dir = table.sortDir || 'desc';
 
-      const response = await feesAPI.getFees(filterParams, page, pageSize);
+      const response = await feesAPI.getFees(filterParams, page, table.limit);
       setFees(response.data.data);
       setTotalPages(response.data.pagination.total_pages);
       setTotalCount(response.data.pagination.total_count);
-      setCurrentPage(page);
       setError('');
     } catch (err) {
       setError('Error al cargar cuotas');
@@ -100,11 +102,11 @@ const FeeManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters, pageSize]);
+  }, [filters, table.search, table.sortBy, table.sortDir, table.limit, table.page]);
 
   useEffect(() => {
-    fetchFees();
-  }, [fetchFees]);
+    fetchFees(table.page);
+  }, [fetchFees, table.page]);
 
   useEffect(() => {
     fetchProperties();
@@ -178,7 +180,7 @@ const FeeManagement = () => {
         await feesAPI.createFee(submitData);
         toast.success('Cuota creada correctamente');
       }
-      fetchFees(currentPage);
+      fetchFees(table.page);
       handleCloseDialog();
     } catch (err) {
       if (!isNetworkError(err)) {
@@ -201,7 +203,7 @@ const FeeManagement = () => {
     try {
       await feesAPI.deleteFee(fee.id);
       toast.success('Cuota eliminada correctamente');
-      fetchFees(currentPage);
+      fetchFees(table.page);
     } catch (err) {
       if (!isNetworkError(err)) {
         toast.error('Error al eliminar cuota');
@@ -225,7 +227,7 @@ const FeeManagement = () => {
         generateFormData.feeScheduleIds.length > 0 ? generateFormData.feeScheduleIds : null
       );
       toast.success(response.data.message || 'Cuotas generadas correctamente');
-      fetchFees(currentPage);
+      fetchFees(table.page);
       setGenerateOpen(false);
     } catch (err) {
       if (!isNetworkError(err)) {
@@ -272,6 +274,7 @@ const handleMonthsChange = (event) => {
       ...filters,
       [field]: value,
     });
+    table.setPage(1);
   };
 
   const handleClearFilters = () => {
@@ -281,12 +284,12 @@ const handleMonthsChange = (event) => {
       status: '',
       property: '',
     });
-    setCurrentPage(1);
+    table.setPage(1);
   };
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
-      fetchFees(newPage);
+      table.setPage(newPage);
     }
   };
 
@@ -450,19 +453,44 @@ const handleMonthsChange = (event) => {
         }
       />
 
-      {error && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2.5 }}
-          action={
-            <Button color="inherit" size="small" onClick={() => fetchFees(currentPage)}>
-              Reintentar
-            </Button>
-          }
-        >
-          {error}
-        </Alert>
-      )}
+      <ErrorState message={error} onRetry={() => fetchFees(table.page)} />
+
+      <DataToolbar
+        search={table.search}
+        onSearchChange={table.setSearch}
+        searchPlaceholder="Buscar por propiedad, propietario o referencia…"
+        resultCount={fees.length}
+        totalCount={totalCount}
+      >
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Ordenar por</InputLabel>
+          <Select
+            value={table.sortBy || 'period'}
+            label="Ordenar por"
+            onChange={(event) =>
+              table.setSort(event.target.value, table.sortDir || 'desc')
+            }
+          >
+            <MenuItem value="period">Periodo</MenuItem>
+            <MenuItem value="property">Propiedad</MenuItem>
+            <MenuItem value="owner">Propietario</MenuItem>
+            <MenuItem value="amount">Monto</MenuItem>
+            <MenuItem value="due_date">Vencimiento</MenuItem>
+            <MenuItem value="status">Estado</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 130 }}>
+          <InputLabel>Dirección</InputLabel>
+          <Select
+            value={table.sortDir || 'desc'}
+            label="Dirección"
+            onChange={(event) => table.setSort(table.sortBy || 'period', event.target.value)}
+          >
+            <MenuItem value="asc">Ascendente</MenuItem>
+            <MenuItem value="desc">Descendente</MenuItem>
+          </Select>
+        </FormControl>
+      </DataToolbar>
 
       <FilterBar
         chips={activeFilterChips}
@@ -585,8 +613,7 @@ const handleMonthsChange = (event) => {
         header={
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Mostrando {fees.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}–
-              {Math.min(currentPage * pageSize, totalCount)} de {totalCount} cuotas
+              {totalCount} cuotas
             </Typography>
             {isAdmin && (
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -596,16 +623,15 @@ const handleMonthsChange = (event) => {
           </Box>
         }
         footer={
-          totalPages > 1 ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <Pagination
-                count={totalPages}
-                page={currentPage}
-                onChange={(event, page) => handlePageChange(page)}
-                color="primary"
-              />
-            </Box>
-          ) : null
+          <TablePagination
+            page={table.page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={table.limit}
+            onPageChange={handlePageChange}
+            onPageSizeChange={table.setLimit}
+            disabled={loading}
+          />
         }
       />
 

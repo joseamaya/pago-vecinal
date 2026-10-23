@@ -12,12 +12,15 @@ const EMPTY_FILTERS = {
   property: '',
 };
 
-const buildFilterParams = (filters) => {
+const buildFilterParams = (filters, search = '', sortBy = '', sortDir = '') => {
   const params = {};
   if (filters.year) params.year = parseInt(filters.year, 10);
   if (filters.month) params.month = parseInt(filters.month, 10);
   if (filters.status) params.status = filters.status;
   if (filters.property) params.property_id = filters.property;
+  if (search) params.search = search;
+  if (sortBy) params.sort_by = sortBy;
+  if (sortDir) params.sort_dir = sortDir;
   return params;
 };
 
@@ -29,7 +32,10 @@ export function usePaymentFilters(properties = []) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [pageSize] = useState(PAGE_SIZE);
+  const [pageSize, setPageSizeState] = useState(PAGE_SIZE);
+  const [search, setSearchState] = useState('');
+  const [sortBy, setSortByState] = useState('');
+  const [sortDir, setSortDirState] = useState('');
   const [availableYears] = useState(() => {
     const currentYear = new Date().getFullYear();
     const years = [];
@@ -45,10 +51,14 @@ export function usePaymentFilters(properties = []) {
       try {
         setLoading(true);
         const response = await paymentsAPI.getPayments(targetPage, pageSize, targetFilters);
-        const sortedData = [...response.data.data].sort(
-          (a, b) => new Date(b.payment_date) - new Date(a.payment_date)
+        const rows = response.data.data || [];
+        setPayments(
+          sortBy
+            ? rows
+            : [...rows].sort(
+                (a, b) => new Date(b.payment_date) - new Date(a.payment_date)
+              )
         );
-        setPayments(sortedData);
         setTotalPages(response.data.pagination.total_pages);
         setTotalCount(response.data.pagination.total_count);
         setPage(targetPage);
@@ -60,10 +70,13 @@ export function usePaymentFilters(properties = []) {
         setLoading(false);
       }
     },
-    [pageSize]
+    [pageSize, sortBy]
   );
 
-  const currentFilters = useMemo(() => buildFilterParams(filters), [filters]);
+  const currentFilters = useMemo(
+    () => buildFilterParams(filters, search, sortBy, sortDir),
+    [filters, search, sortBy, sortDir]
+  );
 
   useEffect(() => {
     fetchPayments(1, {});
@@ -73,7 +86,7 @@ export function usePaymentFilters(properties = []) {
     if (!mountedRef.current) return;
     fetchPayments(1, currentFilters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.year, filters.month, filters.status, filters.property]);
+  }, [filters.year, filters.month, filters.status, filters.property, search, sortBy, sortDir, pageSize]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -83,8 +96,25 @@ export function usePaymentFilters(properties = []) {
     setFilters((previous) => ({ ...previous, [name]: value }));
   }, []);
 
+  const setSearch = useCallback((value) => {
+    setSearchState(value);
+  }, []);
+
+  const setSort = useCallback((nextSortBy, nextSortDir = '') => {
+    setSortByState(nextSortBy);
+    setSortDirState(nextSortDir);
+  }, []);
+
+  const setPageSize = useCallback((value) => {
+    setPageSizeState(value);
+    setPage(1);
+  }, []);
+
   const clearFilters = useCallback(() => {
     setFilters(EMPTY_FILTERS);
+    setSearchState('');
+    setSortByState('');
+    setSortDirState('');
   }, []);
 
   const applyFilters = useCallback(() => {
@@ -142,6 +172,12 @@ export function usePaymentFilters(properties = []) {
     error,
     page,
     pageSize,
+    setPageSize,
+    search,
+    setSearch,
+    sortBy,
+    sortDir,
+    setSort,
     totalPages,
     totalCount,
     availableYears,

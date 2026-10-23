@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -26,6 +26,10 @@ import StatusChip from './common/StatusChip';
 import ActionMenu from './common/ActionMenu';
 import FormDialog from './common/FormDialog';
 import EmptyState from './common/EmptyState';
+import DataToolbar from './common/DataToolbar';
+import TablePagination from './common/TablePagination';
+import ErrorState from './common/ErrorState';
+import { useTableState } from '../hooks/useTableState';
 
 const EMPTY_USER = { email: '', full_name: '', phone: '', role: 'owner', password: '' };
 
@@ -41,6 +45,28 @@ const UserManagement = () => {
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState(EMPTY_USER);
+  const table = useTableState();
+
+  const filteredUsers = useMemo(() => {
+    const term = table.search.trim().toLowerCase();
+    if (!term) return users;
+    return users.filter((user) =>
+      [user.full_name, user.email, user.phone, user.role]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term))
+    );
+  }, [users, table.search]);
+
+  const totalPages = Math.max(Math.ceil(filteredUsers.length / table.limit), 1);
+  const currentPage = Math.min(table.page, totalPages);
+  const visibleUsers = useMemo(
+    () =>
+      filteredUsers.slice(
+        (currentPage - 1) * table.limit,
+        currentPage * table.limit
+      ),
+    [filteredUsers, currentPage, table.limit]
+  );
 
   useEffect(() => {
     fetchUsers();
@@ -186,23 +212,19 @@ const UserManagement = () => {
         }
       />
 
-      {error && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2.5 }}
-          action={
-            <Button color="inherit" size="small" onClick={fetchUsers}>
-              Reintentar
-            </Button>
-          }
-        >
-          {error}
-        </Alert>
-      )}
+      <ErrorState message={error} onRetry={fetchUsers} />
+
+      <DataToolbar
+        search={table.search}
+        onSearchChange={table.setSearch}
+        searchPlaceholder="Buscar por nombre, correo, teléfono o rol…"
+        resultCount={filteredUsers.length}
+        totalCount={users.length}
+      />
 
       <ResponsiveTable
         columns={columns}
-        rows={users}
+        rows={visibleUsers}
         loading={loading}
         getRowId={(user) => user.id}
         mobileTitle={(user) => user.full_name}
@@ -233,6 +255,17 @@ const UserManagement = () => {
             ]}
           />
         )}
+        footer={
+          <TablePagination
+            page={currentPage}
+            totalPages={totalPages}
+            totalCount={filteredUsers.length}
+            pageSize={table.limit}
+            onPageChange={table.setPage}
+            onPageSizeChange={table.setLimit}
+            disabled={loading}
+          />
+        }
       />
 
       <FormDialog

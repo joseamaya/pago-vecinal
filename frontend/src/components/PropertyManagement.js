@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
+  FormControl,
   Grid,
-  Pagination,
+  InputLabel,
+  MenuItem,
+  Select,
   TextField,
   Typography,
 } from '@mui/material';
@@ -25,6 +27,11 @@ import ResponsiveTable from './common/ResponsiveTable';
 import ActionMenu from './common/ActionMenu';
 import FormDialog from './common/FormDialog';
 import EmptyState from './common/EmptyState';
+import DataToolbar from './common/DataToolbar';
+import TablePagination from './common/TablePagination';
+import ErrorState from './common/ErrorState';
+import { useAsyncData } from '../hooks/useAsyncData';
+import { useTableState } from '../hooks/useTableState';
 import { formatPropertyLabel } from '../utils/formatters';
 
 const EMPTY_PROPERTY = { row_letter: '', number: '', villa: '', owner_name: '', owner_phone: '' };
@@ -33,39 +40,37 @@ const PropertyManagement = () => {
   const { isAdmin } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-  const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const [open, setOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [editingProperty, setEditingProperty] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [formData, setFormData] = useState(EMPTY_PROPERTY);
 
-  useEffect(() => {
-    fetchProperties(1);
-  }, []);
+  const table = useTableState({ defaultSortBy: 'villa', defaultSortDir: 'asc' });
 
-  const fetchProperties = async (page = 1) => {
-    try {
-      setLoading(true);
-      const response = await propertiesAPI.getProperties(page, 20);
-      setProperties(response.data.data);
-      setTotalPages(response.data.pagination.total_pages);
-      setCurrentPage(page);
-      setError('');
-    } catch (err) {
-      setError('No pudimos cargar las propiedades.');
-      console.error('Error fetching properties:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loader = useCallback(
+    () =>
+      propertiesAPI
+        .getProperties(table.page, table.limit, {
+          search: table.search || undefined,
+          sort_by: table.sortBy || undefined,
+          sort_dir: table.sortDir || undefined,
+        })
+        .then((response) => response.data),
+    [table.page, table.limit, table.search, table.sortBy, table.sortDir]
+  );
+
+  const { data, loading, error, reload } = useAsyncData(
+    loader,
+    [loader],
+    { fallbackError: 'No pudimos cargar las propiedades.' }
+  );
+
+  const properties = data?.data || [];
+  const pagination = data?.pagination || { total_pages: 1, total_count: 0 };
 
   const handleOpenDialog = (property = null) => {
     setFormError('');
@@ -105,7 +110,7 @@ const PropertyManagement = () => {
         await propertiesAPI.createProperty(submitData);
         toast.success('Propiedad creada correctamente');
       }
-      fetchProperties(currentPage);
+      await reload();
       handleCloseDialog();
     } catch (err) {
       if (!isNetworkError(err)) {
@@ -128,7 +133,7 @@ const PropertyManagement = () => {
     try {
       await propertiesAPI.deleteProperty(property.id);
       toast.success('Propiedad eliminada correctamente');
-      fetchProperties(currentPage);
+      await reload();
     } catch (err) {
       if (!isNetworkError(err)) {
         toast.error('No pudimos eliminar la propiedad');
@@ -147,7 +152,8 @@ const PropertyManagement = () => {
       const { imported, updated, errors } = response.data;
       toast.success(`Importación completa: ${imported} creadas, ${updated} actualizadas, ${errors.length} errores.`);
       if (errors.length > 0) console.error('Errores de importación:', errors);
-      fetchProperties(1);
+      table.setPage(1);
+      await reload();
       setBulkImportOpen(false);
       setSelectedFile(null);
     } catch (err) {
@@ -188,19 +194,42 @@ const PropertyManagement = () => {
         }
       />
 
-      {error && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2.5 }}
-          action={
-            <Button color="inherit" size="small" onClick={() => fetchProperties(currentPage)}>
-              Reintentar
-            </Button>
-          }
-        >
-          {error}
-        </Alert>
-      )}
+      <ErrorState message={error} onRetry={reload} />
+
+      <DataToolbar
+        search={table.search}
+        onSearchChange={table.setSearch}
+        searchPlaceholder="Buscar por villa, fila, número o propietario…"
+        resultCount={properties.length}
+        totalCount={pagination.total_count}
+      >
+        <FormControl size="small" sx={{ minWidth: 170 }}>
+          <InputLabel>Ordenar por</InputLabel>
+          <Select
+            value={table.sortBy}
+            label="Ordenar por"
+            onChange={(event) =>
+              table.setSort(event.target.value, table.sortDir || 'asc')
+            }
+          >
+            <MenuItem value="villa">Villa</MenuItem>
+            <MenuItem value="row_letter">Fila</MenuItem>
+            <MenuItem value="number">Número</MenuItem>
+            <MenuItem value="owner_name">Propietario</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 130 }}>
+          <InputLabel>Dirección</InputLabel>
+          <Select
+            value={table.sortDir || 'asc'}
+            label="Dirección"
+            onChange={(event) => table.setSort(table.sortBy || 'villa', event.target.value)}
+          >
+            <MenuItem value="asc">Ascendente</MenuItem>
+            <MenuItem value="desc">Descendente</MenuItem>
+          </Select>
+        </FormControl>
+      </DataToolbar>
 
       <ResponsiveTable
         columns={columns}
@@ -241,16 +270,15 @@ const PropertyManagement = () => {
             : undefined
         }
         footer={
-          totalPages > 1 ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <Pagination
-                count={totalPages}
-                page={currentPage}
-                onChange={(event, page) => fetchProperties(page)}
-                color="primary"
-              />
-            </Box>
-          ) : null
+          <TablePagination
+            page={table.page}
+            totalPages={pagination.total_pages}
+            totalCount={pagination.total_count}
+            pageSize={table.limit}
+            onPageChange={table.setPage}
+            onPageSizeChange={table.setLimit}
+            disabled={loading}
+          />
         }
       />
 

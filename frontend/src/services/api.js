@@ -58,7 +58,8 @@ export const usersAPI = {
 
 // Properties API
 export const propertiesAPI = {
-  getProperties: (page = 1, limit = 20) => api.get('/properties/', { params: { page, limit } }),
+  getProperties: (page = 1, limit = 20, options = {}) =>
+    api.get('/properties/', { params: { page, limit, ...options } }),
   getProperty: (id) => api.get(`/properties/${id}`),
   getDistinctLetters: () => api.get('/properties/distinct/letters'),
   getDistinctNumbers: () => api.get('/properties/distinct/numbers'),
@@ -84,6 +85,9 @@ export const paymentsAPI = {
     if (filters.status !== undefined) params.status = filters.status;
     if (filters.fee_id !== undefined) params.fee_id = filters.fee_id;
     if (filters.property_id !== undefined) params.property_id = filters.property_id;
+    if (filters.search !== undefined) params.search = filters.search;
+    if (filters.sort_by !== undefined) params.sort_by = filters.sort_by;
+    if (filters.sort_dir !== undefined) params.sort_dir = filters.sort_dir;
     return api.get('/payments/', { params });
   },
   getPayment: (id) => api.get(`/payments/${id}`),
@@ -163,7 +167,8 @@ export const expensesAPI = {
 
 // Receipts API
 export const receiptsAPI = {
-  getReceipts: (page = 1, limit = 20) => api.get('/receipts/', { params: { page, limit } }),
+  getReceipts: (page = 1, limit = 20, options = {}) =>
+    api.get('/receipts/', { params: { page, limit, ...options } }),
   getReceipt: (id) => api.get(`/receipts/${id}`),
   createReceipt: (receiptData) => api.post('/receipts/', receiptData),
   updateReceipt: (id, receiptData) => api.put(`/receipts/${id}`, receiptData),
@@ -182,6 +187,9 @@ export const feesAPI = {
     if (filters.status !== undefined) params.status = filters.status;
     if (filters.property_id !== undefined) params.property_id = filters.property_id;
     if (filters.sort_by_period !== undefined) params.sort_by_period = filters.sort_by_period;
+    if (filters.search !== undefined) params.search = filters.search;
+    if (filters.sort_by !== undefined) params.sort_by = filters.sort_by;
+    if (filters.sort_dir !== undefined) params.sort_dir = filters.sort_dir;
     return api.get('/fees/', { params });
   },
   getFee: (id) => api.get(`/fees/${id}`),

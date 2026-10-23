@@ -91,6 +91,36 @@ describe('usePaymentFilters', () => {
     await waitFor(() => expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 20, {}));
   });
 
+  test('applies search, sorting and page size', async () => {
+    const { result } = renderHook(() => usePaymentFilters([]));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.setSearch('Villa'));
+    await waitFor(() =>
+      expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 20, {
+        search: 'Villa',
+      })
+    );
+
+    act(() => result.current.setSort('amount', 'desc'));
+    await waitFor(() =>
+      expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 20, {
+        search: 'Villa',
+        sort_by: 'amount',
+        sort_dir: 'desc',
+      })
+    );
+
+    act(() => result.current.setPageSize(50));
+    await waitFor(() =>
+      expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 50, {
+        search: 'Villa',
+        sort_by: 'amount',
+        sort_dir: 'desc',
+      })
+    );
+  });
+
   test('exposes an error when loading fails', async () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     paymentsAPI.getPayments.mockRejectedValueOnce(new Error('network'));

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Pagination, Paper, Typography } from '@mui/material';
+import { Box, Button, Paper, Typography } from '@mui/material';
 import {
   Add as AddIcon,
   CheckCircleOutline as ApproveIcon,
@@ -13,6 +13,7 @@ import ActionMenu from '../common/ActionMenu';
 import StatusChip from '../common/StatusChip';
 import MoneyText from '../common/MoneyText';
 import EmptyState from '../common/EmptyState';
+import TablePagination from '../common/TablePagination';
 import { formatCurrency, formatDate, formatPeriod } from '../../utils/formatters';
 
 const PaymentTable = ({
@@ -32,7 +33,14 @@ const PaymentTable = ({
   onDownload,
   pagination = {},
 }) => {
-  const { page = 1, totalPages = 1, totalCount = 0, pageSize = 20, onPageChange } = pagination;
+  const {
+    page = 1,
+    totalPages = 1,
+    totalCount = 0,
+    pageSize = 20,
+    onPageChange,
+    onPageSizeChange,
+  } = pagination;
   const pendingIds = payments
     .filter((payment) => payment.status === 'pending')
     .map((payment) => payment.id);
@@ -201,8 +209,7 @@ const PaymentTable = ({
         header={
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Mostrando {payments.length > 0 ? (page - 1) * pageSize + 1 : 0}–
-              {Math.min(page * pageSize, totalCount)} de {totalCount} pagos
+              {totalCount} pagos
             </Typography>
             {isAdmin && selectedPayments.length > 0 && (
               <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
@@ -212,16 +219,15 @@ const PaymentTable = ({
           </Box>
         }
         footer={
-          totalPages > 1 ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                onChange={(event, newPage) => onPageChange?.(newPage)}
-                color="primary"
-              />
-            </Box>
-          ) : null
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={pageSize}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+            disabled={loading}
+          />
         }
       />
     </Box>
