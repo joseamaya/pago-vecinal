@@ -42,6 +42,7 @@ class TestListReceipts:
     async def test_owner_query_targets_payment_and_misc_links(self, mongomock_db):
         from types import SimpleNamespace
         from beanie import PydanticObjectId
+        from bson import DBRef
         from app.models.user import UserRole
         from app.models.payment import Payment
         from app.models.miscellaneous_payment import MiscellaneousPayment
@@ -52,19 +53,19 @@ class TestListReceipts:
         misc_id = PydanticObjectId()
 
         pay_query = MagicMock()
-        pay_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=pay_id)])
+        pay_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=pay_id, user=user, fee_id="fee-1")])
         misc_query = MagicMock()
-        misc_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=misc_id)])
+        misc_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=misc_id, user=user)])
 
-        with patch.object(Payment, "find", return_value=pay_query), patch.object(
-            MiscellaneousPayment, "find", return_value=misc_query
+        with patch.object(Payment, "find_all", return_value=pay_query), patch.object(
+            MiscellaneousPayment, "find_all", return_value=misc_query
         ):
             query = await _owner_receipts_query(user)
 
         assert query.get_filter_query() == {
             "$or": [
-                {"payment.$id": {"$in": [pay_id]}},
-                {"miscellaneous_payment.$id": {"$in": [misc_id]}},
+                {"payment": {"$in": [DBRef("payments", pay_id)]}},
+                {"miscellaneous_payment": {"$in": [DBRef("miscellaneous_payments", misc_id)]}},
             ]
         }
 

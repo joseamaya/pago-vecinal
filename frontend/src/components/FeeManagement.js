@@ -1,41 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Alert,
+  Box,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Select,
-  MenuItem,
+  Checkbox,
   FormControl,
   InputLabel,
-  Chip,
-  IconButton,
-  Box,
-  Alert,
-  Checkbox,
   ListItemText,
+  MenuItem,
   OutlinedInput,
-  Grid,
   Pagination,
-  useMediaQuery,
-  useTheme,
+  Select,
+  TextField,
+  Typography,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
+  DeleteOutline as DeleteIcon,
+  DownloadOutlined as DownloadIcon,
+  EditOutlined as EditIcon,
   Refresh as RefreshIcon,
-  GetApp as DownloadIcon,
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
@@ -44,19 +28,22 @@ import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import PageContainer from './common/PageContainer';
-import LoadingSkeleton from './common/LoadingSkeleton';
-import LoadingSpinner from './common/LoadingSpinner';
+import PageHeader from './common/PageHeader';
+import ResponsiveTable from './common/ResponsiveTable';
+import FilterBar from './common/FilterBar';
+import ActionMenu from './common/ActionMenu';
+import FormDialog from './common/FormDialog';
+import StatusChip from './common/StatusChip';
+import MoneyText from './common/MoneyText';
 import EmptyState from './common/EmptyState';
 import PaymentsModal from './PaymentsModal';
-import { getStatusColor, getStatusLabel } from '../utils/statusMappings';
 import { MONTHS } from '../utils/months';
+import { formatDate, formatPeriod, formatPropertyLabel, toInputDate } from '../utils/formatters';
 
 const FeeManagement = () => {
   const { isAdmin } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [fees, setFees] = useState([]);
   const [properties, setProperties] = useState([]);
   const [feeSchedules, setFeeSchedules] = useState([]);
@@ -121,8 +108,8 @@ const FeeManagement = () => {
 
   useEffect(() => {
     fetchProperties();
-    fetchFeeSchedules();
-  }, []);
+    if (isAdmin) fetchFeeSchedules();
+  }, [isAdmin]);
 
   const fetchProperties = async () => {
     try {
@@ -148,7 +135,7 @@ const FeeManagement = () => {
       setFormData({
         property_id: fee.property_id,
         fee_schedule_id: fee.fee_schedule_id,
-        due_date: new Date(fee.due_date).toISOString().split('T')[0],
+        due_date: toInputDate(fee.due_date),
         notes: fee.notes || '',
       });
     } else {
@@ -287,11 +274,6 @@ const handleMonthsChange = (event) => {
     });
   };
 
-  const handleApplyFilters = () => {
-    setCurrentPage(1); // Reset to first page when filters change
-    fetchFees(1);
-  };
-
   const handleClearFilters = () => {
     setFilters({
       year: new Date().getFullYear(),
@@ -299,8 +281,7 @@ const handleMonthsChange = (event) => {
       status: '',
       property: '',
     });
-    setCurrentPage(1); // Reset to first page
-    fetchFees(1);
+    setCurrentPage(1);
   };
 
   const handlePageChange = (newPage) => {
@@ -311,7 +292,10 @@ const handleMonthsChange = (event) => {
 
   const handleDownloadExcel = async () => {
     try {
-      const response = await reportsAPI.getFilteredFeesReport(filters);
+      const response = await reportsAPI.getFilteredFeesReport({
+        ...filters,
+        property_id: filters.property,
+      });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -355,400 +339,414 @@ const handleMonthsChange = (event) => {
     setSelectedFeeForPayments(null);
   };
 
+  const availableYears = Array.from(
+    { length: Math.max(new Date().getFullYear() - 2019, 1) },
+    (_, index) => new Date().getFullYear() - index
+  );
+
+  const columns = [
+    {
+      key: 'property',
+      label: 'Propiedad',
+      mobile: false,
+      render: (fee) => getPropertyInfo(fee.property_id),
+    },
+    {
+      key: 'amount',
+      label: 'Monto',
+      render: (fee) => <MoneyText value={fee.amount} variant="body2" />,
+    },
+    {
+      key: 'paid_amount',
+      label: 'Pagado',
+      render: (fee) => <MoneyText value={fee.paid_amount} variant="body2" sx={{ color: 'success.main' }} />,
+    },
+    {
+      key: 'remaining_amount',
+      label: 'Pendiente',
+      render: (fee) => (
+        <MoneyText value={fee.remaining_amount ?? fee.amount} variant="body2" sx={{ color: 'error.main' }} />
+      ),
+    },
+    {
+      key: 'period',
+      label: 'Periodo',
+      render: (fee) => formatPeriod(fee.month, fee.year),
+    },
+    {
+      key: 'due_date',
+      label: 'Vencimiento',
+      render: (fee) => formatDate(fee.due_date),
+    },
+    {
+      key: 'status',
+      label: 'Estado',
+      render: (fee) => <StatusChip status={fee.status} />,
+    },
+  ];
+
+  const activeFilterChips = [
+    filters.year && {
+      key: 'year',
+      label: `Año ${filters.year}`,
+      onRemove: () => setFilters((current) => ({ ...current, year: '' })),
+    },
+    filters.month && {
+      key: 'month',
+      label: MONTHS.find((month) => month.value.toString() === filters.month.toString())?.label,
+      onRemove: () => setFilters((current) => ({ ...current, month: '' })),
+    },
+    filters.status && {
+      key: 'status',
+      label: filters.status,
+      onRemove: () => setFilters((current) => ({ ...current, status: '' })),
+    },
+    filters.property && {
+      key: 'property',
+      label: getPropertyInfo(filters.property),
+      onRemove: () => setFilters((current) => ({ ...current, property: '' })),
+    },
+  ].filter(Boolean);
+
   return (
-    <PageContainer>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Gestión de Cuotas
-        </Typography>
-        <Box>
-          {isAdmin && (
-            <>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={handleGenerateFees}
-                sx={{ mr: 2 }}
-              >
-                Generar Cuotas
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<DownloadIcon />}
-                onClick={handleDownloadExcel}
-                sx={{ mr: 2 }}
-              >
-                Descargar Excel
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<DownloadIcon />}
-                onClick={handleDownloadTrafficLightReport}
-                sx={{ mr: 2 }}
-              >
-                Reporte Semáforo
-              </Button>
-            </>
-          )}
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nueva Cuota
-          </Button>
-        </Box>
-      </Box>
+    <PageContainer maxWidth="xl">
+      <PageHeader
+        eyebrow="Cobranzas"
+        title="Cuotas"
+        subtitle="Genera, revisa y da seguimiento a las cuotas de cada propiedad."
+        actions={
+          <>
+            <ActionMenu
+              ariaLabel="Más acciones de cuotas"
+              buttonSx={{ border: 1, borderColor: 'divider', borderRadius: 2.5 }}
+              items={
+                isAdmin
+                  ? [
+                      {
+                        label: 'Exportar Excel',
+                        icon: <DownloadIcon fontSize="small" />,
+                        onClick: handleDownloadExcel,
+                      },
+                      {
+                        label: 'Reporte semáforo',
+                        icon: <DownloadIcon fontSize="small" />,
+                        onClick: handleDownloadTrafficLightReport,
+                      },
+                    ]
+                  : []
+              }
+            />
+            {isAdmin && (
+              <>
+                <Button variant="outlined" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+                  Nueva cuota
+                </Button>
+                <Button variant="contained" startIcon={<RefreshIcon />} onClick={handleGenerateFees}>
+                  Generar cuotas
+                </Button>
+              </>
+            )}
+          </>
+        }
+      />
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2.5 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => fetchFees(currentPage)}>
+              Reintentar
+            </Button>
+          }
+        >
           {error}
         </Alert>
       )}
 
-      {/* Filters Section */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" component="h2" gutterBottom>
-          Filtros
-        </Typography>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={2}>
-            <TextField
-              fullWidth
-              label="Año"
-              type="number"
-              value={filters.year}
-              onChange={(e) => handleFilterChange('year', e.target.value)}
-              inputProps={{ min: 2020, max: 2030 }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <FormControl fullWidth>
-              <InputLabel>Mes</InputLabel>
-              <Select
-                value={filters.month}
-                onChange={(e) => handleFilterChange('month', e.target.value)}
-                label="Mes"
-              >
-                <MenuItem value="">
-                  <em>Todos</em>
-                </MenuItem>
-                {MONTHS.map((month) => (
-                  <MenuItem key={month.value} value={month.value}>
-                    {month.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <FormControl fullWidth>
-              <InputLabel>Estado</InputLabel>
-              <Select
-                value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-                label="Estado"
-              >
-                <MenuItem value="">
-                  <em>Todos</em>
-                </MenuItem>
-                <MenuItem value="pending">Pendiente</MenuItem>
-                <MenuItem value="partially_paid">Pago Parcial</MenuItem>
-                <MenuItem value="completed">Completado</MenuItem>
-                <MenuItem value="failed">Fallido</MenuItem>
-                <MenuItem value="cancelled">Cancelado</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <FormControl fullWidth>
-              <InputLabel>Propiedad</InputLabel>
-              <Select
-                value={filters.property}
-                onChange={(e) => handleFilterChange('property', e.target.value)}
-                label="Propiedad"
-              >
-                <MenuItem value="">
-                  <em>Todas</em>
-                </MenuItem>
-                {properties.map((property) => (
-                  <MenuItem key={property.id} value={property.id}>
-                    {property.villa} {property.row_letter}{property.number} - {property.owner_name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Box display="flex" gap={1}>
-              <Button
-                variant="contained"
-                onClick={handleApplyFilters}
-                fullWidth
-              >
-                Aplicar Filtros
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={handleClearFilters}
-                fullWidth
-              >
-                Limpiar
-              </Button>
+      <FilterBar
+        chips={activeFilterChips}
+        onClear={handleClearFilters}
+      >
+        <FormControl fullWidth>
+          <InputLabel>Año</InputLabel>
+          <Select
+            value={filters.year}
+            onChange={(event) => handleFilterChange('year', event.target.value)}
+            label="Año"
+          >
+            <MenuItem value="">
+              <em>Todos</em>
+            </MenuItem>
+            {availableYears.map((year) => (
+              <MenuItem key={year} value={year}>
+                {year}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl fullWidth>
+          <InputLabel>Mes</InputLabel>
+          <Select
+            value={filters.month}
+            onChange={(event) => handleFilterChange('month', event.target.value)}
+            label="Mes"
+          >
+            <MenuItem value="">
+              <em>Todos</em>
+            </MenuItem>
+            {MONTHS.map((month) => (
+              <MenuItem key={month.value} value={month.value}>
+                {month.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl fullWidth>
+          <InputLabel>Estado</InputLabel>
+          <Select
+            value={filters.status}
+            onChange={(event) => handleFilterChange('status', event.target.value)}
+            label="Estado"
+          >
+            <MenuItem value="">
+              <em>Todos</em>
+            </MenuItem>
+            <MenuItem value="pending">Pendiente</MenuItem>
+            <MenuItem value="partially_paid">Pago parcial</MenuItem>
+            <MenuItem value="completed">Completado</MenuItem>
+            <MenuItem value="failed">Fallido</MenuItem>
+            <MenuItem value="cancelled">Cancelado</MenuItem>
+            <MenuItem value="agreement">En convenio</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl fullWidth>
+          <InputLabel>Propiedad</InputLabel>
+          <Select
+            value={filters.property}
+            onChange={(event) => handleFilterChange('property', event.target.value)}
+            label="Propiedad"
+          >
+            <MenuItem value="">
+              <em>Todas</em>
+            </MenuItem>
+            {properties.map((property) => (
+              <MenuItem key={property.id} value={property.id}>
+                {formatPropertyLabel(property)} · {property.owner_name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </FilterBar>
+
+      <ResponsiveTable
+        columns={columns}
+        rows={fees}
+        loading={loading}
+        getRowId={(fee) => fee.id}
+        mobileTitle={(fee) => getPropertyInfo(fee.property_id)}
+        mobileSubtitle={(fee) => `${formatPeriod(fee.month, fee.year)} · ${formatDate(fee.due_date)}`}
+        emptyState={
+          <EmptyState
+            title="No hay cuotas registradas"
+            description="Genera cuotas o crea una manualmente para empezar."
+            action={
+              isAdmin && (
+                <Button variant="contained" startIcon={<RefreshIcon />} onClick={handleGenerateFees}>
+                  Generar cuotas
+                </Button>
+              )
+            }
+          />
+        }
+        renderActions={(fee) => (
+          <ActionMenu
+            ariaLabel={`Acciones para la cuota ${formatPeriod(fee.month, fee.year)}`}
+            items={[
+              (fee.status === 'completed' || fee.status === 'partially_paid') && {
+                label: 'Ver pagos',
+                icon: <ViewIcon fontSize="small" />,
+                onClick: () => handleViewPayments(fee),
+              },
+              {
+                label: 'Editar',
+                icon: <EditIcon fontSize="small" />,
+                onClick: () => handleOpenDialog(fee),
+              },
+              isAdmin && {
+                label: 'Eliminar',
+                icon: <DeleteIcon fontSize="small" />,
+                color: 'error',
+                onClick: () => handleDelete(fee),
+              },
+            ].filter(Boolean)}
+          />
+        )}
+        header={
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Mostrando {fees.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}–
+              {Math.min(currentPage * pageSize, totalCount)} de {totalCount} cuotas
+            </Typography>
+            {isAdmin && (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {filters.year || 'Todos los años'}
+              </Typography>
+            )}
+          </Box>
+        }
+        footer={
+          totalPages > 1 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Pagination
+                count={totalPages}
+                page={currentPage}
+                onChange={(event, page) => handlePageChange(page)}
+                color="primary"
+              />
             </Box>
-          </Grid>
-        </Grid>
-      </Paper>
+          ) : null
+        }
+      />
 
-      <Paper>
-        {/* Pagination Info */}
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="body2" color="textSecondary">
-            Mostrando {fees.length > 0 ? ((currentPage - 1) * pageSize) + 1 : 0} - {Math.min(currentPage * pageSize, totalCount)} de {totalCount} cuotas
-          </Typography>
-        </Box>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Propiedad</TableCell>
-                <TableCell>Monto Total</TableCell>
-                <TableCell>Monto Pagado</TableCell>
-                <TableCell>Monto Pendiente</TableCell>
-                <TableCell>Año</TableCell>
-                <TableCell>Mes</TableCell>
-                <TableCell>Fecha de Vencimiento</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <LoadingSkeleton type="table" rows={5} columns={9} />
-              ) : fees.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9}>
-                    <EmptyState
-                      title="No hay cuotas registradas"
-                      description="Genera cuotas o crea una manualmente para empezar."
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                fees.map((fee) => (
-                  <TableRow key={fee.id}>
-                    <TableCell>{getPropertyInfo(fee.property_id)}</TableCell>
-                    <TableCell>S/ {fee.amount.toFixed(2)}</TableCell>
-                    <TableCell>S/ {(fee.paid_amount || 0).toFixed(2)}</TableCell>
-                    <TableCell>S/ {(fee.remaining_amount || fee.amount).toFixed(2)}</TableCell>
-                    <TableCell>{fee.year}</TableCell>
-                    <TableCell>{fee.month}</TableCell>
-                    <TableCell>
-                      {new Date(fee.due_date).toLocaleDateString('es-ES')}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getStatusLabel(fee.status)}
-                        color={getStatusColor(fee.status)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {(fee.status === 'completed' || fee.status === 'partially_paid') && (
-                        <IconButton
-                          color="info"
-                          onClick={() => handleViewPayments(fee)}
-                          aria-label="Ver pagos de la cuota"
-                          title="Ver Pagos"
-                        >
-                          <ViewIcon />
-                        </IconButton>
-                      )}
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleOpenDialog(fee)}
-                        aria-label={`Editar cuota ${fee.month}/${fee.year}`}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      {isAdmin && (
-                        <IconButton
-                          color="error"
-                          onClick={() => handleDelete(fee)}
-                          aria-label={`Eliminar cuota ${fee.month}/${fee.year}`}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <Box display="flex" justifyContent="center" mt={2}>
-          <Pagination
-            count={totalPages}
-            page={currentPage}
-            onChange={(event, page) => handlePageChange(page)}
-            color="primary"
-            size="large"
+      <FormDialog
+        open={open}
+        onClose={handleCloseDialog}
+        onSubmit={handleSubmit}
+        title={editingFee ? 'Editar cuota' : 'Nueva cuota'}
+        subtitle={
+          editingFee
+            ? `${getPropertyInfo(editingFee.property_id)} · ${formatPeriod(editingFee.month, editingFee.year)}`
+            : 'Selecciona la propiedad y el plan de cuotas.'
+        }
+        submitLabel={editingFee ? 'Guardar cambios' : 'Crear cuota'}
+        saving={saving}
+        maxWidth="sm"
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <FormControl fullWidth>
+            <InputLabel>Propiedad</InputLabel>
+            <Select
+              value={formData.property_id}
+              onChange={(event) => setFormData({ ...formData, property_id: event.target.value })}
+              label="Propiedad"
+              required
+            >
+              {properties.map((property) => (
+                <MenuItem key={property.id} value={property.id}>
+                  {formatPropertyLabel(property)} · {property.owner_name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth>
+            <InputLabel>Plan de cuotas</InputLabel>
+            <Select
+              value={formData.fee_schedule_id}
+              onChange={(event) => setFormData({ ...formData, fee_schedule_id: event.target.value })}
+              label="Plan de cuotas"
+              required
+            >
+              {feeSchedules.map((schedule) => (
+                <MenuItem key={schedule.id} value={schedule.id}>
+                  {schedule.description} · S/ {Number(schedule.amount).toFixed(2)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Fecha de vencimiento"
+            type="date"
+            fullWidth
+            required
+            value={formData.due_date}
+            onChange={(event) => setFormData({ ...formData, due_date: event.target.value })}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            label="Notas"
+            fullWidth
+            multiline
+            rows={3}
+            value={formData.notes}
+            onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
           />
         </Box>
-      )}
+      </FormDialog>
 
-      {/* Dialog for Add/Edit Fee */}
-      <Dialog open={open} onClose={handleCloseDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
-        <DialogTitle>
-          {editingFee ? 'Editar Cuota' : 'Nueva Cuota'}
-        </DialogTitle>
-        <form onSubmit={handleSubmit}>
-          <DialogContent>
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Propiedad</InputLabel>
-              <Select
-                value={formData.property_id}
-                onChange={(e) => setFormData({ ...formData, property_id: e.target.value })}
-                label="Propiedad"
-                required
-              >
-                {properties.map((property) => (
-                  <MenuItem key={property.id} value={property.id}>
-                    {property.villa} {property.row_letter}{property.number} - {property.owner_name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Plan de Cuotas</InputLabel>
-              <Select
-                value={formData.fee_schedule_id}
-                onChange={(e) => setFormData({ ...formData, fee_schedule_id: e.target.value })}
-                label="Plan de Cuotas"
-                required
-              >
-                {feeSchedules.map((schedule) => (
-                  <MenuItem key={schedule.id} value={schedule.id}>
-                    {schedule.description} - S/ {schedule.amount.toFixed(2)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              margin="dense"
-              label="Fecha de Vencimiento"
-              type="date"
-              fullWidth
-              required
-              value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
-            <TextField
-              margin="dense"
-              label="Notas"
-              fullWidth
-              multiline
-              rows={3}
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog} disabled={saving}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={saving}>
-              {saving ? 'Guardando...' : editingFee ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Dialog for Generate Fees */}
-      <Dialog open={generateOpen} onClose={handleGenerateClose} maxWidth="sm" fullWidth fullScreen={isMobile}>
-        <DialogTitle>
-          Generar Cuotas
-        </DialogTitle>
-        <form onSubmit={handleGenerateSubmit}>
-          <DialogContent>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-              Selecciona el año, los meses y los planes de cuotas para generar las cuotas. Se generarán cuotas para todas las propiedades usando los planes seleccionados.
-            </Typography>
-            <TextField
-              margin="dense"
-              label="Año"
-              type="number"
-              fullWidth
-              required
+      <FormDialog
+        open={generateOpen}
+        onClose={handleGenerateClose}
+        onSubmit={handleGenerateSubmit}
+        title="Generar cuotas"
+        subtitle="Se generarán cuotas para todas las propiedades con los planes seleccionados."
+        submitLabel="Generar cuotas"
+        savingLabel="Generando…"
+        saving={generatingFees}
+        maxWidth="sm"
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <TextField
+            label="Año"
+            type="number"
+            fullWidth
+            required
+            disabled={generatingFees}
+            value={generateFormData.year}
+            onChange={(event) =>
+              setGenerateFormData({ ...generateFormData, year: parseInt(event.target.value, 10) })
+            }
+            inputProps={{ min: 2020, max: 2035 }}
+          />
+          <FormControl fullWidth>
+            <InputLabel>Meses</InputLabel>
+            <Select
+              multiple
               disabled={generatingFees}
-              value={generateFormData.year}
-              onChange={(e) => setGenerateFormData({ ...generateFormData, year: parseInt(e.target.value) })}
-              inputProps={{ min: 2020, max: 2030 }}
-            />
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Meses</InputLabel>
-              <Select
-                multiple
-                disabled={generatingFees}
-                value={generateFormData.months}
-                onChange={handleMonthsChange}
-                input={<OutlinedInput label="Meses" />}
-                renderValue={(selected) => selected.map(month => MONTHS.find(m => m.value === month)?.label).join(', ')}
-              >
-                {MONTHS.map((month) => (
-                  <MenuItem key={month.value} value={month.value}>
-                    <Checkbox checked={generateFormData.months.indexOf(month.value) > -1} />
-                    <ListItemText primary={month.label} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Planes de Cuotas</InputLabel>
-              <Select
-                multiple
-                disabled={generatingFees}
-                value={generateFormData.feeScheduleIds}
-                onChange={handleFeeSchedulesChange}
-                input={<OutlinedInput label="Planes de Cuotas" />}
-                renderValue={(selected) => selected.map(id => {
-                  const schedule = feeSchedules.find(s => s.id === id);
-                  return schedule ? schedule.description : id;
-                }).join(', ')}
-              >
-                {feeSchedules.map((schedule) => (
-                  <MenuItem key={schedule.id} value={schedule.id}>
-                    <Checkbox checked={generateFormData.feeScheduleIds.indexOf(schedule.id) > -1} />
-                    <ListItemText primary={`${schedule.description} - S/ ${schedule.amount.toFixed(2)}`} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Typography variant="caption" color="textSecondary" sx={{ mt: 1 }}>
-              Si no seleccionas ningún plan de cuotas, se usarán todos los planes activos.
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleGenerateClose} disabled={generatingFees}>
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={generatingFees}
-              startIcon={generatingFees ? <LoadingSpinner size={20} /> : null}
+              value={generateFormData.months}
+              onChange={handleMonthsChange}
+              input={<OutlinedInput label="Meses" />}
+              renderValue={(selected) =>
+                selected.map((month) => MONTHS.find((item) => item.value === month)?.label).join(', ')
+              }
             >
-              {generatingFees ? 'Generando...' : 'Generar Cuotas'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+              {MONTHS.map((month) => (
+                <MenuItem key={month.value} value={month.value}>
+                  <Checkbox checked={generateFormData.months.indexOf(month.value) > -1} />
+                  <ListItemText primary={month.label} />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth>
+            <InputLabel>Planes de cuotas</InputLabel>
+            <Select
+              multiple
+              disabled={generatingFees}
+              value={generateFormData.feeScheduleIds}
+              onChange={handleFeeSchedulesChange}
+              input={<OutlinedInput label="Planes de cuotas" />}
+              renderValue={(selected) =>
+                selected
+                  .map((id) => feeSchedules.find((schedule) => schedule.id === id)?.description)
+                  .filter(Boolean)
+                  .join(', ')
+              }
+            >
+              {feeSchedules.map((schedule) => (
+                <MenuItem key={schedule.id} value={schedule.id}>
+                  <Checkbox checked={generateFormData.feeScheduleIds.indexOf(schedule.id) > -1} />
+                  <ListItemText primary={`${schedule.description} · S/ ${Number(schedule.amount).toFixed(2)}`} />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Si no seleccionas planes, se usarán todos los planes activos.
+          </Typography>
+        </Box>
+      </FormDialog>
 
-      {/* Payments Modal */}
       <PaymentsModal
         open={paymentsModalOpen}
         onClose={handleClosePaymentsModal}

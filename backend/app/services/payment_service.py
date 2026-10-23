@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from bson import DBRef
 
 from ..models.payment import Payment, PaymentStatus
 from ..models.fee import Fee, FeeStatus
@@ -145,10 +146,12 @@ async def bulk_import_payment_rows(ws, current_user):
                 continue
 
             fee = await Fee.find_one(
-                Fee.property.id == property_obj.id,
-                Fee.year == year,
-                Fee.month == month,
-                Fee.status == FeeStatus.PENDING
+                {
+                    "property": DBRef("properties", property_obj.id),
+                    "year": year,
+                    "month": month,
+                    "status": FeeStatus.PENDING,
+                }
             )
 
             if not fee:

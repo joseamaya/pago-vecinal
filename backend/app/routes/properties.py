@@ -6,6 +6,8 @@ from ..schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..services.property_service import bulk_import_property_rows
+from ..utils.links import link_id
+from bson import DBRef
 from ..utils.uploads import (
     validate_upload,
     EXCEL_EXTENSIONS,
@@ -38,7 +40,7 @@ async def get_properties(
     query = {}
     if current_user.role != UserRole.ADMIN:
         # Owners can only see their own properties
-        query["owner.id"] = current_user.id
+        query["owner"] = DBRef("users", current_user.id)
 
     # Get total count
     total_count = await Property.find(query).count()
@@ -60,7 +62,7 @@ async def get_properties(
             villa=prop.villa,
             owner_name=prop.owner_name,
             owner_phone=prop.owner_phone,
-            owner_id=str(prop.owner.id) if prop.owner else None
+            owner_id=link_id(prop.owner)
         )
         for prop in properties
     ]
@@ -90,7 +92,7 @@ async def get_property(property_id: str, current_user: User = Depends(get_curren
         villa=prop.villa,
         owner_name=prop.owner_name,
         owner_phone=prop.owner_phone,
-        owner_id=str(prop.owner.id) if prop.owner else None
+        owner_id=link_id(prop.owner)
     )
 
 @router.post("/", response_model=PropertyResponse)
@@ -165,7 +167,7 @@ async def update_property(
         villa=prop.villa,
         owner_name=prop.owner_name,
         owner_phone=prop.owner_phone,
-        owner_id=str(prop.owner.id) if prop.owner else None
+        owner_id=link_id(prop.owner)
     )
 
 @router.delete("/{property_id}")
@@ -189,7 +191,7 @@ async def delete_property(property_id: str, current_user: User = Depends(get_cur
 async def get_distinct_letters(current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.ADMIN:
         # Owners can only see their own properties
-        properties = await Property.find(Property.owner.id == current_user.id).to_list()
+        properties = await Property.find({"owner": DBRef("users", current_user.id)}).to_list()
     else:
         properties = await Property.find_all().to_list()
 
@@ -200,7 +202,7 @@ async def get_distinct_letters(current_user: User = Depends(get_current_user)):
 async def get_distinct_numbers(current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.ADMIN:
         # Owners can only see their own properties
-        properties = await Property.find(Property.owner.id == current_user.id).to_list()
+        properties = await Property.find({"owner": DBRef("users", current_user.id)}).to_list()
     else:
         properties = await Property.find_all().to_list()
 
@@ -215,9 +217,11 @@ async def get_property_by_letter_number(
 ):
     if current_user.role != UserRole.ADMIN:
         prop = await Property.find_one(
-            Property.row_letter == row_letter,
-            Property.number == number,
-            Property.owner.id == current_user.id
+            {
+                "row_letter": row_letter,
+                "number": number,
+                "owner": DBRef("users", current_user.id),
+            }
         )
     else:
         prop = await Property.find_one(
@@ -238,7 +242,7 @@ async def get_property_by_letter_number(
         villa=prop.villa,
         owner_name=prop.owner_name,
         owner_phone=prop.owner_phone,
-        owner_id=str(prop.owner.id) if prop.owner else None
+        owner_id=link_id(prop.owner)
     )
 
 @router.post("/bulk-import", response_model=BulkImportResponse)

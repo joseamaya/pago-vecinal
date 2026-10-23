@@ -38,6 +38,39 @@ class TestListProperties:
         assert data["data"][0]["row_letter"] == "A"
 
 
+    @pytest.mark.asyncio
+    async def test_owner_only_sees_own_properties(
+        self, client, mongomock_db, test_property, test_owner_user, auth_headers_owner
+    ):
+        from app.models.property import Property
+        from app.models.user import User
+
+        admin = await User.find_one(User.email == "test@example.com")
+        own_property = Property(
+            row_letter="B",
+            number=2,
+            villa="Villa 2",
+            owner_name="Owner User",
+            owner=test_owner_user,
+        )
+        await own_property.insert()
+        other_property = Property(
+            row_letter="C",
+            number=3,
+            villa="Villa 3",
+            owner_name="Admin User",
+            owner=admin,
+        )
+        await other_property.insert()
+
+        response = await client.get("/properties/?page=1&limit=20", headers=auth_headers_owner)
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert len(data) == 1
+        assert data[0]["row_letter"] == "B"
+        assert data[0]["owner_id"] == str(test_owner_user.id)
+
+
 class TestCreateProperty:
     @pytest.mark.asyncio
     async def test_creates_property(self, client, mongomock_db, auth_headers_admin):

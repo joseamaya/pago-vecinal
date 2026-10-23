@@ -11,6 +11,15 @@ export const useAuth = () => {
   return context;
 };
 
+const getErrorMessage = (error, fallback) => {
+  const detail = error.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item.msg || item.message || 'Dato inválido').join('. ');
+  }
+  return fallback;
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,25 +62,33 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Login failed'
+        error: getErrorMessage(error, 'No pudimos iniciar sesión. Inténtalo nuevamente.')
       };
     }
   };
 
   const register = async (userData) => {
     try {
-      const response = await api.post('/auth/register', userData);
+      const payload = {
+        email: userData.email,
+        password: userData.password,
+        role: 'owner',
+        full_name: userData.fullName,
+        phone: userData.phone,
+      };
+      const response = await api.post('/auth/register', payload);
       const { access_token } = response.data;
 
       localStorage.setItem('token', access_token);
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
+      const userResponse = await api.get('/users/me');
+      setUser(userResponse.data);
+      localStorage.setItem('user', JSON.stringify(userResponse.data));
 
       return { success: true };
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Registration failed'
+        error: getErrorMessage(error, 'No pudimos crear la cuenta. Inténtalo nuevamente.')
       };
     }
   };

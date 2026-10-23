@@ -3,6 +3,7 @@ from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient, ASGITransport
 from datetime import datetime, timedelta
 from app.main import app
+from app.models.fee import FeeStatus
 
 
 
@@ -153,3 +154,137 @@ class TestGetOwnerExpensesReport:
             "/dashboard/owner/expenses-report", headers=auth_headers_admin
         )
         assert response.status_code == 403
+
+
+class TestGetDashboardTrends:
+    @pytest.mark.asyncio
+    async def test_admin_gets_monthly_series(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        from app.models.property import Property
+        from app.models.fee import Fee, FeeSchedule
+        from app.models.payment import Payment, PaymentStatus
+        from app.models.expense import Expense
+        from app.models.user import User
+
+        admin = await User.find_one(User.email == "test@example.com")
+        prop = Property(
+            row_letter="A", number=1, villa="Villa 1",
+            owner_name="Owner", owner=admin,
+        )
+        await prop.insert()
+        fs = FeeSchedule(
+            amount=100.0, description="Cuota",
+            effective_date=datetime.utcnow(), due_day=15,
+        )
+        await fs.insert()
+        fee = Fee(
+            property=prop, fee_schedule=fs, amount=100.0,
+            generated_date=datetime.utcnow(), year=2025, month=7,
+            due_date=datetime.utcnow(), status=FeeStatus.PENDING,
+        )
+        await fee.insert()
+        payment = Payment(
+            fee=fee, fee_id=str(fee.id), user=admin, amount=100.0,
+            payment_date=datetime.utcnow(), status=PaymentStatus.APPROVED,
+        )
+        await payment.insert()
+        expense = Expense(
+            expense_date=datetime.utcnow(), description="Luz",
+            amount=40.0, year=2025, month=7,
+        )
+        await expense.insert()
+
+        response = await client.get("/dashboard/trends?months=3", headers=auth_headers_admin)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["months"] == 3
+        assert len(data["series"]) == 3
+        current = data["series"][-1]
+        assert current["collected"] == 100.0
+        assert current["expenses"] == 40.0
+        assert current["balance"] == 60.0
+
+    @pytest.mark.asyncio
+    async def test_owner_sees_payments_for_own_properties(
+        self, client, mongomock_db, auth_headers_owner
+    ):
+        from app.models.property import Property
+        from app.models.fee import Fee, FeeSchedule, FeeStatus
+        from app.models.payment import Payment, PaymentStatus
+        from app.models.user import User
+
+        owner = await User.find_one(User.email == "owner@example.com")
+        admin = await User.find_one(User.email == "test@example.com")
+        prop = Property(
+            row_letter="A", number=1, villa="Villa 1",
+            owner_name="Owner", owner=owner,
+        )
+        await prop.insert()
+        fs = FeeSchedule(
+            amount=100.0, description="Cuota",
+            effective_date=datetime.utcnow(), due_day=15,
+        )
+        await fs.insert()
+        fee = Fee(
+            property=prop, fee_schedule=fs, amount=100.0,
+            generated_date=datetime.utcnow(), year=2025, month=7,
+            due_date=datetime.utcnow(), status=FeeStatus.PENDING,
+        )
+        await fee.insert()
+
+        own_payment = Payment(
+            fee=fee, fee_id=str(fee.id), user=owner, amount=100.0,
+            payment_date=datetime.utcnow(), status=PaymentStatus.APPROVED,
+        )
+        await own_payment.insert()
+        other_payment = Payment(
+            fee=fee, fee_id=str(fee.id), user=admin, amount=50.0,
+            payment_date=datetime.utcnow(), status=PaymentStatus.APPROVED,
+        )
+        await other_payment.insert()
+
+        response = await client.get("/dashboard/trends?months=1", headers=auth_headers_owner)
+        assert response.status_code == 200
+        assert response.json()["series"][-1]["collected"] == 150.0
+
+
+class TestGetRecentActivity:
+    @pytest.mark.asyncio
+    async def test_admin_gets_recent_payments(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        from app.models.property import Property
+        from app.models.fee import Fee, FeeSchedule, FeeStatus
+        from app.models.payment import Payment, PaymentStatus
+        from app.models.user import User
+
+        admin = await User.find_one(User.email == "test@example.com")
+        prop = Property(
+            row_letter="A", number=1, villa="Villa 1",
+            owner_name="Owner", owner=admin,
+        )
+        await prop.insert()
+        fs = FeeSchedule(
+            amount=100.0, description="Cuota",
+            effective_date=datetime.utcnow(), due_day=15,
+        )
+        await fs.insert()
+        fee = Fee(
+            property=prop, fee_schedule=fs, amount=100.0,
+            generated_date=datetime.utcnow(), year=2025, month=7,
+            due_date=datetime.utcnow(), status=FeeStatus.PENDING,
+        )
+        await fee.insert()
+        payment = Payment(
+            fee=fee, fee_id=str(fee.id), user=admin, amount=100.0,
+            payment_date=datetime.utcnow(), status=PaymentStatus.APPROVED,
+        )
+        await payment.insert()
+
+        response = await client.get("/dashboard/recent-activity", headers=auth_headers_admin)
+        assert response.status_code == 200
+        activity = response.json()["activity"]
+        assert len(activity) == 1
+        assert activity[0]["amount"] == 100.0
+        assert activity[0]["property"]["villa"] == "Villa 1"
