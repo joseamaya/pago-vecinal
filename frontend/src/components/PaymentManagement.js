@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Alert, Button, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
+import { Button, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { Add as AddIcon } from '@mui/icons-material';
@@ -14,6 +14,8 @@ import { usePaymentDialog } from '../hooks/usePaymentDialog';
 import PageContainer from './common/PageContainer';
 import PageHeader from './common/PageHeader';
 import FilterBar from './common/FilterBar';
+import DataToolbar from './common/DataToolbar';
+import ErrorState from './common/ErrorState';
 import PaymentTable from './payments/PaymentTable';
 import PaymentFormDialog from './payments/PaymentFormDialog';
 import BulkUploadDialog from './payments/BulkUploadDialog';
@@ -201,19 +203,46 @@ const PaymentManagement = () => {
         }
       />
 
-      {filters.error && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2.5 }}
-          action={
-            <Button color="inherit" size="small" onClick={filters.refresh}>
-              Reintentar
-            </Button>
-          }
-        >
-          {filters.error}
-        </Alert>
-      )}
+      <ErrorState message={filters.error} onRetry={filters.refresh} />
+
+      <DataToolbar
+        search={filters.search}
+        onSearchChange={filters.setSearch}
+        searchPlaceholder="Buscar por propiedad, propietario o notas…"
+        resultCount={filters.payments.length}
+        totalCount={filters.totalCount}
+      >
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Ordenar por</InputLabel>
+          <Select
+            value={filters.sortBy}
+            label="Ordenar por"
+            onChange={(event) => {
+              const value = event.target.value;
+              filters.setSort(value, value ? filters.sortDir || 'asc' : '');
+            }}
+          >
+            <MenuItem value="">Estado (predeterminado)</MenuItem>
+            <MenuItem value="date">Fecha</MenuItem>
+            <MenuItem value="amount">Monto</MenuItem>
+            <MenuItem value="status">Estado</MenuItem>
+            <MenuItem value="property">Propiedad</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 130 }}>
+          <InputLabel>Dirección</InputLabel>
+          <Select
+            value={filters.sortDir || 'asc'}
+            label="Dirección"
+            onChange={(event) =>
+              filters.setSort(filters.sortBy || 'date', event.target.value)
+            }
+          >
+            <MenuItem value="asc">Ascendente</MenuItem>
+            <MenuItem value="desc">Descendente</MenuItem>
+          </Select>
+        </FormControl>
+      </DataToolbar>
 
       <FilterBar chips={filters.activeFilterChips} onClear={filters.clearFilters}>
         <FormControl fullWidth>
@@ -309,6 +338,7 @@ const PaymentManagement = () => {
           totalCount: filters.totalCount,
           pageSize: filters.pageSize,
           onPageChange: filters.handlePageChange,
+          onPageSizeChange: filters.setPageSize,
         }}
       />
 

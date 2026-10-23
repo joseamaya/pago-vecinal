@@ -1,15 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   FormControl,
   InputLabel,
   MenuItem,
-  Pagination,
   Select,
   TextField,
-  Typography,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -31,6 +28,11 @@ import ActionMenu from './common/ActionMenu';
 import FormDialog from './common/FormDialog';
 import MoneyText from './common/MoneyText';
 import EmptyState from './common/EmptyState';
+import DataToolbar from './common/DataToolbar';
+import TablePagination from './common/TablePagination';
+import ErrorState from './common/ErrorState';
+import { useAsyncData } from '../hooks/useAsyncData';
+import { useTableState } from '../hooks/useTableState';
 import { formatCurrency, formatDate, formatPeriod } from '../utils/formatters';
 
 const EMPTY_RECEIPT = { payment_id: '', fee_period: '', notes: '' };
@@ -39,41 +41,55 @@ const ReceiptManagement = () => {
   const { isAdmin } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-  const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
   const [formError, setFormError] = useState('');
   const [open, setOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState(null);
-  const [pagination, setPagination] = useState({ page: 0, limit: 20, total_count: 0, total_pages: 0 });
   const [formData, setFormData] = useState(EMPTY_RECEIPT);
 
+  const table = useTableState({ defaultSortBy: 'date', defaultSortDir: 'desc' });
+  const { page: tablePage, setPage } = table;
+
+  const loader = useCallback(
+    () =>
+      receiptsAPI
+        .getReceipts(table.page, table.limit, {
+          search: table.search || undefined,
+          sort_by: table.sortBy || undefined,
+          sort_dir: table.sortDir || undefined,
+        })
+        .then((response) => response.data),
+    [table.page, table.limit, table.search, table.sortBy, table.sortDir]
+  );
+
+  const { data, loading, refreshing, error, reload } = useAsyncData(
+    loader,
+    [loader],
+    { fallbackError: 'No pudimos cargar los recibos.' }
+  );
+
+  const receipts = data?.data || [];
+  const pagination = data?.pagination || { total_count: 0, total_pages: 0 };
+  const totalPages = Math.max(pagination.total_pages || 1, 1);
+  const currentPage = Math.min(table.page, totalPages);
+
   useEffect(() => {
-    fetchReceipts();
+    if (data && tablePage > totalPages) setPage(totalPages);
+  }, [data, tablePage, totalPages, setPage]);
+
+  const refreshFromFirstPage = useCallback(async () => {
+    if (tablePage !== 1) {
+      setPage(1);
+      return;
+    }
+    await reload();
+  }, [tablePage, setPage, reload]);
+
+  useEffect(() => {
     fetchPayments();
   }, []);
-
-  const fetchReceipts = async (page = 1, limit = 20) => {
-    try {
-      setLoading(true);
-      const response = await receiptsAPI.getReceipts(page, limit);
-      setReceipts(response.data.data);
-      setPagination({
-        page: response.data.pagination.page - 1,
-        limit: response.data.pagination.limit,
-        total_count: response.data.pagination.total_count,
-        total_pages: response.data.pagination.total_pages,
-      });
-      setError('');
-    } catch (err) {
-      setError('No pudimos cargar los recibos.');
-      console.error('Error fetching receipts:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchPayments = async () => {
     try {
@@ -120,7 +136,7 @@ const ReceiptManagement = () => {
         await receiptsAPI.createReceipt(formData);
         toast.success('Recibo creado correctamente');
       }
-      fetchReceipts();
+      await refreshFromFirstPage();
       handleCloseDialog();
     } catch (err) {
       if (!isNetworkError(err)) {
@@ -143,7 +159,7 @@ const ReceiptManagement = () => {
     try {
       await receiptsAPI.deleteReceipt(receipt.id);
       toast.success('Recibo eliminado correctamente');
-      fetchReceipts();
+      await refreshFromFirstPage();
     } catch (err) {
       if (!isNetworkError(err)) {
         toast.error('No pudimos eliminar el recibo');
@@ -201,7 +217,7 @@ const ReceiptManagement = () => {
     if (!confirmed) return;
 
     try {
-      setLoading(true);
+      setRegenerating(true);
       const response = await receiptsAPI.regenerateAllReceiptPDFs();
       toast.success(`PDFs regenerados: ${response.data.updated_count} recibos actualizados`);
       if (response.data.errors?.length > 0) {
@@ -213,7 +229,7 @@ const ReceiptManagement = () => {
       }
       console.error('Error regenerating all receipt PDFs:', err);
     } finally {
-      setLoading(false);
+      setRegenerating(false);
     }
   };
 
@@ -245,30 +261,16 @@ const ReceiptManagement = () => {
     },
   ];
 
-  const footer = pagination.total_pages > 1 && (
-    <Box
-      sx={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 1,
-        px: 2.5,
-        py: 1.75,
-      }}
-    >
-      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-        Mostrando {pagination.page * pagination.limit + 1}–
-        {Math.min((pagination.page + 1) * pagination.limit, pagination.total_count)} de {pagination.total_count}
-      </Typography>
-      <Pagination
-        count={pagination.total_pages}
-        page={pagination.page + 1}
-        onChange={(event, page) => fetchReceipts(page, pagination.limit)}
-        color="primary"
-        size="small"
-      />
-    </Box>
+  const footer = (
+    <TablePagination
+      page={currentPage}
+      totalPages={totalPages}
+      totalCount={pagination.total_count}
+      pageSize={table.limit}
+      onPageChange={table.setPage}
+      onPageSizeChange={table.setLimit}
+      disabled={loading || refreshing}
+    />
   );
 
   return (
@@ -280,7 +282,7 @@ const ReceiptManagement = () => {
         actions={
           <>
             {isAdmin && (
-              <Button variant="outlined" startIcon={<SyncIcon />} onClick={handleRegenerateAll} disabled={loading}>
+              <Button variant="outlined" startIcon={<SyncIcon />} onClick={handleRegenerateAll} disabled={regenerating}>
                 Regenerar PDFs
               </Button>
             )}
@@ -291,24 +293,48 @@ const ReceiptManagement = () => {
         }
       />
 
-      {error && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2.5 }}
-          action={
-            <Button color="inherit" size="small" onClick={() => fetchReceipts()}>
-              Reintentar
-            </Button>
-          }
-        >
-          {error}
-        </Alert>
-      )}
+      <ErrorState message={error} onRetry={reload} />
+
+      <DataToolbar
+        search={table.search}
+        onSearchChange={table.setSearch}
+        searchPlaceholder="Buscar por recibo, propiedad o propietario…"
+        resultCount={receipts.length}
+        totalCount={pagination.total_count}
+      >
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Ordenar por</InputLabel>
+          <Select
+            value={table.sortBy}
+            label="Ordenar por"
+            onChange={(event) =>
+              table.setSort(event.target.value, table.sortDir || 'desc')
+            }
+          >
+            <MenuItem value="date">Fecha</MenuItem>
+            <MenuItem value="correlative">Recibo</MenuItem>
+            <MenuItem value="amount">Monto</MenuItem>
+            <MenuItem value="owner">Propietario</MenuItem>
+            <MenuItem value="property">Propiedad</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 130 }}>
+          <InputLabel>Dirección</InputLabel>
+          <Select
+            value={table.sortDir || 'desc'}
+            label="Dirección"
+            onChange={(event) => table.setSort(table.sortBy || 'date', event.target.value)}
+          >
+            <MenuItem value="asc">Ascendente</MenuItem>
+            <MenuItem value="desc">Descendente</MenuItem>
+          </Select>
+        </FormControl>
+      </DataToolbar>
 
       <ResponsiveTable
         columns={columns}
         rows={receipts}
-        loading={loading}
+        loading={loading || refreshing}
         getRowId={(receipt) => receipt.id}
         mobileTitle={(receipt) => `Recibo ${receipt.correlative_number}`}
         mobileSubtitle={(receipt) =>

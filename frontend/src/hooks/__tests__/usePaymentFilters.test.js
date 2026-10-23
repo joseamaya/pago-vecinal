@@ -91,6 +91,39 @@ describe('usePaymentFilters', () => {
     await waitFor(() => expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 20, {}));
   });
 
+  test('applies search, sorting and page size without duplicate fetches', async () => {
+    const { result } = renderHook(() => usePaymentFilters([]));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(paymentsAPI.getPayments).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.setSearch('Villa'));
+    await waitFor(() =>
+      expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 20, {
+        search: 'Villa',
+      })
+    );
+
+    act(() => result.current.setSort('amount', 'desc'));
+    await waitFor(() =>
+      expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 20, {
+        search: 'Villa',
+        sort_by: 'amount',
+        sort_dir: 'desc',
+      })
+    );
+    expect(paymentsAPI.getPayments).toHaveBeenCalledTimes(3);
+
+    act(() => result.current.setPageSize(50));
+    await waitFor(() =>
+      expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 50, {
+        search: 'Villa',
+        sort_by: 'amount',
+        sort_dir: 'desc',
+      })
+    );
+    expect(paymentsAPI.getPayments).toHaveBeenCalledTimes(4);
+  });
+
   test('exposes an error when loading fails', async () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     paymentsAPI.getPayments.mockRejectedValueOnce(new Error('network'));
