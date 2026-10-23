@@ -16,6 +16,8 @@ test('owner can register, update profile and change password', async ({ page }) 
 
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Hola,');
+  await expect(page.getByText('Evolución de deuda')).toBeVisible();
+  await expect(page.getByText('Sin deuda pendiente')).toBeVisible();
 
   await openUserMenu(page);
   await page.getByText('Mi perfil').click();

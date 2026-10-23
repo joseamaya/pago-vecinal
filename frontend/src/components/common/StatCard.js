@@ -106,9 +106,11 @@ const StatCard = ({
     position: 'relative',
     height: '100%',
     overflow: 'hidden',
-    ...(onClick && {
-      '&:hover': { transform: 'translateY(-2px)', borderColor: 'primary.light' },
-    }),
+    '&:hover': {
+      transform: 'translateY(-2px)',
+      boxShadow: 3,
+      borderColor: 'primary.light',
+    },
   };
 
   if (onClick) {

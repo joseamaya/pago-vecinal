@@ -6,6 +6,7 @@ export const components = {
       '*, *::before, *::after': {
         '@media (prefers-reduced-motion: reduce)': {
           animationDuration: '0.01ms !important',
+          animationDelay: '0ms !important',
           animationIterationCount: '1 !important',
           transitionDuration: '0.01ms !important',
           scrollBehavior: 'auto !important',

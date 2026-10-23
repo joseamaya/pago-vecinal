@@ -36,7 +36,7 @@ export const ToastProvider = ({ children }) => {
   const show = useCallback(
     (toast) => {
       const id = `${Date.now()}-${Math.random()}`;
-      const autoHideDuration = toast.autoHideDuration ?? 5000;
+      const autoHideDuration = toast.autoHideDuration ?? 4000;
       setToasts((current) => [
         ...current,
         { severity: 'info', ...toast, id, autoHideDuration },

@@ -25,6 +25,7 @@ import {
   StorefrontOutlined as StoreIcon,
 } from '@mui/icons-material';
 import { BarChart } from '@mui/x-charts/BarChart';
+import { LineChart } from '@mui/x-charts/LineChart';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI } from '../services/api';
@@ -61,7 +62,7 @@ const Dashboard = () => {
     try {
       const [statsRes, trendsRes, recentRes] = await Promise.all([
         dashboardAPI.getStats(),
-        dashboardAPI.getTrends(6),
+        dashboardAPI.getTrends(12),
         dashboardAPI.getRecentActivity(6),
       ]);
       setStats(statsRes.data);
@@ -132,6 +133,28 @@ const Dashboard = () => {
       map.set(entry.property.id, entry);
     });
     return map;
+  }, [ownerData.debtSummary]);
+
+  const debtEvolution = useMemo(() => {
+    const buckets = new Map();
+    (ownerData.debtSummary?.properties || []).forEach((entry) => {
+      (entry.fees || []).forEach((fee) => {
+        if (!fee.month || !fee.year) return;
+        const key = `${fee.year}-${String(fee.month).padStart(2, '0')}`;
+        buckets.set(key, (buckets.get(key) || 0) + (Number(fee.amount) || 0));
+      });
+    });
+
+    return [...buckets.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => {
+        const [year, month] = key.split('-').map(Number);
+        return {
+          key,
+          label: `${formatMonth(month).slice(0, 3)} ${String(year).slice(2)}`,
+          value: Number(value.toFixed(2)),
+        };
+      });
   }, [ownerData.debtSummary]);
 
   const quickActions = isAdmin
@@ -254,18 +277,29 @@ const Dashboard = () => {
                 helper: 'a tu nombre',
               },
             ]
-        ).map((item) => (
-          <Grid key={item.title} size={{ xs: 6, md: 3 }}>
+        ).map((item, index) => (
+          <Grid
+            key={item.title}
+            size={{ xs: 6, md: 3 }}
+            sx={{
+              animation: 'fade-up 420ms ease both',
+              animationDelay: `${index * 60}ms`,
+            }}
+          >
             <StatCard {...item} loading={loading} />
           </Grid>
         ))}
       </Grid>
 
-      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+      <Grid
+        container
+        spacing={2.5}
+        sx={{ mb: 3, animation: 'fade-up 420ms ease both', animationDelay: '240ms' }}
+      >
         <Grid size={{ xs: 12, lg: 8 }}>
           <SectionCard
             title="Ingresos y gastos"
-            subtitle="Últimos 6 meses"
+            subtitle="Últimos 12 meses"
             action={
               <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/reports')}>
                 Ver reportes
@@ -353,7 +387,73 @@ const Dashboard = () => {
       </Grid>
 
       {isOwner && (
-        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        <Grid
+          container
+          spacing={2.5}
+          sx={{ mb: 3, animation: 'fade-up 420ms ease both', animationDelay: '300ms' }}
+        >
+          <Grid size={12}>
+            <SectionCard
+              title="Evolución de deuda"
+              subtitle="Cuotas pendientes agrupadas por periodo"
+              contentSx={{ px: { xs: 1, sm: 2 }, py: 2 }}
+            >
+              {ownerLoading ? (
+                <Skeleton variant="rounded" height={240} />
+              ) : debtEvolution.length === 0 ? (
+                <EmptyState
+                  title="Sin deuda pendiente"
+                  description="Cuando tengas cuotas pendientes verás aquí su evolución."
+                  icon={<FeeIcon />}
+                />
+              ) : (
+                <LineChart
+                  height={240}
+                  series={[
+                    {
+                      data: debtEvolution.map((item) => item.value),
+                      label: 'Deuda pendiente',
+                      color: theme.palette.error.main,
+                      area: true,
+                    },
+                  ]}
+                  xAxis={[
+                    {
+                      scaleType: 'point',
+                      data: debtEvolution.map((item) => item.label),
+                      tickLabelStyle: { fontSize: 11 },
+                    },
+                  ]}
+                  yAxis={[
+                    {
+                      valueFormatter: (value) =>
+                        value >= 1000
+                          ? `S/ ${formatNumber(value / 1000)}k`
+                          : `S/ ${formatNumber(value)}`,
+                      tickLabelStyle: { fontSize: 11 },
+                    },
+                  ]}
+                  grid={{ horizontal: true }}
+                  margin={{ left: 68, right: 16, top: 24, bottom: 36 }}
+                  slotProps={{
+                    legend: {
+                      direction: 'row',
+                      position: { vertical: 'top', horizontal: 'right' },
+                    },
+                  }}
+                />
+              )}
+            </SectionCard>
+          </Grid>
+        </Grid>
+      )}
+
+      {isOwner && (
+        <Grid
+          container
+          spacing={2.5}
+          sx={{ mb: 3, animation: 'fade-up 420ms ease both', animationDelay: '360ms' }}
+        >
           <Grid size={{ xs: 12, lg: 7 }}>
             <SectionCard
               title="Tus propiedades"
@@ -462,7 +562,11 @@ const Dashboard = () => {
         </Grid>
       )}
 
-      <Grid container spacing={2.5}>
+      <Grid
+        container
+        spacing={2.5}
+        sx={{ animation: 'fade-up 420ms ease both', animationDelay: '420ms' }}
+      >
         <Grid size={{ xs: 12, lg: 8 }}>
           <SectionCard
             title="Movimientos recientes"
