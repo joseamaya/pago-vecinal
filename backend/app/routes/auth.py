@@ -34,7 +34,7 @@ async def register(
     user = User(
         email=user_data.email,
         password_hash=hashed_password,
-        role=user_data.role,
+        role=UserRole.OWNER,
         full_name=user_data.full_name,
         phone=user_data.phone
     )

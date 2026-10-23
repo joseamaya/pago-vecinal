@@ -31,6 +31,8 @@ from ..utils.uploads import (
     MAX_RECEIPT_MB,
 )
 from ..schemas.common import BulkApproveRequest
+from ..utils.links import link_id
+from bson import DBRef
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ async def get_miscellaneous_payments(current_user: User = Depends(get_current_us
         payments = await MiscellaneousPayment.find_all().to_list()
     else:
         # Owners can only see their own payments
-        payments = await MiscellaneousPayment.find(MiscellaneousPayment.user.id == current_user.id).to_list()
+        payments = await MiscellaneousPayment.find({"user": DBRef("users", current_user.id)}).to_list()
 
     # Fetch links for each payment
     for payment in payments:
@@ -162,6 +164,7 @@ async def create_miscellaneous_payment(
 @router.put("/{payment_id}", response_model=MiscellaneousPaymentResponse)
 async def update_miscellaneous_payment(
     payment_id: str,
+    property_id: Optional[str] = Form(None),
     amount: Optional[float] = Form(None),
     payment_type: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
@@ -207,6 +210,33 @@ async def update_miscellaneous_payment(
         payment.receipt_file = file_path
 
     # Update fields
+    if property_id is not None:
+        prop = None
+        if property_id:
+            prop = await Property.get(property_id)
+            if not prop:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Property not found"
+                )
+            if (current_user.role != UserRole.ADMIN and
+                (not prop.owner or link_id(prop.owner) != str(current_user.id))):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not enough permissions"
+                )
+            payment.property_details = {
+                "villa": getattr(prop, "villa", "N/A"),
+                "row_letter": getattr(prop, "row_letter", "N/A"),
+                "number": getattr(prop, "number", 0),
+                "owner_name": getattr(prop, "owner_name", "Propietario no registrado"),
+                "owner_phone": getattr(prop, "owner_phone", "N/A") or "N/A",
+            }
+            payment.owner_details = {
+                "name": getattr(prop, "owner_name", "Propietario no registrado"),
+                "phone": getattr(prop, "owner_phone", "N/A") or "N/A",
+            }
+        payment.property = prop
     if amount is not None:
         payment.amount = amount
     if payment_type is not None:
@@ -291,7 +321,7 @@ async def download_miscellaneous_receipt(payment_id: str, current_user: User = D
         )
 
     # Get the associated receipt
-    receipt = await Receipt.find_one(Receipt.miscellaneous_payment.id == payment.id)
+    receipt = await Receipt.find_one({"miscellaneous_payment": DBRef("miscellaneous_payments", payment.id)})
     if not receipt:
         # Create receipt on the fly for payments approved before the fix
         logger.info("Creating receipt on the fly for miscellaneous payment %s", payment_id)

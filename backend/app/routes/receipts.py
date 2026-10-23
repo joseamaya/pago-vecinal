@@ -1,7 +1,6 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, RedirectResponse
-from beanie.operators import In, Or
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
@@ -17,6 +16,7 @@ from ..utils.pdf_generator import generate_receipt_pdf
 from ..config.database import database
 from ..services.receipt_service import generate_correlative_number, create_receipt_for_payment
 from ..services.cloudinary_service import upload_receipt_pdf
+from bson import DBRef
 
 logger = logging.getLogger(__name__)
 
@@ -62,20 +62,26 @@ async def _owner_receipts_query(current_user):
     # Owners can only see receipts for their own payments (regular and miscellaneous)
     payment_ids = [
         p.id
-        for p in await Payment.find(Payment.user.id == current_user.id).to_list()
+        for p in await Payment.find({"user": DBRef("users", current_user.id)}).to_list()
     ]
     misc_payment_ids = [
         m.id
-        for m in await MiscellaneousPayment.find(
-            MiscellaneousPayment.user.id == current_user.id
-        ).to_list()
+        for m in await MiscellaneousPayment.find({"user": DBRef("users", current_user.id)}).to_list()
     ]
-    return Receipt.find(
-        Or(
-            In(Receipt.payment.id, payment_ids),
-            In(Receipt.miscellaneous_payment.id, misc_payment_ids),
+    clauses = []
+    if payment_ids:
+        clauses.append({"payment": {"$in": [DBRef("payments", pid) for pid in payment_ids]}})
+    if misc_payment_ids:
+        clauses.append(
+            {
+                "miscellaneous_payment": {
+                    "$in": [DBRef("miscellaneous_payments", mid) for mid in misc_payment_ids]
+                }
+            }
         )
-    )
+    if not clauses:
+        return Receipt.find({"_id": None})
+    return Receipt.find({"$or": clauses})
 
 
 def _build_receipt_pdf_data(receipt, payment_doc, misc_doc, expense_doc=None, treasurer_details=None):
@@ -234,7 +240,7 @@ async def create_receipt(
         )
 
     # Check if receipt already exists for this payment
-    existing_receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    existing_receipt = await Receipt.find_one({"payment": DBRef("payments", payment.id)})
     if existing_receipt:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

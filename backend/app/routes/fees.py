@@ -9,6 +9,8 @@ from ..models.property import Property
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
+from ..utils.links import link_id, link_ref_id
+from bson import DBRef
 
 class GenerateFeesRequest(BaseModel):
     manual: bool = False
@@ -21,6 +23,16 @@ class PaginatedFeeResponse(BaseModel):
     pagination: dict
 
 router = APIRouter()
+
+
+async def _can_access_fee(fee: Fee, current_user: User) -> bool:
+    if current_user.role == UserRole.ADMIN:
+        return True
+    if fee.user and link_id(fee.user) == str(current_user.id):
+        return True
+    property_id = link_ref_id(fee.property)
+    prop = await Property.get(property_id) if property_id else None
+    return bool(prop and link_id(prop.owner) == str(current_user.id))
 
 @router.get("/", response_model=PaginatedFeeResponse)
 async def get_fees(
@@ -36,8 +48,16 @@ async def get_fees(
     query_filters = {}
 
     if current_user.role != UserRole.ADMIN:
-        # Owners can only see their own fees
-        query_filters["user.$id"] = PydanticObjectId(current_user.id)
+        # Owners can see fees linked to them or to their properties (legacy records)
+        owned_properties = await Property.find(
+            {"owner": DBRef("users", current_user.id)}
+        ).to_list()
+        owner_clauses = [{"user.$id": PydanticObjectId(current_user.id)}]
+        if owned_properties:
+            owner_clauses.append(
+                {"property.$id": {"$in": [prop.id for prop in owned_properties]}}
+            )
+        query_filters["$or"] = owner_clauses
 
     if year is not None:
         query_filters["year"] = year
@@ -160,8 +180,7 @@ async def get_fee(fee_id: str, current_user: User = Depends(get_current_user)):
         await fee.fetch_link(Fee.user)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not fee.user or str(fee.user.id) != str(current_user.id))):
+    if not await _can_access_fee(fee, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -282,8 +301,7 @@ async def update_fee(
         await fee.fetch_link(Fee.user)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not fee.user or str(fee.user.id) != str(current_user.id))):
+    if not await _can_access_fee(fee, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -403,10 +421,18 @@ async def generate_fees(request: GenerateFeesRequest, current_user: User = Depen
             for prop in properties:
                 # Check if fee already exists for this property, fee_schedule, month, year
                 existing_fee = await Fee.find_one(
-                    Fee.property.id == prop.id,
-                    Fee.fee_schedule.id == fee_schedule.id,
-                    Fee.generated_date >= datetime(current_year, current_month, 1),
-                    Fee.generated_date < datetime(current_year if current_month < 12 else current_year + 1, current_month % 12 + 1, 1)
+                    {
+                        "property": DBRef("properties", prop.id),
+                        "fee_schedule": DBRef("fee_schedules", fee_schedule.id),
+                        "generated_date": {
+                            "$gte": datetime(current_year, current_month, 1),
+                            "$lt": datetime(
+                                current_year if current_month < 12 else current_year + 1,
+                                current_month % 12 + 1,
+                                1,
+                            ),
+                        },
+                    }
                 )
 
                 if not existing_fee:
@@ -427,6 +453,7 @@ async def generate_fees(request: GenerateFeesRequest, current_user: User = Depen
                     fee = Fee(
                         property=prop,
                         fee_schedule=fee_schedule,
+                        user=prop.owner,
                         amount=fee_schedule.amount,
                         generated_date=generated_date,
                         year=current_year,

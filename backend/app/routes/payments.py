@@ -15,6 +15,8 @@ from ..models.fee import Fee, FeeStatus
 from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..models.receipt import Receipt
+from ..utils.links import link_id, link_ref_id
+from bson import DBRef
 from ..schemas.receipt import ReceiptResponse
 from ..models.property import Property
 from ..dependencies.auth import get_current_user, require_admin
@@ -40,6 +42,16 @@ class PaginatedPaymentResponse(BaseModel):
 
 router = APIRouter()
 
+
+async def _can_access_fee(fee: Fee, current_user: User) -> bool:
+    if current_user.role == UserRole.ADMIN:
+        return True
+    if fee.user and link_id(fee.user) == str(current_user.id):
+        return True
+    property_id = link_ref_id(fee.property)
+    prop = await Property.get(property_id) if property_id else None
+    return bool(prop and link_id(prop.owner) == str(current_user.id))
+
 @router.get("/", response_model=PaginatedPaymentResponse)
 async def get_payments(
     page: int = 1,
@@ -55,7 +67,7 @@ async def get_payments(
     query_filters = {}
     if current_user.role != UserRole.ADMIN:
         # Owners can only see their own payments
-        query_filters["user.id"] = current_user.id
+        query_filters["user.$id"] = current_user.id
 
     # Add filter parameters
     if year is not None and month is not None:
@@ -172,7 +184,7 @@ async def get_payments(
     payment_responses = []
     for result in results:
         # Find associated receipt
-        receipt = await Receipt.find_one(Receipt.payment.id == result["_id"])
+        receipt = await Receipt.find_one({"payment": DBRef("payments", result["_id"])})
         receipt_correlative = receipt.correlative_number if receipt else None
         receipt_issue_date = receipt.issue_date if receipt else None
 
@@ -221,7 +233,7 @@ async def get_payment(payment_id: str, current_user: User = Depends(get_current_
         await payment.fee.fetch_link('property')
 
     # Fetch associated receipt if exists
-    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    receipt = await Receipt.find_one({"payment": DBRef("payments", payment.id)})
     receipt_correlative = receipt.correlative_number if receipt else None
     receipt_issue_date = receipt.issue_date if receipt else None
 
@@ -304,7 +316,7 @@ async def create_payment(
         await payment.fee.fetch_link('property')
 
     # Fetch associated receipt if exists
-    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    receipt = await Receipt.find_one({"payment": DBRef("payments", payment.id)})
     receipt_correlative = receipt.correlative_number if receipt else None
     receipt_issue_date = receipt.issue_date if receipt else None
 
@@ -386,7 +398,7 @@ async def update_payment(
         await payment.fee.fetch_link('property')
 
     # Fetch associated receipt if exists
-    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    receipt = await Receipt.find_one({"payment": DBRef("payments", payment.id)})
     receipt_correlative = receipt.correlative_number if receipt else None
     receipt_issue_date = receipt.issue_date if receipt else None
 
@@ -426,7 +438,7 @@ async def delete_payment(payment_id: str, current_user: User = Depends(get_curre
     fee = payment.fee
 
     # Find and delete the associated receipt
-    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    receipt = await Receipt.find_one({"payment": DBRef("payments", payment.id)})
     if receipt:
         # Delete the generated PDF file if it exists
         if receipt.generated_receipt_file and os.path.exists(receipt.generated_receipt_file):
@@ -470,7 +482,7 @@ async def download_generated_receipt(payment_id: str, current_user: User = Depen
         )
 
     # Find associated receipt
-    receipt = await Receipt.find_one(Receipt.payment.id == payment.id)
+    receipt = await Receipt.find_one({"payment": DBRef("payments", payment.id)})
     if not receipt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

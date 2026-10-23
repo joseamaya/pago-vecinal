@@ -42,6 +42,7 @@ class TestListReceipts:
     async def test_owner_query_targets_payment_and_misc_links(self, mongomock_db):
         from types import SimpleNamespace
         from beanie import PydanticObjectId
+        from bson import DBRef
         from app.models.user import UserRole
         from app.models.payment import Payment
         from app.models.miscellaneous_payment import MiscellaneousPayment
@@ -63,8 +64,8 @@ class TestListReceipts:
 
         assert query.get_filter_query() == {
             "$or": [
-                {"payment.$id": {"$in": [pay_id]}},
-                {"miscellaneous_payment.$id": {"$in": [misc_id]}},
+                {"payment": {"$in": [DBRef("payments", pay_id)]}},
+                {"miscellaneous_payment": {"$in": [DBRef("miscellaneous_payments", misc_id)]}},
             ]
         }
 
