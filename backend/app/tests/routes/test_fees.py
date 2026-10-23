@@ -59,6 +59,45 @@ class TestListFees:
             assert response.status_code == 200
 
     @pytest.mark.asyncio
+    async def test_search_and_sort_are_applied_to_pipelines(
+        self, client, override_auth_as_admin
+    ):
+        with patch("app.routes.fees.database") as mock_db:
+            fake_collection = MagicMock()
+            fake_collection.aggregate.return_value.to_list = AsyncMock(return_value=[])
+            mock_db.fees = fake_collection
+
+            response = await client.get(
+                "/fees/?search=Villa&sort_by=amount&sort_dir=desc"
+            )
+            assert response.status_code == 200
+
+        count_pipeline = fake_collection.aggregate.call_args_list[0].args[0]
+        data_pipeline = fake_collection.aggregate.call_args_list[1].args[0]
+
+        count_search = next(
+            stage["$match"]
+            for stage in count_pipeline
+            if "$match" in stage and "$or" in stage["$match"]
+        )
+        assert any("property_data.owner_name" in clause for clause in count_search["$or"])
+
+        data_search = next(
+            stage["$match"]
+            for stage in data_pipeline
+            if "$match" in stage and "$or" in stage["$match"]
+        )
+        assert any("property_data.villa" in clause for clause in data_search["$or"])
+
+        sort_stage = next(stage["$sort"] for stage in data_pipeline if "$sort" in stage)
+        assert sort_stage["amount"] == -1
+
+    @pytest.mark.asyncio
+    async def test_invalid_sort_is_rejected(self, client, override_auth_as_admin):
+        response = await client.get("/fees/?sort_by=unknown")
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
     async def test_owner_cannot_generate_fees(self, client, mock_owner_user):
         async def override():
             return mock_owner_user
