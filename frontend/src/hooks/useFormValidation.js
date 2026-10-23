@@ -5,7 +5,13 @@ const focusField = (name) => {
   if (typeof document === 'undefined') return;
   requestAnimationFrame(() => {
     const input = document.querySelector(`[name="${name}"]`);
-    input?.focus?.();
+    const field =
+      input?.closest('[role="combobox"]') ||
+      input
+        ?.closest('.MuiFormControl-root')
+        ?.querySelector('[role="combobox"], input, textarea, button') ||
+      input;
+    field?.focus?.();
   });
 };
 

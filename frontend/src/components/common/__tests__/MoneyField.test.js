@@ -14,7 +14,7 @@ describe('MoneyField', () => {
     );
 
     expect(screen.getByText('S/')).toBeInTheDocument();
-    expect(screen.getByLabelText('Monto')).toHaveValue('150');
+    expect(screen.getByLabelText('Monto')).toHaveValue(150);
     expect(screen.getByText('Máximo S/ 200.00')).toBeInTheDocument();
   });
 

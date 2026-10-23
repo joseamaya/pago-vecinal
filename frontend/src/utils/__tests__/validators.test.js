@@ -1,7 +1,9 @@
 import {
   email,
+  integer,
   maxNumber,
   minLength,
+  parseAmount,
   phone,
   positiveInteger,
   positiveNumber,
@@ -28,6 +30,7 @@ describe('validators', () => {
     expect(minLength(6)('')).toBe('');
 
     expect(phone()('999 888 777')).toBe('');
+    expect(phone()('ext 12')).toBe('');
     expect(phone()('123')).not.toBe('');
     expect(phone()('')).toBe('');
   });
@@ -39,6 +42,16 @@ describe('validators', () => {
     expect(positiveInteger()('2.5')).not.toBe('');
     expect(maxNumber(100)('101')).not.toBe('');
     expect(maxNumber(100)('99')).toBe('');
+    expect(parseAmount('0x10')).toBeNaN();
+    expect(positiveNumber()('0x10')).not.toBe('');
+  });
+
+  test('integer allows zero and negatives but rejects exponents', () => {
+    expect(integer()('0')).toBe('');
+    expect(integer()('-2')).toBe('');
+    expect(integer()('1e3')).not.toBe('');
+    expect(integer()('2.5')).not.toBe('');
+    expect(positiveInteger()('0')).not.toBe('');
   });
 
   test('validateValues collects the first error per field', () => {

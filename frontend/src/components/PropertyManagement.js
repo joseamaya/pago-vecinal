@@ -33,7 +33,7 @@ import ErrorState from './common/ErrorState';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { useTableState } from '../hooks/useTableState';
 import { useFormValidation } from '../hooks/useFormValidation';
-import { positiveInteger, phone, required } from '../utils/validators';
+import { integer, phone, required } from '../utils/validators';
 import { formatPropertyLabel } from '../utils/formatters';
 
 const EMPTY_PROPERTY = { row_letter: '', number: '', villa: '', owner_name: '', owner_phone: '' };
@@ -41,7 +41,7 @@ const EMPTY_PROPERTY = { row_letter: '', number: '', villa: '', owner_name: '', 
 const PROPERTY_SCHEMA = {
   villa: required('Ingresa la villa.'),
   row_letter: required('Ingresa la fila.'),
-  number: [required('Ingresa el número.'), positiveInteger('Ingresa un número entero mayor a 0.')],
+  number: [required('Ingresa el número.'), integer('Ingresa un número entero.')],
   owner_name: required('Ingresa el nombre del propietario.'),
   owner_phone: phone('Ingresa un teléfono válido.'),
 };
@@ -137,9 +137,9 @@ const PropertyManagement = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setFormError('');
     if (!validateAll()) return;
     setSaving(true);
-    setFormError('');
     try {
       const submitData = { ...formData, number: parseInt(formData.number, 10) };
       if (editingProperty) {

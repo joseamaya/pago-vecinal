@@ -13,6 +13,7 @@ import {
 import FormDialog from '../common/FormDialog';
 import MoneyField from '../common/MoneyField';
 import { formatCurrency, formatDate, formatPeriod } from '../../utils/formatters';
+import { parseAmount } from '../../utils/validators';
 
 const readOnlyInput = { htmlInput: { readOnly: true } };
 
@@ -43,7 +44,7 @@ const PaymentFormDialog = ({ dialog, isAdmin = false }) => {
     handleSubmit,
   } = dialog;
 
-  const amountNumber = Number(formData.amount);
+  const amountNumber = parseAmount(formData.amount);
   const amountError = !formData.amount
     ? 'Ingresa el monto.'
     : !Number.isFinite(amountNumber) || amountNumber <= 0

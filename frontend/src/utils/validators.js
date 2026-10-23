@@ -10,18 +10,30 @@ export const email = (message = 'Ingresa un correo electrónico válido.') =>
 export const minLength = (length, message = `Ingresa al menos ${length} caracteres.`) =>
   (value) => (!isRequired(value) || String(value).trim().length >= length ? '' : message);
 
+export const parseAmount = (value) => {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return NaN;
+  return Number(normalized);
+};
+
 export const positiveNumber = (message = 'Ingresa un número mayor a 0.') =>
   (value) => {
     if (!isRequired(value)) return '';
-    const number = Number(value);
+    const number = parseAmount(value);
     return Number.isFinite(number) && number > 0 ? '' : message;
   };
 
 export const positiveInteger = (message = 'Ingresa un número entero mayor a 0.') =>
   (value) => {
     if (!isRequired(value)) return '';
-    const number = Number(value);
-    return Number.isInteger(number) && number > 0 ? '' : message;
+    const normalized = String(value).trim();
+    return /^\d+$/.test(normalized) && Number(normalized) > 0 ? '' : message;
+  };
+
+export const integer = (message = 'Ingresa un número entero.') =>
+  (value) => {
+    if (!isRequired(value)) return '';
+    return /^-?\d+$/.test(String(value).trim()) ? '' : message;
   };
 
 export const maxNumber = (max, message = `El valor no puede superar ${max}.`) =>
@@ -34,6 +46,7 @@ export const maxNumber = (max, message = `El valor no puede superar ${max}.`) =>
 export const phone = (message = 'Ingresa un teléfono válido.') =>
   (value) => {
     if (!isRequired(value)) return '';
+    if (/[a-zA-Z]/.test(String(value))) return '';
     const digits = String(value).replace(/\D/g, '');
     return digits.length >= 6 && digits.length <= 15 ? '' : message;
   };

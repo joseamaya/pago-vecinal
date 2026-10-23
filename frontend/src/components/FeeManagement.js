@@ -690,7 +690,6 @@ const handleMonthsChange = (event) => {
               name="property_id"
               value={formData.property_id}
               onChange={handleFeeFieldChange('property_id')}
-              onBlur={handleFeeFieldBlur('property_id')}
               label="Propiedad"
               required
             >
@@ -708,7 +707,6 @@ const handleMonthsChange = (event) => {
               name="fee_schedule_id"
               value={formData.fee_schedule_id}
               onChange={handleFeeFieldChange('fee_schedule_id')}
-              onBlur={handleFeeFieldBlur('fee_schedule_id')}
               label="Plan de cuotas"
               required
             >

@@ -147,9 +147,9 @@ const UserManagement = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setFormError('');
     if (!validateAll()) return;
     setSaving(true);
-    setFormError('');
     try {
       if (editingUser) {
         await usersAPI.updateUser(editingUser.id, formData);
