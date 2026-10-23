@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import List, Optional
-from pydantic import BaseModel
 from datetime import datetime
 import os
 import shutil
@@ -9,9 +8,10 @@ from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from ..models.expense import Expense
 from ..schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseResponse
+from ..schemas.common import ExpenseBulkImportResponse
 from ..models.receipt import Receipt
-from ..models.user import User, UserRole
-from ..dependencies.auth import get_current_user, require_admin
+from ..models.user import User
+from ..dependencies.auth import require_admin
 from ..services.expense_service import bulk_import_expense_rows
 from ..utils.uploads import (
     validate_upload,
@@ -23,23 +23,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
-class BulkImportResponse(BaseModel):
-    successful_imports: int
-    failed_imports: int
-    errors: List[dict]
-
 router = APIRouter()
 
 @router.get("/", response_model=List[ExpenseResponse])
-async def get_expenses(current_user: User = Depends(get_current_user)):
-    # Only admins can access expenses
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can access expenses"
-        )
-
+async def get_expenses(current_user: User = Depends(require_admin)):
     expenses = await Expense.find_all().to_list()
 
     return [
@@ -68,14 +55,7 @@ async def download_expenses_template(current_user: User = Depends(require_admin)
 
 
 @router.get("/{expense_id}", response_model=ExpenseResponse)
-async def get_expense(expense_id: str, current_user: User = Depends(get_current_user)):
-    # Only admins can access expenses
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can access expenses"
-        )
-
+async def get_expense(expense_id: str, current_user: User = Depends(require_admin)):
     expense = await Expense.get(expense_id)
     if not expense:
         raise HTTPException(
@@ -100,15 +80,8 @@ async def create_expense(
     amount: float = Form(...),
     year: Optional[int] = Form(None),
     month: Optional[int] = Form(None),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    # Only admins can create expenses
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can create expenses"
-        )
-
     # Auto-calculate year and month from expense_date if not provided
     if year is None:
         year = expense_date.year
@@ -142,15 +115,8 @@ async def update_expense(
     amount: Optional[float] = Form(None),
     year: Optional[int] = Form(None),
     month: Optional[int] = Form(None),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    # Only admins can update expenses
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can update expenses"
-        )
-
     expense = await Expense.get(expense_id)
     if not expense:
         raise HTTPException(
@@ -188,14 +154,7 @@ async def update_expense(
     )
 
 @router.delete("/{expense_id}")
-async def delete_expense(expense_id: str, current_user: User = Depends(get_current_user)):
-    # Only admins can delete expenses
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can delete expenses"
-        )
-
+async def delete_expense(expense_id: str, current_user: User = Depends(require_admin)):
     expense = await Expense.get(expense_id)
     if not expense:
         raise HTTPException(
@@ -209,18 +168,12 @@ async def delete_expense(expense_id: str, current_user: User = Depends(get_curre
 # This endpoint is no longer needed
 
 
-@router.post("/bulk-import", response_model=BulkImportResponse)
+@router.post("/bulk-import", response_model=ExpenseBulkImportResponse)
 async def bulk_import_expenses(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Bulk import expenses from Excel file"""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can bulk import expenses"
-        )
-
     await validate_upload(file, EXCEL_EXTENSIONS, EXCEL_CONTENT_TYPES, MAX_EXCEL_MB)
 
     try:
@@ -247,7 +200,7 @@ async def bulk_import_expenses(
             )
 
         results = await bulk_import_expense_rows(ws)
-        return BulkImportResponse(**results)
+        return ExpenseBulkImportResponse(**results)
 
     except InvalidFileException:
         raise HTTPException(

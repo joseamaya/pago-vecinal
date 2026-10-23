@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, RedirectResponse
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel
 from ..models.receipt import Receipt
+from ..schemas.common import PaginatedResponse
 from ..schemas.receipt import ReceiptCreate, ReceiptUpdate, ReceiptResponse
 from ..models.payment import Payment
 from ..models.miscellaneous_payment import MiscellaneousPayment
@@ -21,10 +21,6 @@ from bson import DBRef
 from ..utils.links import link_id, link_ref_id
 
 logger = logging.getLogger(__name__)
-
-class PaginatedReceiptResponse(BaseModel):
-    data: List[ReceiptResponse]
-    pagination: dict
 
 router = APIRouter()
 
@@ -128,7 +124,7 @@ def _build_receipt_pdf_data(receipt, payment_doc, misc_doc, expense_doc=None, tr
     }
 
 
-@router.get("/", response_model=PaginatedReceiptResponse)
+@router.get("/", response_model=PaginatedResponse[ReceiptResponse])
 async def get_receipts(
     page: int = 1,
     limit: int = 20,
@@ -178,7 +174,7 @@ async def get_receipts(
         for receipt in receipts
     ]
 
-    return PaginatedReceiptResponse(
+    return PaginatedResponse[ReceiptResponse](
         data=receipt_responses,
         pagination={
             "page": page,
@@ -422,13 +418,7 @@ async def regenerate_receipt_pdf(receipt_id: str, current_user: User = Depends(g
     return {"message": "PDF regenerated successfully with updated treasurer information"}
 
 @router.post("/regenerate-all-pdfs")
-async def regenerate_all_receipt_pdfs(current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions - only admins can regenerate all PDFs"
-        )
-
+async def regenerate_all_receipt_pdfs(current_user: User = Depends(require_admin)):
     # Get all receipts
     receipts = await Receipt.find_all().to_list()
     updated_count = 0

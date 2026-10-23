@@ -2,19 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from ..models.fee import FeeSchedule
 from ..schemas.fee_schedule import FeeScheduleCreate, FeeScheduleUpdate, FeeScheduleResponse
-from ..models.user import User, UserRole
-from ..dependencies.auth import get_current_user, require_admin
+from ..models.user import User
+from ..dependencies.auth import require_admin
 
 router = APIRouter()
 
 @router.get("/", response_model=List[FeeScheduleResponse])
-async def get_fee_schedules(current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def get_fee_schedules(current_user: User = Depends(require_admin)):
     schedules = await FeeSchedule.find_all().to_list()
     return [
         FeeScheduleResponse(
@@ -30,13 +24,7 @@ async def get_fee_schedules(current_user: User = Depends(get_current_user)):
     ]
 
 @router.get("/{schedule_id}", response_model=FeeScheduleResponse)
-async def get_fee_schedule(schedule_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def get_fee_schedule(schedule_id: str, current_user: User = Depends(require_admin)):
     schedule = await FeeSchedule.get(schedule_id)
     if not schedule:
         raise HTTPException(
@@ -57,14 +45,8 @@ async def get_fee_schedule(schedule_id: str, current_user: User = Depends(get_cu
 @router.post("/", response_model=FeeScheduleResponse)
 async def create_fee_schedule(
     schedule_data: FeeScheduleCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     schedule = FeeSchedule(
         amount=schedule_data.amount,
         description=schedule_data.description,
@@ -88,14 +70,8 @@ async def create_fee_schedule(
 async def update_fee_schedule(
     schedule_id: str,
     schedule_update: FeeScheduleUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     schedule = await FeeSchedule.get(schedule_id)
     if not schedule:
         raise HTTPException(
@@ -120,13 +96,7 @@ async def update_fee_schedule(
     )
 
 @router.delete("/{schedule_id}")
-async def delete_fee_schedule(schedule_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def delete_fee_schedule(schedule_id: str, current_user: User = Depends(require_admin)):
     schedule = await FeeSchedule.get(schedule_id)
     if not schedule:
         raise HTTPException(

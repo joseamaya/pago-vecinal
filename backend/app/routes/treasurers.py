@@ -7,8 +7,8 @@ from ..models.treasurer import Treasurer
 from ..schemas.treasurer import TreasurerCreate, TreasurerUpdate, TreasurerResponse
 
 logger = logging.getLogger(__name__)
-from ..models.user import User, UserRole
-from ..dependencies.auth import get_current_user, require_admin
+from ..models.user import User
+from ..dependencies.auth import require_admin
 from ..utils.uploads import (
     validate_upload,
     generate_stored_filename,
@@ -21,13 +21,7 @@ from ..utils.uploads import (
 router = APIRouter()
 
 @router.get("/", response_model=List[TreasurerResponse])
-async def get_treasurers(current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def get_treasurers(current_user: User = Depends(require_admin)):
     treasurers = await Treasurer.find_all().to_list()
     return [
         TreasurerResponse(
@@ -42,14 +36,8 @@ async def get_treasurers(current_user: User = Depends(get_current_user)):
 @router.get("/{villa}", response_model=TreasurerResponse)
 async def get_treasurer_by_villa(
     villa: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     treasurer = await Treasurer.find_one(Treasurer.villa == villa)
     if not treasurer:
         raise HTTPException(
@@ -67,14 +55,8 @@ async def get_treasurer_by_villa(
 @router.post("/", response_model=TreasurerResponse)
 async def create_treasurer(
     treasurer_data: TreasurerCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     # Check if treasurer already exists for this villa
     existing_treasurer = await Treasurer.find_one(Treasurer.villa == treasurer_data.villa)
     if existing_treasurer:
@@ -101,14 +83,8 @@ async def create_treasurer(
 async def update_treasurer(
     villa: str,
     treasurer_data: TreasurerUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     treasurer = await Treasurer.find_one(Treasurer.villa == villa)
     if not treasurer:
         raise HTTPException(
@@ -133,14 +109,8 @@ async def update_treasurer(
 @router.delete("/{villa}")
 async def delete_treasurer(
     villa: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     treasurer = await Treasurer.find_one(Treasurer.villa == villa)
     if not treasurer:
         raise HTTPException(
@@ -161,14 +131,8 @@ async def delete_treasurer(
 @router.post("/upload-signature")
 async def upload_signature(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     await validate_upload(file, IMAGE_EXTENSIONS, IMAGE_CONTENT_TYPES, MAX_SIGNATURE_MB)
 
     # Ensure signatures directory exists

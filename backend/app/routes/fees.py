@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 from ..models.fee import Fee, FeeStatus, FeeSchedule
 from ..schemas.fee import FeeCreate, FeeUpdate, FeeResponse
+from ..schemas.common import PaginatedResponse
 from ..models.property import Property
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
@@ -18,10 +19,6 @@ class GenerateFeesRequest(BaseModel):
     months: Optional[List[int]] = None  # List of months (1-12)
     fee_schedule_ids: Optional[List[str]] = None  # List of fee schedule IDs
 
-class PaginatedFeeResponse(BaseModel):
-    data: List[FeeResponse]
-    pagination: dict
-
 router = APIRouter()
 
 
@@ -34,7 +31,7 @@ async def _can_access_fee(fee: Fee, current_user: User) -> bool:
     prop = await Property.get(property_id) if property_id else None
     return bool(prop and link_id(prop.owner) == str(current_user.id))
 
-@router.get("/", response_model=PaginatedFeeResponse)
+@router.get("/", response_model=PaginatedResponse[FeeResponse])
 async def get_fees(
     page: int = 1,
     limit: int = 20,
@@ -154,7 +151,7 @@ async def get_fees(
             notes=result.get("notes")
         ))
 
-    return PaginatedFeeResponse(
+    return PaginatedResponse[FeeResponse](
         data=fee_responses,
         pagination={
             "page": page,
@@ -347,13 +344,7 @@ async def update_fee(
     )
 
 @router.delete("/{fee_id}")
-async def delete_fee(fee_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def delete_fee(fee_id: str, current_user: User = Depends(require_admin)):
     fee = await Fee.get(fee_id)
     if not fee:
         raise HTTPException(
@@ -365,13 +356,7 @@ async def delete_fee(fee_id: str, current_user: User = Depends(get_current_user)
     return {"message": "Fee deleted successfully"}
 
 @router.post("/generate")
-async def generate_fees(request: GenerateFeesRequest, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def generate_fees(request: GenerateFeesRequest, current_user: User = Depends(require_admin)):
     now = datetime.utcnow()
 
     # Use provided year or default to current
