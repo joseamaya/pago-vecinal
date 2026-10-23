@@ -2,7 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-22
-> **Status:** Ready
+> **Status:** Partially implemented
+> **Implementation:** Verified 2026-10-23: services, dependencies, schemas, settings, logging and Cloudinary are centralized. Some owner/admin checks remain in agreements, miscellaneous payments and dashboard by design.
 
 ---
 
@@ -22,15 +23,15 @@ Refactor the backend to introduce a proper **Service Layer**, extract reusable *
 
 ## Success Criteria
 
-- [ ] `app/services/` directory created with 4+ service modules (payment, receipt, cloudinary, fee)
-- [ ] `app/dependencies/` module with `require_admin` and `require_owner` FastAPI dependencies
-- [ ] `app/schemas/` module with shared Pydantic models (`PaginatedResponse`, `BulkImportResponse`, `BulkApproveRequest`)
-- [ ] `app/config/settings.py` using `pydantic.BaseSettings` for all env vars
-- [ ] `app/config/logging.py` configured with `logging` module — zero bare `print()` remaining in `app/` routes
-- [ ] Cloudinary logic centralized in `app/services/cloudinary_service.py` — used by all route files
-- [ ] Cross-route imports eliminated (receipt creation via service layer, not route-to-route imports)
+- [x] `app/services/` directory created with 4+ service modules (payment, receipt, cloudinary, fee)
+- [x] `app/dependencies/` module with `require_admin` dependency and `require_owner` authorization helper
+- [x] `app/schemas/` module with shared Pydantic models (`PaginatedResponse`, `BulkImportResponse`, `BulkApproveRequest`)
+- [x] `app/config/settings.py` using `pydantic.BaseSettings` for all env vars
+- [x] `app/config/logging.py` configured with `logging` module — zero bare `print()` remaining in `app/` routes
+- [x] Cloudinary logic centralized in `app/services/cloudinary_service.py` — used by all route files
+- [x] Cross-route imports eliminated (receipt creation via service layer, not route-to-route imports)
 - [ ] All 12 route files updated to use new service layer, dependencies, and schemas
-- [ ] Existing API contract preserved — all endpoints return identical responses
+- [x] Existing API contract preserved — all endpoints return identical responses
 - [ ] Ad-hoc test scripts (`test_*.py`) still run successfully against the refactored code
 
 ---

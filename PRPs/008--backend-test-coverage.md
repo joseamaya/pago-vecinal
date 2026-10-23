@@ -2,7 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-22
-> **Status:** Ready
+> **Status:** Implemented
+> **Implementation:** Verified 2026-10-23: 323 backend tests passing with pytest + mongomock.
 
 ---
 
@@ -20,21 +21,21 @@ Implement a pytest-based test suite covering the newly created service layer, co
 
 ## Success Criteria
 
-- [ ] `pytest` + `pytest-asyncio` + `httpx` + `mongomock` installed in requirements
-- [ ] `backend/app/tests/` directory created with proper `__init__.py`
-- [ ] `backend/pytest.ini` configured with asyncio mode and test paths
-- [ ] Unit tests for `app/config/settings.py` (valid config, missing env var, defaults)
-- [ ] Unit tests for `app/config/logging.py` (setup_logging, log levels)
-- [ ] Unit tests for `app/auth/utils.py` (password hashing, JWT create/verify, authenticate_user with mocked DB)
-- [ ] Unit tests for `app/dependencies/auth.py` (`get_current_user` valid/invalid tokens, `require_admin` access control)
-- [ ] Unit tests for `app/services/cloudinary_service.py` (upload, delete, error handling — mocked cloudinary)
-- [ ] Unit tests for `app/services/receipt_service.py` (correlative number generation, receipt creation with mocked DB/Cloudinary)
-- [ ] Unit tests for `app/services/payment_service.py` (fee status recalculation, approval flow, receipt trigger)
-- [ ] Unit tests for `app/schemas/common.py` (PaginatedResponse serialization, BulkApproveRequest validation)
-- [ ] Unit tests for `app/schemas/` model schemas (Create/Update/Response validation, required fields, edge cases)
-- [ ] Integration tests for 3 key route modules using `TestClient` with mocked Beanie
-- [ ] Existing ad-hoc test scripts still run without modification
-- [ ] `pytest` runs in CI-like mode without requiring MongoDB
+- [x] `pytest` + `pytest-asyncio` + `httpx` + `mongomock` installed in requirements
+- [x] `backend/app/tests/` directory created with proper `__init__.py`
+- [x] `backend/pytest.ini` configured with asyncio mode and test paths
+- [x] Unit tests for `app/config/settings.py` (valid config, missing env var, defaults)
+- [x] Unit tests for `app/config/logging.py` (setup_logging, log levels)
+- [x] Unit tests for `app/auth/utils.py` (password hashing, JWT create/verify, authenticate_user with mocked DB)
+- [x] Unit tests for `app/dependencies/auth.py` (`get_current_user` valid/invalid tokens, `require_admin` access control)
+- [x] Unit tests for `app/services/cloudinary_service.py` (upload, delete, error handling — mocked cloudinary)
+- [x] Unit tests for `app/services/receipt_service.py` (correlative number generation, receipt creation with mocked DB/Cloudinary)
+- [x] Unit tests for `app/services/payment_service.py` (fee status recalculation, approval flow, receipt trigger)
+- [x] Unit tests for `app/schemas/common.py` (PaginatedResponse serialization, BulkApproveRequest validation)
+- [x] Unit tests for `app/schemas/` model schemas (Create/Update/Response validation, required fields, edge cases)
+- [x] Integration tests for 3 key route modules using `TestClient` with mocked Beanie
+- [x] Existing ad-hoc test scripts still run without modification
+- [x] `pytest` runs in CI-like mode without requiring MongoDB
 
 ---
 

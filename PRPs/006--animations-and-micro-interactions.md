@@ -2,7 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-18
-> **Status:** Ready
+> **Status:** Partially implemented
+> **Implementation:** Verified 2026-10-23: page transitions, reduced motion, theme hover states and sidebar transitions are implemented. Dashboard stagger/stat-card hover remain optional.
 
 ---
 
@@ -17,13 +18,13 @@ Add subtle, purposeful animations and micro-interactions throughout the UI to cr
 ## Success Criteria
 - [ ] Dashboard stat cards have hover elevation effect (subtle lift)
 - [ ] Dashboard content sections fade/stagger in on page load
-- [ ] Buttons have refined hover/press states (beyond MUI defaults)
-- [ ] Sidebar navigation items have smooth active indicator transition
-- [ ] Dialog open/close transitions feel smooth (MUI default is acceptable but verify)
-- [ ] Table rows have subtle hover highlight
-- [ ] Page transitions (route changes) have a brief fade-in
-- [ ] All animations respect `prefers-reduced-motion`
-- [ ] `npm run build` succeeds, `npm test` passes
+- [x] Buttons have refined hover/press states (beyond MUI defaults)
+- [x] Sidebar navigation items have smooth active indicator transition
+- [x] Dialog open/close transitions feel smooth (MUI default is acceptable but verify)
+- [x] Table rows have subtle hover highlight
+- [x] Page transitions (route changes) have a brief fade-in
+- [x] All animations respect `prefers-reduced-motion`
+- [x] `npm run build` succeeds, `npm test` passes
 
 ---
 

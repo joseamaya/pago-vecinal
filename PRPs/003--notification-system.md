@@ -2,7 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-18
-> **Status:** Ready
+> **Status:** Implemented
+> **Implementation:** Verified 2026-10-23: implemented as `ToastProvider`/`useToast`; no native `alert()` remains.
 
 ---
 
@@ -16,14 +17,14 @@ Replace the current ad-hoc error/success feedback (inline `<Alert>` components a
 - Each component duplicates its own error state management
 
 ## Success Criteria
-- [ ] Global `NotificationProvider` context wraps the app (in `App.js`)
-- [ ] `useNotification()` hook provides `{ success(msg), error(msg), info(msg), warning(msg) }`
-- [ ] Native `alert()` in `PaymentManagement.js` replaced with snackbar toast
-- [ ] Inline `<Alert>` error patterns replaced with snackbar where appropriate (errors on mutations)
-- [ ] Snackbar auto-dismisses after 4 seconds (configurable)
-- [ ] Multiple toasts can stack
-- [ ] Snackbar respects theme (light/dark)
-- [ ] `npm run build` succeeds, `npm test` passes
+- [x] Global `NotificationProvider` context wraps the app (in `App.js`)
+- [x] `useNotification()` hook provides `{ success(msg), error(msg), info(msg), warning(msg) }`
+- [x] Native `alert()` in `PaymentManagement.js` replaced with snackbar toast
+- [x] Inline `<Alert>` error patterns replaced with snackbar where appropriate (errors on mutations)
+- [x] Snackbar auto-dismisses after 4 seconds (configurable)
+- [x] Multiple toasts can stack
+- [x] Snackbar respects theme (light/dark)
+- [x] `npm run build` succeeds, `npm test` passes
 
 ---
 

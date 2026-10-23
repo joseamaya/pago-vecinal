@@ -2,7 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-18
-> **Status:** Ready
+> **Status:** Implemented
+> **Implementation:** Verified 2026-10-23: custom palette/typography, branded `index.html`, and removal of dead CRA CSS.
 
 ---
 
@@ -17,14 +18,14 @@ Replace the generic MUI default look with a cohesive, branded visual identity. T
 - Body uses the default system font stack (ugly, no character)
 
 ## Success Criteria
-- [ ] Custom color palette defined (primary, secondary, accent, background variants, semantic colors) — no MUI defaults
-- [ ] One distinctive font pair loaded (e.g., display + body from Google Fonts) — not the system stack
-- [ ] `index.html` updated: `<html lang="es">`, `<title>Pago Vecinal</title>`, proper meta description, custom favicon
-- [ ] Dark theme is not just `#121212` — uses a curated dark palette that complements the light palette
-- [ ] `App.css` stripped of dead CRA boilerplate (`.App-logo-spin`, `.App-header`, `.App-logo`)
-- [ ] `index.css` updated with the new font stack and any design tokens
-- [ ] All existing pages look correct in both light and dark modes
-- [ ] `npm run build` succeeds, `npm test` passes
+- [x] Custom color palette defined (primary, secondary, accent, background variants, semantic colors) — no MUI defaults
+- [x] One distinctive font pair loaded (e.g., display + body from Google Fonts) — not the system stack
+- [x] `index.html` updated: `<html lang="es">`, `<title>Pago Vecinal</title>`, proper meta description, custom favicon
+- [x] Dark theme is not just `#121212` — uses a curated dark palette that complements the light palette
+- [x] `App.css` stripped of dead CRA boilerplate (`.App-logo-spin`, `.App-header`, `.App-logo`)
+- [x] `index.css` updated with the new font stack and any design tokens
+- [x] All existing pages look correct in both light and dark modes
+- [x] `npm run build` succeeds, `npm test` passes
 
 ---
 

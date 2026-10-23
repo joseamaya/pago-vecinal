@@ -2,7 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-18
-> **Status:** Ready
+> **Status:** Implemented
+> **Implementation:** Verified 2026-10-23: `PaymentManagement.js` is 326 lines; hooks/components extracted and covered by tests.
 
 ---
 
@@ -16,14 +17,14 @@ Refactor `PaymentManagement.js` (currently 1341 lines) into smaller, focused com
 - Filter state and API calls are mixed with rendering
 
 ## Success Criteria
-- [ ] `PaymentManagement.js` reduced to <400 lines (coordinating sub-components)
-- [ ] Custom hook `usePaymentFilters` extracted for filter state + API calls
-- [ ] Custom hook `usePaymentDialog` extracted for dialog/form state
-- [ ] `PaymentTable` component extracted (table + rows + pagination)
-- [ ] `PaymentFormDialog` component extracted (the add/edit dialog with cascade selectors)
-- [ ] `BulkUploadDialog` component extracted (the bulk upload dialog)
-- [ ] All existing functionality preserved (CRUD, filters, bulk approve, bulk upload, export)
-- [ ] `npm run build` succeeds, `npm test` passes
+- [x] `PaymentManagement.js` reduced to <400 lines (coordinating sub-components)
+- [x] Custom hook `usePaymentFilters` extracted for filter state + API calls
+- [x] Custom hook `usePaymentDialog` extracted for dialog/form state
+- [x] `PaymentTable` component extracted (table + rows + pagination)
+- [x] `PaymentFormDialog` component extracted (the add/edit dialog with cascade selectors)
+- [x] `BulkUploadDialog` component extracted (the bulk upload dialog)
+- [x] All existing functionality preserved (CRUD, filters, bulk approve, bulk upload, export)
+- [x] `npm run build` succeeds, `npm test` passes
 
 ---
 

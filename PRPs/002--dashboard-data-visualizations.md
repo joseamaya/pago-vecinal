@@ -2,7 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-18
-> **Status:** Ready
+> **Status:** Implemented with deviation
+> **Implementation:** Verified 2026-10-23: charts are implemented with `@mui/x-charts` (Bar + Pie). Owner debt is shown as per-property progress rather than a time-series chart.
 
 ---
 
@@ -16,15 +17,15 @@ Add meaningful charts and data visualizations to the Dashboard using the existin
 - Property owners would benefit from visualizing their debt/expenses over time
 
 ## Success Criteria
-- [ ] Dashboard shows at least 2 charts for admin view, 1 for owner view
-- [ ] Admin chart 1: Monthly payment collection trend (bar/line chart — payments collected per month over last 12 months)
-- [ ] Admin chart 2: Fee status breakdown (pie/donut chart — paid vs pending vs overdue)
+- [x] Dashboard shows at least 2 charts for admin view, 1 for owner view
+- [x] Admin chart 1: Monthly payment collection trend (bar/line chart — payments collected per month over last 12 months)
+- [x] Admin chart 2: Fee status breakdown (pie/donut chart — paid vs pending vs overdue)
 - [ ] Owner chart 1: Personal debt evolution over time
-- [ ] Charts use the theme's color palette (light/dark compatible)
-- [ ] Charts are responsive and work on mobile
-- [ ] Loading state shown while chart data loads
-- [ ] Empty state shown when no data
-- [ ] `npm run build` succeeds, `npm test` passes
+- [x] Charts use the theme's color palette (light/dark compatible)
+- [x] Charts are responsive and work on mobile
+- [x] Loading state shown while chart data loads
+- [x] Empty state shown when no data
+- [x] `npm run build` succeeds, `npm test` passes
 
 ---
 

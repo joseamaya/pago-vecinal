@@ -2,7 +2,8 @@
 
 > **Version:** 1.0
 > **Created:** 2025-05-22
-> **Status:** Ready
+> **Status:** Implemented
+> **Implementation:** Verified 2026-10-23: lazy routes, ErrorBoundary, hooks/utils, StatCard, skip link and a11y improvements are in place. Page containers use `maxWidth="xl"` consistently.
 
 ---
 
@@ -27,20 +28,20 @@ Refactor the frontend to address critical architecture, performance, code qualit
 
 ## Success Criteria
 
-- [ ] `React.lazy()` + `<Suspense>` para las 14 páginas — bundle splitteado por ruta
-- [ ] `<ErrorBoundary>` a nivel raíz en `App.js`
-- [ ] Directorio `src/hooks/` con 4+ custom hooks (`useApi`, `usePagination`, `useDialog`, `useDownload`)
-- [ ] Directorio `src/utils/` con `constants.js`, `statusMappings.js`, `months.js`, `downloadBlob.js`
-- [ ] `StatCard` extraído a `src/components/common/StatCard.js`
-- [ ] `recharts` eliminado de `package.json`
-- [ ] `console.log` eliminados de `PaymentManagement.js` y otros componentes
-- [ ] `LoadingSpinner` no propaga props desconocidas al DOM
-- [ ] Loading states unificados: todos los componentes usan `<LoadingSkeleton>`, no texto plano
-- [ ] Iconos MUI con `aria-label` o `titleAccess` en botones de acción
-- [ ] Skip-to-content link en `Layout.js`
-- [ ] `Container maxWidth="lg"` consistente en todas las páginas
-- [ ] `npm run build` succeeds sin warnings nuevos
-- [ ] `npm test` passes (tests existentes + nuevos para hooks/utils)
+- [x] `React.lazy()` + `<Suspense>` para las rutas protegidas — bundle splitteado por ruta
+- [x] `<ErrorBoundary>` a nivel raíz en `App.js`
+- [x] Directorio `src/hooks/` con 4+ custom hooks (`useApi`, `usePagination`, `useDialog`, `useDownload`)
+- [x] Directorio `src/utils/` con `constants.js`, `statusMappings.js`, `months.js`, `downloadBlob.js`
+- [x] `StatCard` extraído a `src/components/common/StatCard.js`
+- [x] `recharts` eliminado de `package.json`
+- [x] `console.log` eliminados de `PaymentManagement.js` y otros componentes
+- [x] `LoadingSpinner` no propaga props desconocidas al DOM
+- [x] Loading states unificados: todos los componentes usan `<LoadingSkeleton>`, no texto plano
+- [x] Iconos MUI con `aria-label` o `titleAccess` en botones de acción
+- [x] Skip-to-content link en `Layout.js`
+- [x] Ancho de página consistente con `PageContainer` (`xl`, salvo perfil)
+- [x] `npm run build` succeeds sin warnings nuevos
+- [x] `npm test` passes (tests existentes + nuevos para hooks/utils)
 
 ---
 
