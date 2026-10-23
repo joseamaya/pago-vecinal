@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -50,6 +50,7 @@ const PropertyManagement = () => {
   const [formData, setFormData] = useState(EMPTY_PROPERTY);
 
   const table = useTableState({ defaultSortBy: 'villa', defaultSortDir: 'asc' });
+  const { page: tablePage, setPage } = table;
 
   const loader = useCallback(
     () =>
@@ -63,7 +64,7 @@ const PropertyManagement = () => {
     [table.page, table.limit, table.search, table.sortBy, table.sortDir]
   );
 
-  const { data, loading, error, reload } = useAsyncData(
+  const { data, loading, refreshing, error, reload } = useAsyncData(
     loader,
     [loader],
     { fallbackError: 'No pudimos cargar las propiedades.' }
@@ -71,6 +72,20 @@ const PropertyManagement = () => {
 
   const properties = data?.data || [];
   const pagination = data?.pagination || { total_pages: 1, total_count: 0 };
+  const totalPages = Math.max(pagination.total_pages || 1, 1);
+  const currentPage = Math.min(table.page, totalPages);
+
+  useEffect(() => {
+    if (data && tablePage > totalPages) setPage(totalPages);
+  }, [data, tablePage, totalPages, setPage]);
+
+  const refreshFromFirstPage = useCallback(async () => {
+    if (tablePage !== 1) {
+      setPage(1);
+      return;
+    }
+    await reload();
+  }, [tablePage, setPage, reload]);
 
   const handleOpenDialog = (property = null) => {
     setFormError('');
@@ -110,7 +125,7 @@ const PropertyManagement = () => {
         await propertiesAPI.createProperty(submitData);
         toast.success('Propiedad creada correctamente');
       }
-      await reload();
+      await refreshFromFirstPage();
       handleCloseDialog();
     } catch (err) {
       if (!isNetworkError(err)) {
@@ -133,7 +148,7 @@ const PropertyManagement = () => {
     try {
       await propertiesAPI.deleteProperty(property.id);
       toast.success('Propiedad eliminada correctamente');
-      await reload();
+      await refreshFromFirstPage();
     } catch (err) {
       if (!isNetworkError(err)) {
         toast.error('No pudimos eliminar la propiedad');
@@ -152,8 +167,7 @@ const PropertyManagement = () => {
       const { imported, updated, errors } = response.data;
       toast.success(`Importación completa: ${imported} creadas, ${updated} actualizadas, ${errors.length} errores.`);
       if (errors.length > 0) console.error('Errores de importación:', errors);
-      table.setPage(1);
-      await reload();
+      await refreshFromFirstPage();
       setBulkImportOpen(false);
       setSelectedFile(null);
     } catch (err) {
@@ -234,7 +248,7 @@ const PropertyManagement = () => {
       <ResponsiveTable
         columns={columns}
         rows={properties}
-        loading={loading}
+        loading={loading || refreshing}
         getRowId={(property) => property.id}
         mobileTitle={(property) => formatPropertyLabel(property)}
         mobileSubtitle={(property) => property.owner_name}
@@ -271,13 +285,13 @@ const PropertyManagement = () => {
         }
         footer={
           <TablePagination
-            page={table.page}
-            totalPages={pagination.total_pages}
+            page={currentPage}
+            totalPages={totalPages}
             totalCount={pagination.total_count}
             pageSize={table.limit}
             onPageChange={table.setPage}
             onPageSizeChange={table.setLimit}
-            disabled={loading}
+            disabled={loading || refreshing}
           />
         }
       />

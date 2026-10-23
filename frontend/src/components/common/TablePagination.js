@@ -8,10 +8,11 @@ import {
   Typography,
 } from '@mui/material';
 
-const rangeLabel = (page, limit, totalCount) => {
+const rangeLabel = (page, totalPages, limit, totalCount) => {
   if (!totalCount) return 'Sin resultados';
-  const start = (page - 1) * limit + 1;
-  const end = Math.min(page * limit, totalCount);
+  const safePage = Math.min(Math.max(page, 1), Math.max(totalPages, 1));
+  const start = (safePage - 1) * limit + 1;
+  const end = Math.min(safePage * limit, totalCount);
   return `Mostrando ${start}–${end} de ${totalCount}`;
 };
 
@@ -25,7 +26,13 @@ const TablePagination = ({
   pageSizeOptions = [10, 20, 50],
   disabled = false,
   sx,
-}) => (
+}) => {
+  const safePage = Math.min(Math.max(page, 1), Math.max(totalPages, 1));
+  const options = pageSizeOptions.includes(pageSize)
+    ? pageSizeOptions
+    : [...pageSizeOptions, pageSize].sort((left, right) => left - right);
+
+  return (
   <Box
     sx={[
       {
@@ -41,7 +48,7 @@ const TablePagination = ({
     ]}
   >
     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-      {rangeLabel(page, pageSize, totalCount)}
+      {rangeLabel(safePage, totalPages, pageSize, totalCount)}
     </Typography>
 
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
@@ -52,7 +59,7 @@ const TablePagination = ({
           disabled={disabled}
           inputProps={{ 'aria-label': 'Filas por página' }}
         >
-          {pageSizeOptions.map((size) => (
+          {options.map((size) => (
             <MenuItem key={size} value={size}>
               {size} / pág.
             </MenuItem>
@@ -62,7 +69,7 @@ const TablePagination = ({
 
       <Pagination
         count={Math.max(totalPages, 1)}
-        page={page}
+        page={safePage}
         onChange={(event, value) => onPageChange?.(value)}
         color="primary"
         size="small"
@@ -70,6 +77,7 @@ const TablePagination = ({
       />
     </Box>
   </Box>
-);
+  );
+};
 
 export default TablePagination;

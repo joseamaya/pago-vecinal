@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Button,
@@ -78,8 +78,13 @@ const FeeManagement = () => {
   const [selectedFeeForPayments, setSelectedFeeForPayments] = useState(null);
   const [generatingFees, setGeneratingFees] = useState(false);
   const table = useTableState({ defaultSortBy: 'period', defaultSortDir: 'desc' });
+  const { page: tablePage, setPage } = table;
+  const requestIdRef = useRef(0);
 
   const fetchFees = useCallback(async (page = table.page) => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+
     try {
       setLoading(true);
       const filterParams = {};
@@ -92,21 +97,31 @@ const FeeManagement = () => {
       filterParams.sort_dir = table.sortDir || 'desc';
 
       const response = await feesAPI.getFees(filterParams, page, table.limit);
+      if (requestId !== requestIdRef.current) return;
+
       setFees(response.data.data);
       setTotalPages(response.data.pagination.total_pages);
       setTotalCount(response.data.pagination.total_count);
       setError('');
     } catch (err) {
-      setError('Error al cargar cuotas');
-      console.error('Error fetching fees:', err);
+      if (requestId === requestIdRef.current) {
+        setError('Error al cargar cuotas');
+        console.error('Error fetching fees:', err);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [filters, table.search, table.sortBy, table.sortDir, table.limit, table.page]);
 
   useEffect(() => {
     fetchFees(table.page);
   }, [fetchFees, table.page]);
+
+  useEffect(() => {
+    if (totalPages > 0 && tablePage > totalPages) setPage(totalPages);
+  }, [tablePage, totalPages, setPage]);
 
   useEffect(() => {
     fetchProperties();
@@ -624,7 +639,7 @@ const handleMonthsChange = (event) => {
         }
         footer={
           <TablePagination
-            page={table.page}
+            page={Math.min(table.page, Math.max(totalPages, 1))}
             totalPages={totalPages}
             totalCount={totalCount}
             pageSize={table.limit}

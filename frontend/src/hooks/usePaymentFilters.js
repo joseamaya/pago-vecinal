@@ -19,8 +19,10 @@ const buildFilterParams = (filters, search = '', sortBy = '', sortDir = '') => {
   if (filters.status) params.status = filters.status;
   if (filters.property) params.property_id = filters.property;
   if (search) params.search = search;
-  if (sortBy) params.sort_by = sortBy;
-  if (sortDir) params.sort_dir = sortDir;
+  if (sortBy) {
+    params.sort_by = sortBy;
+    if (sortDir) params.sort_dir = sortDir;
+  }
   return params;
 };
 
@@ -44,13 +46,27 @@ export function usePaymentFilters(properties = []) {
     }
     return years;
   });
-  const mountedRef = useRef(false);
+  const requestIdRef = useRef(0);
 
   const fetchPayments = useCallback(
     async (targetPage = 1, targetFilters = {}) => {
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
+
       try {
         setLoading(true);
         const response = await paymentsAPI.getPayments(targetPage, pageSize, targetFilters);
+        if (requestId !== requestIdRef.current) return;
+
+        const totalPagesResponse = Math.max(
+          response.data.pagination.total_pages || 1,
+          1
+        );
+        if (targetPage > totalPagesResponse) {
+          fetchPayments(totalPagesResponse, targetFilters);
+          return;
+        }
+
         const rows = response.data.data || [];
         setPayments(
           sortBy
@@ -64,10 +80,14 @@ export function usePaymentFilters(properties = []) {
         setPage(targetPage);
         setError('');
       } catch (err) {
-        setError('Error al cargar pagos');
-        console.error('Error fetching payments:', err);
+        if (requestId === requestIdRef.current) {
+          setError('Error al cargar pagos');
+          console.error('Error fetching payments:', err);
+        }
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
     [pageSize, sortBy]
@@ -79,18 +99,8 @@ export function usePaymentFilters(properties = []) {
   );
 
   useEffect(() => {
-    fetchPayments(1, {});
-  }, [fetchPayments]);
-
-  useEffect(() => {
-    if (!mountedRef.current) return;
     fetchPayments(1, currentFilters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.year, filters.month, filters.status, filters.property, search, sortBy, sortDir, pageSize]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-  }, []);
+  }, [fetchPayments, currentFilters, pageSize]);
 
   const setFilter = useCallback((name, value) => {
     setFilters((previous) => ({ ...previous, [name]: value }));

@@ -91,9 +91,10 @@ describe('usePaymentFilters', () => {
     await waitFor(() => expect(paymentsAPI.getPayments).toHaveBeenLastCalledWith(1, 20, {}));
   });
 
-  test('applies search, sorting and page size', async () => {
+  test('applies search, sorting and page size without duplicate fetches', async () => {
     const { result } = renderHook(() => usePaymentFilters([]));
     await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(paymentsAPI.getPayments).toHaveBeenCalledTimes(1);
 
     act(() => result.current.setSearch('Villa'));
     await waitFor(() =>
@@ -110,6 +111,7 @@ describe('usePaymentFilters', () => {
         sort_dir: 'desc',
       })
     );
+    expect(paymentsAPI.getPayments).toHaveBeenCalledTimes(3);
 
     act(() => result.current.setPageSize(50));
     await waitFor(() =>
@@ -119,6 +121,7 @@ describe('usePaymentFilters', () => {
         sort_dir: 'desc',
       })
     );
+    expect(paymentsAPI.getPayments).toHaveBeenCalledTimes(4);
   });
 
   test('exposes an error when loading fails', async () => {

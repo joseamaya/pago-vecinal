@@ -46,6 +46,7 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState(EMPTY_USER);
   const table = useTableState();
+  const { page: tablePage, setPage } = table;
 
   const filteredUsers = useMemo(() => {
     const term = table.search.trim().toLowerCase();
@@ -67,6 +68,10 @@ const UserManagement = () => {
       ),
     [filteredUsers, currentPage, table.limit]
   );
+
+  useEffect(() => {
+    if (tablePage > totalPages) setPage(totalPages);
+  }, [tablePage, totalPages, setPage]);
 
   useEffect(() => {
     fetchUsers();

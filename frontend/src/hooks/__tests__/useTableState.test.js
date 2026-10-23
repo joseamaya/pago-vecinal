@@ -58,16 +58,22 @@ describe('useTableState', () => {
     act(() => result.current.setLimit(50));
     expect(result.current.limit).toBe(50);
     expect(result.current.page).toBe(1);
+
+    act(() => result.current.setPage(2));
+    act(() => result.current.setSort('amount', 'asc'));
+    expect(result.current.page).toBe(1);
   });
 
-  test('reset clears table state', () => {
-    const { result } = renderTableState('/fees?q=Villa&page=2&sort=amount&dir=desc');
+  test('reset clears table state and preserves unrelated params', () => {
+    const { result } = renderTableState(
+      '/fees?q=Villa&page=2&sort=amount&dir=desc&year=2026'
+    );
 
     act(() => result.current.reset());
 
     expect(result.current.search).toBe('');
     expect(result.current.page).toBe(1);
     expect(result.current.sortBy).toBe('');
-    expect(result.current.params.toString()).toBe('');
+    expect(result.current.params.get('year')).toBe('2026');
   });
 });

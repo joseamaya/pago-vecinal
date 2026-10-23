@@ -217,16 +217,16 @@ const PaymentManagement = () => {
           <Select
             value={filters.sortBy}
             label="Ordenar por"
-            onChange={(event) =>
-              filters.setSort(event.target.value, filters.sortDir || 'asc')
-            }
+            onChange={(event) => {
+              const value = event.target.value;
+              filters.setSort(value, value ? filters.sortDir || 'asc' : '');
+            }}
           >
             <MenuItem value="">Estado (predeterminado)</MenuItem>
             <MenuItem value="date">Fecha</MenuItem>
             <MenuItem value="amount">Monto</MenuItem>
             <MenuItem value="status">Estado</MenuItem>
             <MenuItem value="property">Propiedad</MenuItem>
-            <MenuItem value="owner">Propietario</MenuItem>
           </Select>
         </FormControl>
         <FormControl size="small" sx={{ minWidth: 130 }}>

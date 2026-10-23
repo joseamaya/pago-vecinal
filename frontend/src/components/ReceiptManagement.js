@@ -50,6 +50,7 @@ const ReceiptManagement = () => {
   const [formData, setFormData] = useState(EMPTY_RECEIPT);
 
   const table = useTableState({ defaultSortBy: 'date', defaultSortDir: 'desc' });
+  const { page: tablePage, setPage } = table;
 
   const loader = useCallback(
     () =>
@@ -63,7 +64,7 @@ const ReceiptManagement = () => {
     [table.page, table.limit, table.search, table.sortBy, table.sortDir]
   );
 
-  const { data, loading, error, reload } = useAsyncData(
+  const { data, loading, refreshing, error, reload } = useAsyncData(
     loader,
     [loader],
     { fallbackError: 'No pudimos cargar los recibos.' }
@@ -71,6 +72,20 @@ const ReceiptManagement = () => {
 
   const receipts = data?.data || [];
   const pagination = data?.pagination || { total_count: 0, total_pages: 0 };
+  const totalPages = Math.max(pagination.total_pages || 1, 1);
+  const currentPage = Math.min(table.page, totalPages);
+
+  useEffect(() => {
+    if (data && tablePage > totalPages) setPage(totalPages);
+  }, [data, tablePage, totalPages, setPage]);
+
+  const refreshFromFirstPage = useCallback(async () => {
+    if (tablePage !== 1) {
+      setPage(1);
+      return;
+    }
+    await reload();
+  }, [tablePage, setPage, reload]);
 
   useEffect(() => {
     fetchPayments();
@@ -121,7 +136,7 @@ const ReceiptManagement = () => {
         await receiptsAPI.createReceipt(formData);
         toast.success('Recibo creado correctamente');
       }
-      await reload();
+      await refreshFromFirstPage();
       handleCloseDialog();
     } catch (err) {
       if (!isNetworkError(err)) {
@@ -144,7 +159,7 @@ const ReceiptManagement = () => {
     try {
       await receiptsAPI.deleteReceipt(receipt.id);
       toast.success('Recibo eliminado correctamente');
-      await reload();
+      await refreshFromFirstPage();
     } catch (err) {
       if (!isNetworkError(err)) {
         toast.error('No pudimos eliminar el recibo');
@@ -248,13 +263,13 @@ const ReceiptManagement = () => {
 
   const footer = (
     <TablePagination
-      page={table.page}
-      totalPages={pagination.total_pages}
+      page={currentPage}
+      totalPages={totalPages}
       totalCount={pagination.total_count}
       pageSize={table.limit}
       onPageChange={table.setPage}
       onPageSizeChange={table.setLimit}
-      disabled={loading}
+      disabled={loading || refreshing}
     />
   );
 
@@ -319,7 +334,7 @@ const ReceiptManagement = () => {
       <ResponsiveTable
         columns={columns}
         rows={receipts}
-        loading={loading}
+        loading={loading || refreshing}
         getRowId={(receipt) => receipt.id}
         mobileTitle={(receipt) => `Recibo ${receipt.correlative_number}`}
         mobileSubtitle={(receipt) =>
