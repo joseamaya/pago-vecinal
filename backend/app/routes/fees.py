@@ -219,7 +219,7 @@ async def create_fee(
 
     # Check if user owns this property or is admin
     if (current_user.role != UserRole.ADMIN and
-        (not prop.owner or str(prop.owner.id) != str(current_user.id))):
+        (not prop.owner or link_id(prop.owner) != str(current_user.id))):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
