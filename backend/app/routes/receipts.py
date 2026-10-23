@@ -9,6 +9,7 @@ from ..schemas.receipt import ReceiptCreate, ReceiptUpdate, ReceiptResponse
 from ..models.payment import Payment
 from ..models.miscellaneous_payment import MiscellaneousPayment
 from ..models.fee import Fee
+from ..models.property import Property
 from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
@@ -17,6 +18,7 @@ from ..config.database import database
 from ..services.receipt_service import generate_correlative_number, create_receipt_for_payment
 from ..services.cloudinary_service import upload_receipt_pdf
 from bson import DBRef
+from ..utils.links import link_id, link_ref_id
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,11 @@ async def _assert_receipt_access(payment_doc, misc_doc, current_user):
         return
 
     if payment_doc is not None:
+        fee = await Fee.get(payment_doc.fee_id)
+        if fee:
+            prop = await Property.get(link_ref_id(fee.property)) if link_ref_id(fee.property) else None
+            if prop and link_id(prop.owner) == str(current_user.id):
+                return
         await payment_doc.fetch_link(Payment.user)
         owner = payment_doc.user
     elif misc_doc is not None:
@@ -59,14 +66,22 @@ async def _assert_receipt_access(payment_doc, misc_doc, current_user):
 
 
 async def _owner_receipts_query(current_user):
-    # Owners can only see receipts for their own payments (regular and miscellaneous)
+    # Owners see receipts for their own payments and payments on their properties
+    user_id = str(current_user.id)
+    properties = await Property.find_all().to_list()
+    property_ids = {str(prop.id) for prop in properties if link_id(prop.owner) == user_id}
+    fees = await Fee.find_all().to_list()
+    fee_ids = {str(fee.id) for fee in fees if link_id(fee.property) in property_ids}
+
     payment_ids = [
-        p.id
-        for p in await Payment.find({"user": DBRef("users", current_user.id)}).to_list()
+        payment.id
+        for payment in await Payment.find_all().to_list()
+        if link_id(payment.user) == user_id or payment.fee_id in fee_ids
     ]
     misc_payment_ids = [
-        m.id
-        for m in await MiscellaneousPayment.find({"user": DBRef("users", current_user.id)}).to_list()
+        payment.id
+        for payment in await MiscellaneousPayment.find_all().to_list()
+        if link_id(payment.user) == user_id
     ]
     clauses = []
     if payment_ids:

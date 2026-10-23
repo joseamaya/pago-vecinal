@@ -419,18 +419,22 @@ const handleMonthsChange = (event) => {
             <ActionMenu
               ariaLabel="Más acciones de cuotas"
               buttonSx={{ border: 1, borderColor: 'divider', borderRadius: 2.5 }}
-              items={[
-                {
-                  label: 'Exportar Excel',
-                  icon: <DownloadIcon fontSize="small" />,
-                  onClick: handleDownloadExcel,
-                },
-                isAdmin && {
-                  label: 'Reporte semáforo',
-                  icon: <DownloadIcon fontSize="small" />,
-                  onClick: handleDownloadTrafficLightReport,
-                },
-              ].filter(Boolean)}
+              items={
+                isAdmin
+                  ? [
+                      {
+                        label: 'Exportar Excel',
+                        icon: <DownloadIcon fontSize="small" />,
+                        onClick: handleDownloadExcel,
+                      },
+                      {
+                        label: 'Reporte semáforo',
+                        icon: <DownloadIcon fontSize="small" />,
+                        onClick: handleDownloadTrafficLightReport,
+                      },
+                    ]
+                  : []
+              }
             />
             {isAdmin && (
               <>

@@ -311,6 +311,9 @@ async def update_fee(
     update_data = fee_update.dict(exclude_unset=True)
     if 'amount' in update_data:
         del update_data['amount']  # Prevent updating amount
+    if current_user.role != UserRole.ADMIN:
+        allowed_fields = {"due_date", "reference", "notes"}
+        update_data = {k: v for k, v in update_data.items() if k in allowed_fields}
     for field, value in update_data.items():
         setattr(fee, field, value)
 

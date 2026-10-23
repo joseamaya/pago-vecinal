@@ -53,12 +53,12 @@ class TestListReceipts:
         misc_id = PydanticObjectId()
 
         pay_query = MagicMock()
-        pay_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=pay_id)])
+        pay_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=pay_id, user=user, fee_id="fee-1")])
         misc_query = MagicMock()
-        misc_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=misc_id)])
+        misc_query.to_list = AsyncMock(return_value=[SimpleNamespace(id=misc_id, user=user)])
 
-        with patch.object(Payment, "find", return_value=pay_query), patch.object(
-            MiscellaneousPayment, "find", return_value=misc_query
+        with patch.object(Payment, "find_all", return_value=pay_query), patch.object(
+            MiscellaneousPayment, "find_all", return_value=misc_query
         ):
             query = await _owner_receipts_query(user)
 

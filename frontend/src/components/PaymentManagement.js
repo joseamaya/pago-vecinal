@@ -823,9 +823,11 @@ const PaymentManagement = () => {
                 Importar
               </Button>
             )}
-            <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={handleExportExcel}>
-              Exportar
-            </Button>
+            {isAdmin && (
+              <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={handleExportExcel}>
+                Exportar
+              </Button>
+            )}
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
               Nuevo pago
             </Button>

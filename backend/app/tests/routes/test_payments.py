@@ -57,7 +57,7 @@ class TestListPayments:
 
         assert response.status_code == 200
         count_pipeline = fake_collection.aggregate.call_args_list[0].args[0]
-        assert count_pipeline[0]["$match"]["user.$id"] == test_owner_user.id
+        assert count_pipeline[0]["$match"]["$or"] == [{"user.$id": test_owner_user.id}]
 
 
 class TestCreatePayment:

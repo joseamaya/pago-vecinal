@@ -63,7 +63,7 @@ const Login = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
       nextErrors.email = 'Ingresa un correo electrónico válido.';
     }
-    if (formData.password.length < 6) {
+    if (isRegister && formData.password.length < 6) {
       nextErrors.password = 'La contraseña debe tener al menos 6 caracteres.';
     }
     if (isRegister && formData.fullName.trim().length < 3) {

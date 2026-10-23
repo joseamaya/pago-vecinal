@@ -43,6 +43,17 @@ class PaginatedPaymentResponse(BaseModel):
 router = APIRouter()
 
 
+async def _owner_fee_ids(current_user: User) -> list:
+    properties = await Property.find_all().to_list()
+    property_ids = {
+        str(prop.id) for prop in properties if link_id(prop.owner) == str(current_user.id)
+    }
+    if not property_ids:
+        return []
+    fees = await Fee.find_all().to_list()
+    return [str(fee.id) for fee in fees if link_id(fee.property) in property_ids]
+
+
 async def _can_access_fee(fee: Fee, current_user: User) -> bool:
     if current_user.role == UserRole.ADMIN:
         return True
@@ -51,6 +62,15 @@ async def _can_access_fee(fee: Fee, current_user: User) -> bool:
     property_id = link_ref_id(fee.property)
     prop = await Property.get(property_id) if property_id else None
     return bool(prop and link_id(prop.owner) == str(current_user.id))
+
+
+async def _can_access_payment(payment: Payment, current_user: User) -> bool:
+    if current_user.role == UserRole.ADMIN:
+        return True
+    if payment.user and link_id(payment.user) == str(current_user.id):
+        return True
+    fee = await Fee.get(payment.fee_id)
+    return bool(fee and await _can_access_fee(fee, current_user))
 
 @router.get("/", response_model=PaginatedPaymentResponse)
 async def get_payments(
@@ -66,8 +86,12 @@ async def get_payments(
     # Build query filters
     query_filters = {}
     if current_user.role != UserRole.ADMIN:
-        # Owners can only see their own payments
-        query_filters["user.$id"] = current_user.id
+        # Owners see payments they registered and payments made on their fees
+        owned_fee_ids = await _owner_fee_ids(current_user)
+        owner_clauses = [{"user.$id": current_user.id}]
+        if owned_fee_ids:
+            owner_clauses.append({"fee_id": {"$in": owned_fee_ids}})
+        query_filters["$or"] = owner_clauses
 
     # Add filter parameters
     if year is not None and month is not None:
@@ -238,8 +262,7 @@ async def get_payment(payment_id: str, current_user: User = Depends(get_current_
     receipt_issue_date = receipt.issue_date if receipt else None
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(payment.user.id) != str(current_user.id)):
+    if not await _can_access_payment(payment, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -279,8 +302,7 @@ async def create_payment(
         )
 
     # Check if user owns this fee or is admin
-    if (current_user.role != UserRole.ADMIN and
-        (not fee.user or str(fee.user.id) != str(current_user.id))):
+    if not await _can_access_fee(fee, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -357,8 +379,7 @@ async def update_payment(
     await payment.fetch_link(Payment.user)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(payment.user.id) != str(current_user.id)):
+    if not await _can_access_payment(payment, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -474,8 +495,7 @@ async def download_generated_receipt(payment_id: str, current_user: User = Depen
     await payment.fetch_link(Payment.user)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(payment.user.id) != str(current_user.id)):
+    if not await _can_access_payment(payment, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

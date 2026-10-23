@@ -214,9 +214,11 @@ const PropertyManagement = () => {
             title="No hay propiedades registradas"
             description="Agrega una propiedad o importa un archivo Excel."
             action={
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
-                Nueva propiedad
-              </Button>
+              isAdmin && (
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+                  Nueva propiedad
+                </Button>
+              )
             }
           />
         }

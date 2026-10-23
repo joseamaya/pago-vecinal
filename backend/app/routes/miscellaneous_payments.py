@@ -236,6 +236,9 @@ async def update_miscellaneous_payment(
                 "name": getattr(prop, "owner_name", "Propietario no registrado"),
                 "phone": getattr(prop, "owner_phone", "N/A") or "N/A",
             }
+        else:
+            payment.property_details = None
+            payment.owner_details = None
         payment.property = prop
     if amount is not None:
         payment.amount = amount
