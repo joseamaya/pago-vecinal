@@ -30,6 +30,8 @@ import DataToolbar from './common/DataToolbar';
 import TablePagination from './common/TablePagination';
 import ErrorState from './common/ErrorState';
 import { useTableState } from '../hooks/useTableState';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { email, minLength, phone, required } from '../utils/validators';
 
 const EMPTY_USER = { email: '', full_name: '', phone: '', role: 'owner', password: '' };
 
@@ -45,6 +47,31 @@ const UserManagement = () => {
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState(EMPTY_USER);
+  const schema = useMemo(
+    () => ({
+      email: [required('Ingresa el correo electrónico.'), email()],
+      full_name: [required('Ingresa el nombre completo.'), minLength(3, 'Ingresa el nombre completo.')],
+      phone: phone(),
+      ...(editingUser
+        ? {}
+        : {
+            password: [
+              required('Ingresa una contraseña inicial.'),
+              minLength(6, 'La contraseña debe tener al menos 6 caracteres.'),
+            ],
+          }),
+    }),
+    [editingUser]
+  );
+  const { errors, validateField, validateAll, clearError, setErrors } = useFormValidation(
+    formData,
+    schema
+  );
+  const handleFieldChange = (field) => (event) => {
+    setFormData((previous) => ({ ...previous, [field]: event.target.value }));
+    clearError(field);
+  };
+  const handleFieldBlur = (field) => () => validateField(field);
   const table = useTableState();
   const { page: tablePage, setPage } = table;
 
@@ -93,6 +120,7 @@ const UserManagement = () => {
 
   const handleOpenDialog = (user = null) => {
     setFormError('');
+    setErrors({});
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -113,11 +141,13 @@ const UserManagement = () => {
     setOpen(false);
     setEditingUser(null);
     setFormError('');
+    setErrors({});
     setFormData(EMPTY_USER);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!validateAll()) return;
     setSaving(true);
     setFormError('');
     try {
@@ -287,25 +317,37 @@ const UserManagement = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <TextField
             autoFocus
+            name="email"
             label="Correo electrónico"
             type="email"
             fullWidth
             required
             value={formData.email}
-            onChange={(event) => setFormData({ ...formData, email: event.target.value })}
+            onChange={handleFieldChange('email')}
+            onBlur={handleFieldBlur('email')}
+            error={Boolean(errors.email)}
+            helperText={errors.email}
           />
           <TextField
+            name="full_name"
             label="Nombre completo"
             fullWidth
             required
             value={formData.full_name}
-            onChange={(event) => setFormData({ ...formData, full_name: event.target.value })}
+            onChange={handleFieldChange('full_name')}
+            onBlur={handleFieldBlur('full_name')}
+            error={Boolean(errors.full_name)}
+            helperText={errors.full_name}
           />
           <TextField
+            name="phone"
             label="Teléfono"
             fullWidth
             value={formData.phone}
-            onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
+            onChange={handleFieldChange('phone')}
+            onBlur={handleFieldBlur('phone')}
+            error={Boolean(errors.phone)}
+            helperText={errors.phone}
           />
           <FormControl fullWidth>
             <InputLabel>Rol</InputLabel>
@@ -320,13 +362,16 @@ const UserManagement = () => {
           </FormControl>
           {!editingUser && (
             <TextField
+              name="password"
               label="Contraseña inicial"
               type="password"
               fullWidth
               required
               value={formData.password}
-              onChange={(event) => setFormData({ ...formData, password: event.target.value })}
-              helperText="Mínimo 6 caracteres. El usuario podrá cambiarla luego."
+              onChange={handleFieldChange('password')}
+              onBlur={handleFieldBlur('password')}
+              error={Boolean(errors.password)}
+              helperText={errors.password || 'Mínimo 6 caracteres. El usuario podrá cambiarla luego.'}
             />
           )}
         </Box>

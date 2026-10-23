@@ -32,9 +32,19 @@ import TablePagination from './common/TablePagination';
 import ErrorState from './common/ErrorState';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { useTableState } from '../hooks/useTableState';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { positiveInteger, phone, required } from '../utils/validators';
 import { formatPropertyLabel } from '../utils/formatters';
 
 const EMPTY_PROPERTY = { row_letter: '', number: '', villa: '', owner_name: '', owner_phone: '' };
+
+const PROPERTY_SCHEMA = {
+  villa: required('Ingresa la villa.'),
+  row_letter: required('Ingresa la fila.'),
+  number: [required('Ingresa el número.'), positiveInteger('Ingresa un número entero mayor a 0.')],
+  owner_name: required('Ingresa el nombre del propietario.'),
+  owner_phone: phone('Ingresa un teléfono válido.'),
+};
 
 const PropertyManagement = () => {
   const { isAdmin } = useAuth();
@@ -48,6 +58,17 @@ const PropertyManagement = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [editingProperty, setEditingProperty] = useState(null);
   const [formData, setFormData] = useState(EMPTY_PROPERTY);
+  const { errors, validateField, validateAll, clearError, setErrors } = useFormValidation(
+    formData,
+    PROPERTY_SCHEMA
+  );
+
+  const handleFieldChange = (field) => (event) => {
+    setFormData((previous) => ({ ...previous, [field]: event.target.value }));
+    clearError(field);
+  };
+
+  const handleFieldBlur = (field) => () => validateField(field);
 
   const table = useTableState({ defaultSortBy: 'villa', defaultSortDir: 'asc' });
   const { page: tablePage, setPage } = table;
@@ -89,6 +110,7 @@ const PropertyManagement = () => {
 
   const handleOpenDialog = (property = null) => {
     setFormError('');
+    setErrors({});
     if (property) {
       setEditingProperty(property);
       setFormData({
@@ -109,11 +131,13 @@ const PropertyManagement = () => {
     setOpen(false);
     setEditingProperty(null);
     setFormError('');
+    setErrors({});
     setFormData(EMPTY_PROPERTY);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!validateAll()) return;
     setSaving(true);
     setFormError('');
     try {
@@ -311,47 +335,73 @@ const PropertyManagement = () => {
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               autoFocus
+              name="villa"
               label="Villa"
               fullWidth
               required
               value={formData.villa}
-              onChange={(event) => setFormData({ ...formData, villa: event.target.value })}
+              onChange={handleFieldChange('villa')}
+              onBlur={handleFieldBlur('villa')}
+              error={Boolean(errors.villa)}
+              helperText={errors.villa}
             />
           </Grid>
           <Grid size={{ xs: 6, sm: 3 }}>
             <TextField
+              name="row_letter"
               label="Fila"
               fullWidth
               required
               value={formData.row_letter}
-              onChange={(event) => setFormData({ ...formData, row_letter: event.target.value.toUpperCase() })}
+              onChange={(event) => {
+                setFormData((previous) => ({
+                  ...previous,
+                  row_letter: event.target.value.toUpperCase(),
+                }));
+                clearError('row_letter');
+              }}
+              onBlur={handleFieldBlur('row_letter')}
+              error={Boolean(errors.row_letter)}
+              helperText={errors.row_letter}
             />
           </Grid>
           <Grid size={{ xs: 6, sm: 3 }}>
             <TextField
+              name="number"
               label="Número"
               type="number"
               fullWidth
               required
               value={formData.number}
-              onChange={(event) => setFormData({ ...formData, number: event.target.value })}
+              onChange={handleFieldChange('number')}
+              onBlur={handleFieldBlur('number')}
+              error={Boolean(errors.number)}
+              helperText={errors.number}
             />
           </Grid>
           <Grid size={12}>
             <TextField
+              name="owner_name"
               label="Nombre del propietario"
               fullWidth
               required
               value={formData.owner_name}
-              onChange={(event) => setFormData({ ...formData, owner_name: event.target.value })}
+              onChange={handleFieldChange('owner_name')}
+              onBlur={handleFieldBlur('owner_name')}
+              error={Boolean(errors.owner_name)}
+              helperText={errors.owner_name}
             />
           </Grid>
           <Grid size={12}>
             <TextField
+              name="owner_phone"
               label="Teléfono del propietario"
               fullWidth
               value={formData.owner_phone}
-              onChange={(event) => setFormData({ ...formData, owner_phone: event.target.value })}
+              onChange={handleFieldChange('owner_phone')}
+              onBlur={handleFieldBlur('owner_phone')}
+              error={Boolean(errors.owner_phone)}
+              helperText={errors.owner_phone}
             />
           </Grid>
         </Grid>

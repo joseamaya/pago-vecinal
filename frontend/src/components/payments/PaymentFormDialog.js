@@ -11,6 +11,7 @@ import {
   TextField,
 } from '@mui/material';
 import FormDialog from '../common/FormDialog';
+import MoneyField from '../common/MoneyField';
 import { formatCurrency, formatDate, formatPeriod } from '../../utils/formatters';
 
 const readOnlyInput = { htmlInput: { readOnly: true } };
@@ -42,6 +43,17 @@ const PaymentFormDialog = ({ dialog, isAdmin = false }) => {
     handleSubmit,
   } = dialog;
 
+  const amountNumber = Number(formData.amount);
+  const amountError = !formData.amount
+    ? 'Ingresa el monto.'
+    : !Number.isFinite(amountNumber) || amountNumber <= 0
+      ? 'Ingresa un monto mayor a 0.'
+      : !editingPayment && selectedFeeAmount > 0 && amountNumber > selectedFeeAmount
+        ? `El monto no puede superar ${formatCurrency(selectedFeeAmount)}.`
+        : '';
+  const dateError = !formData.payment_date ? 'Selecciona la fecha de pago.' : '';
+  const submitDisabled = !selectedFeeId || Boolean(amountError || dateError);
+
   return (
     <FormDialog
       open={open}
@@ -51,6 +63,7 @@ const PaymentFormDialog = ({ dialog, isAdmin = false }) => {
       subtitle="Selecciona la propiedad, la cuota y el monto del pago."
       submitLabel={editingPayment ? 'Guardar cambios' : 'Registrar pago'}
       saving={saving}
+      submitDisabled={submitDisabled}
       maxWidth="md"
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
@@ -186,23 +199,24 @@ const PaymentFormDialog = ({ dialog, isAdmin = false }) => {
                 </>
               )}
             </Box>
-            <TextField
+            <MoneyField
+              name="amount"
               label={
                 selectedFeeInfo.status === 'partially_paid'
-                  ? 'Monto restante (S/)'
-                  : 'Monto (S/)'
+                  ? 'Monto restante'
+                  : 'Monto'
               }
-              type="number"
               fullWidth
               value={formData.amount}
               onChange={(event) =>
                 setFormData((previous) => ({ ...previous, amount: event.target.value }))
               }
-              inputProps={{ min: 0, step: 0.01 }}
+              error={Boolean(amountError)}
               helperText={
-                editingPayment
+                amountError ||
+                (editingPayment
                   ? 'Edita el monto del pago'
-                  : `Máximo ${formatCurrency(selectedFeeAmount)}`
+                  : `Máximo ${formatCurrency(selectedFeeAmount)}`)
               }
               required
             />
@@ -210,6 +224,7 @@ const PaymentFormDialog = ({ dialog, isAdmin = false }) => {
         )}
 
         <TextField
+          name="payment_date"
           label="Fecha de pago"
           type="date"
           fullWidth
@@ -217,6 +232,8 @@ const PaymentFormDialog = ({ dialog, isAdmin = false }) => {
           onChange={(event) =>
             setFormData((previous) => ({ ...previous, payment_date: event.target.value }))
           }
+          error={Boolean(dateError)}
+          helperText={dateError}
           slotProps={{ inputLabel: { shrink: true } }}
           required
         />
