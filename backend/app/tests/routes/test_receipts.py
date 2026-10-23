@@ -29,14 +29,65 @@ class TestListReceipts:
     @pytest.mark.asyncio
     async def test_returns_paginated_receipts(self, client, override_auth_as_admin):
         with patch("app.routes.receipts.Receipt") as MockReceipt:
-            MockReceipt.find_all.return_value.sort.return_value.skip.return_value.limit.return_value.to_list = AsyncMock(return_value=[])
-            MockReceipt.find_all.return_value.count = AsyncMock(return_value=0)
+            query = MockReceipt.find.return_value
+            query.count = AsyncMock(return_value=0)
+            query.sort.return_value.skip.return_value.limit.return_value.to_list = AsyncMock(
+                return_value=[]
+            )
 
             response = await client.get("/receipts/?page=1&limit=20")
             assert response.status_code == 200
             data = response.json()
             assert "data" in data
             assert "pagination" in data
+
+    @pytest.mark.asyncio
+    async def test_search_and_sort_are_applied(self, client, override_auth_as_admin):
+        with patch("app.routes.receipts.Receipt") as MockReceipt:
+            query = MockReceipt.find.return_value
+            query.count = AsyncMock(return_value=0)
+            query.sort.return_value.skip.return_value.limit.return_value.to_list = AsyncMock(
+                return_value=[]
+            )
+
+            response = await client.get(
+                "/receipts/?search=Villa&sort_by=amount&sort_dir=desc"
+            )
+            assert response.status_code == 200
+
+        find_filter = MockReceipt.find.call_args.args[0]
+        search_clauses = find_filter["$or"]
+        assert any("property_details.villa" in clause for clause in search_clauses)
+        assert any("owner_details.name" in clause for clause in search_clauses)
+        query.sort.assert_called_once_with([("total_amount", -1)])
+
+    @pytest.mark.asyncio
+    async def test_invalid_sort_is_rejected(self, client, mongomock_db, auth_headers_admin):
+        response = await client.get(
+            "/receipts/?sort_by=unknown", headers=auth_headers_admin
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_owner_search_keeps_owner_scoping(
+        self, client, mongomock_db, auth_headers_owner
+    ):
+        with patch("app.routes.receipts.Receipt") as MockReceipt:
+            query = MockReceipt.find.return_value
+            query.count = AsyncMock(return_value=0)
+            query.sort.return_value.skip.return_value.limit.return_value.to_list = AsyncMock(
+                return_value=[]
+            )
+
+            response = await client.get(
+                "/receipts/?search=Villa", headers=auth_headers_owner
+            )
+            assert response.status_code == 200
+
+        find_filter = MockReceipt.find.call_args.args[0]
+        assert "$and" in find_filter
+        assert {"_id": None} in find_filter["$and"]
+        assert any("$or" in clause for clause in find_filter["$and"])
 
     @pytest.mark.asyncio
     async def test_owner_query_targets_payment_and_misc_links(self, mongomock_db):

@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime
 import os
 import shutil
@@ -15,6 +15,7 @@ from ..models.treasurer import Treasurer
 from ..models.user import User, UserRole
 from ..models.receipt import Receipt
 from ..utils.links import link_id, link_ref_id
+from ..utils.query import sort_document, sort_spec, text_search_clauses
 from bson import DBRef
 from ..schemas.receipt import ReceiptResponse
 from ..models.property import Property
@@ -68,6 +69,15 @@ async def _can_access_payment(payment: Payment, current_user: User) -> bool:
     fee = await Fee.get(payment.fee_id)
     return bool(fee and await _can_access_fee(fee, current_user))
 
+PAYMENT_SORTS = {
+    "date": "payment_date",
+    "amount": "amount",
+    "status": "status_priority",
+    "property": ["property_data.villa", "property_data.row_letter", "property_data.number"],
+    "owner": "user_data.full_name",
+}
+
+
 @router.get("/", response_model=PaginatedResponse[PaymentResponse])
 async def get_payments(
     page: int = 1,
@@ -77,6 +87,9 @@ async def get_payments(
     status: Optional[str] = None,
     fee_id: Optional[str] = None,
     property_id: Optional[str] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[Literal["date", "amount", "status", "property", "owner"]] = None,
+    sort_dir: Optional[Literal["asc", "desc"]] = None,
     current_user: User = Depends(get_current_user)
 ):
     # Build query filters
@@ -113,6 +126,17 @@ async def get_payments(
     if fee_id is not None:
         query_filters["fee_id"] = fee_id
 
+    search_clauses = text_search_clauses(
+        search,
+        [
+            "property_data.villa",
+            "property_data.owner_name",
+            "property_data.row_letter",
+            "notes",
+        ],
+        numeric_field="property_data.number",
+    )
+
     # Property filter will be handled in the aggregation pipeline
 
     # Get motor collection for aggregation
@@ -138,6 +162,8 @@ async def get_payments(
     ]
     if property_id is not None:
         count_pipeline.append({"$match": {"property_data._id": ObjectId(property_id)}})
+    if search_clauses:
+        count_pipeline.append({"$match": {"$or": search_clauses}})
     count_pipeline.append({"$count": "total"})
     count_result = await payment_collection.aggregate(count_pipeline).to_list(length=1)
     total_count = count_result[0]["total"] if count_result else 0
@@ -172,6 +198,8 @@ async def get_payments(
     ]
     if property_id is not None:
         pipeline.append({"$match": {"property_data._id": ObjectId(property_id)}})
+    if search_clauses:
+        pipeline.append({"$match": {"$or": search_clauses}})
     pipeline.append({"$addFields": {
         "status_priority": {
             "$switch": {
@@ -187,10 +215,18 @@ async def get_payments(
             }
         }
     }})
-    pipeline.append({"$sort": {
-        "status_priority": 1,
-        "payment_date": -1
-    }})
+    spec = sort_spec(sort_by, sort_dir, PAYMENT_SORTS)
+    if spec:
+        if sort_by == "status":
+            spec += [("payment_date", -1)]
+        elif sort_by == "date":
+            spec += [("status_priority", 1)]
+        else:
+            spec += [("status_priority", 1), ("payment_date", -1)]
+    else:
+        spec = [("status_priority", 1), ("payment_date", -1)]
+
+    pipeline.append({"$sort": sort_document(spec)})
     pipeline.append({"$skip": skip})
     pipeline.append({"$limit": limit})
 

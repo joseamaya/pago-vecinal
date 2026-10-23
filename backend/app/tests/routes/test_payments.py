@@ -59,6 +59,67 @@ class TestListPayments:
         count_pipeline = fake_collection.aggregate.call_args_list[0].args[0]
         assert count_pipeline[0]["$match"]["$or"] == [{"user.$id": test_owner_user.id}]
 
+    @pytest.mark.asyncio
+    async def test_search_and_sort_are_applied_to_pipelines(
+        self, client, override_auth_as_admin
+    ):
+        with patch("app.routes.payments.database") as mock_db:
+            fake_collection = MagicMock()
+            fake_collection.aggregate.return_value.to_list = AsyncMock(return_value=[])
+            mock_db.payments = fake_collection
+
+            response = await client.get(
+                "/payments/?search=Villa&sort_by=amount&sort_dir=desc"
+            )
+            assert response.status_code == 200
+
+        count_pipeline = fake_collection.aggregate.call_args_list[0].args[0]
+        data_pipeline = fake_collection.aggregate.call_args_list[1].args[0]
+
+        count_search = next(
+            stage["$match"]
+            for stage in count_pipeline
+            if "$match" in stage and "$or" in stage["$match"]
+        )
+        assert any("property_data.owner_name" in clause for clause in count_search["$or"])
+
+        data_search = next(
+            stage["$match"]
+            for stage in data_pipeline
+            if "$match" in stage and "$or" in stage["$match"]
+        )
+        assert any("property_data.villa" in clause for clause in data_search["$or"])
+
+        sort_stage = next(stage["$sort"] for stage in data_pipeline if "$sort" in stage)
+        assert sort_stage["amount"] == -1
+
+    @pytest.mark.asyncio
+    async def test_invalid_sort_is_rejected(self, client, override_auth_as_admin):
+        response = await client.get("/payments/?sort_by=unknown")
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_owner_search_keeps_owner_scoping(
+        self, client, mongomock_db, auth_headers_owner, test_owner_user
+    ):
+        with patch("app.routes.payments.database") as mock_db:
+            fake_collection = MagicMock()
+            fake_collection.aggregate.return_value.to_list = AsyncMock(return_value=[])
+            mock_db.payments = fake_collection
+
+            response = await client.get(
+                "/payments/?search=Villa", headers=auth_headers_owner
+            )
+            assert response.status_code == 200
+
+        count_pipeline = fake_collection.aggregate.call_args_list[0].args[0]
+        owner_match = count_pipeline[0]["$match"]
+        assert owner_match["$or"] == [{"user.$id": test_owner_user.id}]
+        assert any(
+            "$match" in stage and "$or" in stage["$match"]
+            for stage in count_pipeline
+        )
+
 
 class TestCreatePayment:
     @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, RedirectResponse
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime
 from ..models.receipt import Receipt
 from ..schemas.common import PaginatedResponse
@@ -19,6 +19,7 @@ from ..services.receipt_service import generate_correlative_number, create_recei
 from ..services.cloudinary_service import upload_receipt_pdf
 from bson import DBRef
 from ..utils.links import link_id, link_ref_id
+from ..utils.query import combine_filters, sort_spec, text_search_clauses
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ async def _assert_receipt_access(payment_doc, misc_doc, current_user):
         )
 
 
-async def _owner_receipts_query(current_user):
+async def _owner_receipts_filter(current_user):
     # Owners see receipts for their own payments and payments on their properties
     user_id = str(current_user.id)
     properties = await Property.find_all().to_list()
@@ -91,8 +92,21 @@ async def _owner_receipts_query(current_user):
             }
         )
     if not clauses:
-        return Receipt.find({"_id": None})
-    return Receipt.find({"$or": clauses})
+        return {"_id": None}
+    return {"$or": clauses}
+
+
+async def _owner_receipts_query(current_user):
+    return Receipt.find(await _owner_receipts_filter(current_user))
+
+
+RECEIPT_SORTS = {
+    "date": "issue_date",
+    "correlative": "correlative_number",
+    "amount": "total_amount",
+    "owner": "owner_details.name",
+    "property": "property_details.villa",
+}
 
 
 def _build_receipt_pdf_data(receipt, payment_doc, misc_doc, expense_doc=None, treasurer_details=None):
@@ -128,22 +142,44 @@ def _build_receipt_pdf_data(receipt, payment_doc, misc_doc, expense_doc=None, tr
 async def get_receipts(
     page: int = 1,
     limit: int = 20,
+    search: Optional[str] = None,
+    sort_by: Optional[Literal["date", "correlative", "amount", "owner", "property"]] = None,
+    sort_dir: Optional[Literal["asc", "desc"]] = None,
     current_user: User = Depends(get_current_user)
 ):
-    # Build base query
-    if current_user.role == UserRole.ADMIN:
-        base_query = Receipt.find_all()
-    else:
-        base_query = await _owner_receipts_query(current_user)
+    filters = []
+    if current_user.role != UserRole.ADMIN:
+        filters.append(await _owner_receipts_filter(current_user))
+
+    search_clauses = text_search_clauses(
+        search,
+        [
+            "correlative_number",
+            "property_details.villa",
+            "property_details.owner_name",
+            "owner_details.name",
+            "fee_period",
+            "notes",
+        ],
+    )
+    if search_clauses:
+        filters.append({"$or": search_clauses})
+
+    base_filter = combine_filters(*filters)
+    receipt_query = Receipt.find(base_filter)
 
     # Get total count
-    total_count = await base_query.count()
+    total_count = await receipt_query.count()
 
     # Calculate skip
     skip = (page - 1) * limit
 
-    # Get paginated results, sorted by issue date descending
-    receipts = await base_query.sort([("issue_date", -1)]).skip(skip).limit(limit).to_list()
+    spec = sort_spec(sort_by, sort_dir, RECEIPT_SORTS, default_dir="desc")
+    if not spec:
+        spec = [("issue_date", -1)]
+
+    # Get paginated results
+    receipts = await receipt_query.sort(spec).skip(skip).limit(limit).to_list()
 
     # Fetch links for each receipt
     for receipt in receipts:

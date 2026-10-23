@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from typing import List, Optional
+from typing import List, Literal, Optional
 from ..models.property import Property
 from ..schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
 from ..schemas.common import PaginatedResponse, PropertyBulkImportResponse
@@ -7,6 +7,7 @@ from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..services.property_service import bulk_import_property_rows
 from ..utils.links import link_id
+from ..utils.query import combine_filters, sort_spec, text_search_clauses
 from bson import DBRef
 from ..utils.uploads import (
     validate_upload,
@@ -21,26 +22,50 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+PROPERTY_SORTS = {
+    "villa": "villa",
+    "row_letter": "row_letter",
+    "number": "number",
+    "owner_name": "owner_name",
+}
+
+
 @router.get("/", response_model=PaginatedResponse[PropertyResponse])
 async def get_properties(
     page: int = 1,
     limit: int = 20,
+    search: Optional[str] = None,
+    sort_by: Optional[Literal["villa", "row_letter", "number", "owner_name"]] = None,
+    sort_dir: Optional[Literal["asc", "desc"]] = None,
     current_user: User = Depends(get_current_user)
 ):
-    # Build query
-    query = {}
+    filters = []
     if current_user.role != UserRole.ADMIN:
         # Owners can only see their own properties
-        query["owner"] = DBRef("users", current_user.id)
+        filters.append({"owner": DBRef("users", current_user.id)})
+
+    search_clauses = text_search_clauses(
+        search,
+        ["villa", "row_letter", "owner_name", "owner_phone"],
+        numeric_field="number",
+    )
+    if search_clauses:
+        filters.append({"$or": search_clauses})
+
+    query = combine_filters(*filters)
+    property_query = Property.find(query)
+    spec = sort_spec(sort_by, sort_dir, PROPERTY_SORTS)
+    if spec:
+        property_query = property_query.sort(spec)
 
     # Get total count
-    total_count = await Property.find(query).count()
+    total_count = await property_query.count()
 
     # Calculate skip
     skip = (page - 1) * limit
 
     # Get paginated results
-    properties = await Property.find(query).skip(skip).limit(limit).to_list()
+    properties = await property_query.skip(skip).limit(limit).to_list()
 
     # Calculate total pages
     total_pages = (total_count + limit - 1) // limit

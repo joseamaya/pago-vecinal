@@ -1,6 +1,6 @@
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from ..models.fee import Fee, FeeStatus, FeeSchedule
@@ -11,6 +11,7 @@ from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
 from ..utils.links import link_id, link_ref_id
+from ..utils.query import sort_document, sort_spec, text_search_clauses
 from bson import DBRef
 
 class GenerateFeesRequest(BaseModel):
@@ -20,6 +21,15 @@ class GenerateFeesRequest(BaseModel):
     fee_schedule_ids: Optional[List[str]] = None  # List of fee schedule IDs
 
 router = APIRouter()
+
+FEE_SORTS = {
+    "period": ["year", "month"],
+    "property": ["property_data.villa", "property_data.row_letter", "property_data.number"],
+    "owner": "property_data.owner_name",
+    "amount": "amount",
+    "due_date": "due_date",
+    "status": "status",
+}
 
 
 async def _can_access_fee(fee: Fee, current_user: User) -> bool:
@@ -39,7 +49,10 @@ async def get_fees(
     year: Optional[int] = None,
     month: Optional[int] = None,
     status: Optional[str] = None,
-    property_id: Optional[str] = None
+    property_id: Optional[str] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[Literal["period", "property", "owner", "amount", "due_date", "status"]] = None,
+    sort_dir: Optional[Literal["asc", "desc"]] = None
 ):
     # Build query filters
     query_filters = {}
@@ -73,11 +86,35 @@ async def get_fees(
     if property_id is not None:
         query_filters["property.$id"] = PydanticObjectId(property_id)
 
+    search_clauses = text_search_clauses(
+        search,
+        [
+            "property_data.villa",
+            "property_data.owner_name",
+            "property_data.row_letter",
+            "reference",
+            "notes",
+        ],
+        numeric_field="property_data.number",
+    )
+
     # Get motor collection for aggregation
     fee_collection = database.fees
 
     # Get total count using aggregation
-    count_pipeline = [{"$match": query_filters}, {"$count": "total"}]
+    count_pipeline = [{"$match": query_filters}]
+    if search_clauses:
+        count_pipeline.extend([
+            {"$lookup": {
+                "from": "properties",
+                "localField": "property.$id",
+                "foreignField": "_id",
+                "as": "property_data"
+            }},
+            {"$unwind": "$property_data"},
+            {"$match": {"$or": search_clauses}},
+        ])
+    count_pipeline.append({"$count": "total"})
     count_result = await fee_collection.aggregate(count_pipeline).to_list(length=1)
     total_count = count_result[0]["total"] if count_result else 0
 
@@ -94,6 +131,10 @@ async def get_fees(
             "as": "property_data"
         }},
         {"$unwind": "$property_data"},
+    ]
+    if search_clauses:
+        pipeline.append({"$match": {"$or": search_clauses}})
+    pipeline.extend([
         {"$lookup": {
             "from": "fee_schedules",
             "localField": "fee_schedule.$id",
@@ -108,15 +149,35 @@ async def get_fees(
             "as": "user_data"
         }},
         {"$unwind": {"path": "$user_data", "preserveNullAndEmptyArrays": True}},
-        {"$sort": {
-            "year": -1,
-            "month": -1,
-            "property_data.row_letter": 1,
-            "property_data.number": 1
-        }},
+    ])
+
+    spec = sort_spec(sort_by, sort_dir, FEE_SORTS)
+    if spec:
+        if sort_by != "period":
+            spec += [
+                ("year", -1),
+                ("month", -1),
+                ("property_data.row_letter", 1),
+                ("property_data.number", 1),
+            ]
+        else:
+            spec += [
+                ("property_data.row_letter", 1),
+                ("property_data.number", 1),
+            ]
+    else:
+        spec = [
+            ("year", -1),
+            ("month", -1),
+            ("property_data.row_letter", 1),
+            ("property_data.number", 1),
+        ]
+
+    pipeline.extend([
+        {"$sort": sort_document(spec)},
         {"$skip": skip},
-        {"$limit": limit}
-    ]
+        {"$limit": limit},
+    ])
 
     # Execute aggregation
     results = await fee_collection.aggregate(pipeline).to_list(length=None)
