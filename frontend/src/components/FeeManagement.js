@@ -4,6 +4,7 @@ import {
   Button,
   Checkbox,
   FormControl,
+  FormHelperText,
   InputLabel,
   ListItemText,
   MenuItem,
@@ -39,8 +40,16 @@ import TablePagination from './common/TablePagination';
 import ErrorState from './common/ErrorState';
 import PaymentsModal from './PaymentsModal';
 import { useTableState } from '../hooks/useTableState';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { required } from '../utils/validators';
 import { MONTHS } from '../utils/months';
 import { formatDate, formatPeriod, formatPropertyLabel, toInputDate } from '../utils/formatters';
+
+const FEE_SCHEMA = {
+  property_id: required('Selecciona una propiedad.'),
+  fee_schedule_id: required('Selecciona un plan de cuotas.'),
+  due_date: required('Selecciona la fecha de vencimiento.'),
+};
 
 const FeeManagement = () => {
   const { isAdmin } = useAuth();
@@ -61,6 +70,13 @@ const FeeManagement = () => {
     due_date: '',
     notes: '',
   });
+  const { errors, validateField, validateAll, clearError, setErrors } =
+    useFormValidation(formData, FEE_SCHEMA);
+  const handleFeeFieldChange = (field) => (event) => {
+    setFormData((previous) => ({ ...previous, [field]: event.target.value }));
+    clearError(field);
+  };
+  const handleFeeFieldBlur = (field) => () => validateField(field);
   const [generateFormData, setGenerateFormData] = useState({
     year: new Date().getFullYear(),
     months: [new Date().getMonth() + 1], // Array of selected months
@@ -147,6 +163,7 @@ const FeeManagement = () => {
   };
 
   const handleOpenDialog = (fee = null) => {
+    setErrors({});
     if (fee) {
       setEditingFee(fee);
       setFormData({
@@ -171,6 +188,7 @@ const FeeManagement = () => {
   const handleCloseDialog = () => {
     setOpen(false);
     setEditingFee(null);
+    setErrors({});
     setFormData({
       property_id: '',
       fee_schedule_id: '',
@@ -181,6 +199,7 @@ const FeeManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateAll()) return;
     setSaving(true);
     try {
       const submitData = {
@@ -665,11 +684,12 @@ const handleMonthsChange = (event) => {
         maxWidth="sm"
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <FormControl fullWidth>
+          <FormControl fullWidth error={Boolean(errors.property_id)}>
             <InputLabel>Propiedad</InputLabel>
             <Select
+              name="property_id"
               value={formData.property_id}
-              onChange={(event) => setFormData({ ...formData, property_id: event.target.value })}
+              onChange={handleFeeFieldChange('property_id')}
               label="Propiedad"
               required
             >
@@ -679,12 +699,14 @@ const handleMonthsChange = (event) => {
                 </MenuItem>
               ))}
             </Select>
+            <FormHelperText>{errors.property_id}</FormHelperText>
           </FormControl>
-          <FormControl fullWidth>
+          <FormControl fullWidth error={Boolean(errors.fee_schedule_id)}>
             <InputLabel>Plan de cuotas</InputLabel>
             <Select
+              name="fee_schedule_id"
               value={formData.fee_schedule_id}
-              onChange={(event) => setFormData({ ...formData, fee_schedule_id: event.target.value })}
+              onChange={handleFeeFieldChange('fee_schedule_id')}
               label="Plan de cuotas"
               required
             >
@@ -694,14 +716,19 @@ const handleMonthsChange = (event) => {
                 </MenuItem>
               ))}
             </Select>
+            <FormHelperText>{errors.fee_schedule_id}</FormHelperText>
           </FormControl>
           <TextField
+            name="due_date"
             label="Fecha de vencimiento"
             type="date"
             fullWidth
             required
             value={formData.due_date}
-            onChange={(event) => setFormData({ ...formData, due_date: event.target.value })}
+            onChange={handleFeeFieldChange('due_date')}
+            onBlur={handleFeeFieldBlur('due_date')}
+            error={Boolean(errors.due_date)}
+            helperText={errors.due_date}
             slotProps={{ inputLabel: { shrink: true } }}
           />
           <TextField

@@ -3,6 +3,7 @@ import { paymentsAPI, feesAPI } from '../services/api';
 import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { toInputDate } from '../utils/formatters';
+import { parseAmount } from '../utils/validators';
 
 const createEmptyFeeInfo = () => ({
   ownerName: '',
@@ -147,7 +148,7 @@ export function usePaymentDialog({ properties = [], isAdmin = false, onSaved } =
   );
 
   const validateAmount = (amount) => {
-    const numAmount = parseFloat(amount);
+    const numAmount = parseAmount(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       return 'El monto debe ser un número positivo mayor a 0';
     }
