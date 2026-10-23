@@ -23,6 +23,7 @@ from ..services.miscellaneous_payment_service import (
     create_receipt_for_miscellaneous_payment,
     resolve_treasurer_details,
 )
+from ..services.ownership_service import user_owns_property
 from ..utils.uploads import (
     validate_upload,
     safe_extension,
@@ -31,7 +32,6 @@ from ..utils.uploads import (
     MAX_RECEIPT_MB,
 )
 from ..schemas.common import BulkApproveRequest
-from ..utils.links import link_id
 from bson import DBRef
 
 logger = logging.getLogger(__name__)
@@ -100,8 +100,7 @@ async def create_miscellaneous_payment(
             )
 
         # Check if user owns this property or is admin
-        if (current_user.role != UserRole.ADMIN and
-            (not prop.owner or link_id(prop.owner) != str(current_user.id))):
+        if not await user_owns_property(current_user, prop):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions"
@@ -219,8 +218,7 @@ async def update_miscellaneous_payment(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Property not found"
                 )
-            if (current_user.role != UserRole.ADMIN and
-                (not prop.owner or link_id(prop.owner) != str(current_user.id))):
+            if not await user_owns_property(current_user, prop):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not enough permissions"

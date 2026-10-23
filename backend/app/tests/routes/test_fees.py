@@ -237,12 +237,14 @@ class TestCreateFee:
         mongomock_db,
         test_property,
         test_owner_user,
+        test_owner,
         test_fee_schedule,
         auth_headers_owner,
     ):
         from datetime import datetime, timedelta
 
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()
@@ -267,13 +269,14 @@ class TestCreateFee:
         client,
         mongomock_db,
         test_property,
-        test_owner_user,
+        test_owner,
         test_fee_schedule,
         auth_headers_other_owner,
     ):
         from datetime import datetime, timedelta
 
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()

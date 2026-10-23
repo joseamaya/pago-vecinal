@@ -21,6 +21,7 @@ from ..schemas.receipt import ReceiptResponse
 from ..models.property import Property
 from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
+from ..services.ownership_service import owned_property_ids, user_owns_property
 from ..utils.pdf_generator import generate_receipt_pdf
 from ..utils.uploads import (
     validate_upload,
@@ -41,10 +42,7 @@ router = APIRouter()
 
 
 async def _owner_fee_ids(current_user: User) -> list:
-    properties = await Property.find_all().to_list()
-    property_ids = {
-        str(prop.id) for prop in properties if link_id(prop.owner) == str(current_user.id)
-    }
+    property_ids = await owned_property_ids(current_user)
     if not property_ids:
         return []
     fees = await Fee.find_all().to_list()
@@ -58,7 +56,7 @@ async def _can_access_fee(fee: Fee, current_user: User) -> bool:
         return True
     property_id = link_ref_id(fee.property)
     prop = await Property.get(property_id) if property_id else None
-    return bool(prop and link_id(prop.owner) == str(current_user.id))
+    return await user_owns_property(current_user, prop)
 
 
 async def _can_access_payment(payment: Payment, current_user: User) -> bool:

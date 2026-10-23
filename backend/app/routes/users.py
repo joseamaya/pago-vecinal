@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from ..models.user import User
-from ..schemas.user import UserUpdate, UserResponse, PasswordChange
+from ..schemas.user import UserCreate, UserUpdate, UserResponse, PasswordChange
 from ..dependencies.auth import get_current_user, require_admin, require_owner
 from ..auth.utils import get_password_hash, verify_password
 
@@ -21,6 +21,35 @@ async def get_users(current_user: User = Depends(require_admin)):
         )
         for user in users
     ]
+
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    user_data: UserCreate,
+    current_user: User = Depends(require_admin),
+):
+    existing_user = await User.find_one(User.email == user_data.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+
+    user = User(
+        email=user_data.email,
+        password_hash=get_password_hash(user_data.password),
+        role=user_data.role,
+        full_name=user_data.full_name,
+        phone=user_data.phone,
+    )
+    await user.insert()
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        role=user.role,
+        full_name=user.full_name,
+        phone=user.phone,
+        is_active=user.is_active
+    )
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):

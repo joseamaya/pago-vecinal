@@ -126,9 +126,10 @@ class TestCreateMiscellaneousPayment:
 
     @pytest.mark.asyncio
     async def test_owner_can_create_for_own_property(
-        self, client, mongomock_db, test_property, test_owner_user, auth_headers_owner
+        self, client, mongomock_db, test_property, test_owner_user, test_owner, auth_headers_owner
     ):
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         response = await client.post(
@@ -150,9 +151,10 @@ class TestCreateMiscellaneousPayment:
 
     @pytest.mark.asyncio
     async def test_owner_cannot_create_for_other_property(
-        self, client, mongomock_db, test_property, test_owner_user, auth_headers_other_owner
+        self, client, mongomock_db, test_property, test_owner, auth_headers_other_owner
     ):
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         response = await client.post(

@@ -186,12 +186,13 @@ class TestCreateAgreement:
 
     @pytest.mark.asyncio
     async def test_admin_creation_assigns_property_owner(
-        self, client, mongomock_db, test_property, test_owner_user, test_fee,
+        self, client, mongomock_db, test_property, test_owner_user, test_owner, test_fee,
         auth_headers_admin, resolve_agreement_links,
     ):
         from app.models.agreement import Agreement
 
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         payload = {
@@ -216,10 +217,11 @@ class TestCreateAgreement:
 
     @pytest.mark.asyncio
     async def test_owner_can_create_for_own_property(
-        self, client, mongomock_db, test_property, test_owner_user, test_fee,
+        self, client, mongomock_db, test_property, test_owner_user, test_owner, test_fee,
         auth_headers_owner, resolve_agreement_links,
     ):
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         payload = {
@@ -248,10 +250,11 @@ class TestCreateAgreement:
 
     @pytest.mark.asyncio
     async def test_owner_cannot_create_for_other_property(
-        self, client, mongomock_db, test_property, test_owner_user, test_fee,
+        self, client, mongomock_db, test_property, test_owner, test_fee,
         auth_headers_other_owner,
     ):
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         payload = {

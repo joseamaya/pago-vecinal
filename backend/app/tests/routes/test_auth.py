@@ -44,63 +44,6 @@ class TestLogin:
             mock_auth.assert_called_once_with("admin@test.com", "pass")
 
 
-class TestRegister:
-    @pytest.mark.asyncio
-    async def test_register_new_user(self, client):
-        with patch("app.routes.auth.User") as MockUser:
-            MockUser.find_one = AsyncMock(return_value=None)
-            new_user = MagicMock()
-            new_user.email = "new@test.com"
-            new_user.insert = AsyncMock()
-            MockUser.return_value = new_user
-
-            response = await client.post("/auth/register", json={
-                "email": "new@test.com",
-                "password": "StrongPass123!",
-                "role": "owner",
-                "full_name": "New Owner"
-            })
-            assert response.status_code == 200
-            assert "access_token" in response.json()
-
-    @pytest.mark.asyncio
-    async def test_register_forces_owner_role(self, client):
-        from app.models.user import UserRole
-
-        with patch("app.routes.auth.User") as MockUser:
-            MockUser.find_one = AsyncMock(return_value=None)
-            new_user = MagicMock()
-            new_user.email = "new@test.com"
-            new_user.insert = AsyncMock()
-            MockUser.return_value = new_user
-
-            response = await client.post("/auth/register", json={
-                "email": "new@test.com",
-                "password": "StrongPass123!",
-                "role": "admin",
-                "full_name": "New Owner"
-            })
-
-        assert response.status_code == 200
-        assert MockUser.call_args.kwargs["role"] == UserRole.OWNER
-
-    @pytest.mark.asyncio
-    async def test_register_existing_email(self, client):
-        with patch("app.routes.auth.User") as MockUser:
-            existing = MagicMock()
-            existing.email = "exists@test.com"
-            MockUser.find_one = AsyncMock(return_value=existing)
-
-            response = await client.post("/auth/register", json={
-                "email": "exists@test.com",
-                "password": "StrongPass123!",
-                "role": "owner",
-                "full_name": "Existing"
-            })
-            assert response.status_code == 400
-            assert "already registered" in response.json()["detail"].lower()
-
-
 class TestLoginRateLimit:
     @pytest.mark.asyncio
     async def test_blocks_after_limit(self, client):

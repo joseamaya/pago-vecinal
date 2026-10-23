@@ -177,6 +177,7 @@ async def mongomock_db():
     from beanie import init_beanie
 
     from app.models.user import User
+    from app.models.owner import Owner
     from app.models.property import Property
     from app.models.fee import FeeSchedule, Fee
     from app.models.payment import Payment
@@ -222,6 +223,7 @@ async def mongomock_db():
         database=db,
         document_models=[
             User,
+            Owner,
             Property,
             FeeSchedule,
             Fee,
@@ -282,6 +284,19 @@ async def test_owner_user(mongomock_db):
     )
     await user.insert()
     return user
+
+
+@pytest.fixture
+async def test_owner(mongomock_db, test_owner_user):
+    from app.models.owner import Owner
+
+    owner = Owner(
+        full_name=test_owner_user.full_name,
+        phone=test_owner_user.phone,
+        user=test_owner_user,
+    )
+    await owner.insert()
+    return owner
 
 
 @pytest.fixture
@@ -408,6 +423,19 @@ async def test_other_owner_user(mongomock_db):
     )
     await user.insert()
     return user
+
+
+@pytest.fixture
+async def test_other_owner(mongomock_db, test_other_owner_user):
+    from app.models.owner import Owner
+
+    owner = Owner(
+        full_name=test_other_owner_user.full_name,
+        phone=test_other_owner_user.phone,
+        user=test_other_owner_user,
+    )
+    await owner.insert()
+    return owner
 
 
 @pytest.fixture

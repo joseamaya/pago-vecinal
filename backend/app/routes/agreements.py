@@ -25,6 +25,7 @@ from ..services.agreement_service import (
     build_installment_response,
     create_agreement_with_installments,
 )
+from ..services.ownership_service import primary_user_for_property, user_owns_property
 from ..utils.uploads import (
     validate_upload,
     safe_extension,
@@ -32,7 +33,6 @@ from ..utils.uploads import (
     RECEIPT_CONTENT_TYPES,
     MAX_RECEIPT_MB,
 )
-from ..utils.links import link_id
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +127,7 @@ async def create_agreement(
         )
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not prop.owner or link_id(prop.owner) != str(current_user.id))):
+    if not await user_owns_property(current_user, prop):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -197,7 +196,10 @@ async def create_agreement(
         )
 
     # Admins can create agreements on behalf of the property owner
-    agreement_owner = prop.owner if (current_user.role == UserRole.ADMIN and prop.owner) else current_user
+    if current_user.role == UserRole.ADMIN:
+        agreement_owner = await primary_user_for_property(prop) or current_user
+    else:
+        agreement_owner = current_user
 
     agreement, installments = await create_agreement_with_installments(
         prop, fees, agreement_data, agreement_owner

@@ -207,7 +207,7 @@ class TestGetDashboardTrends:
 
     @pytest.mark.asyncio
     async def test_owner_sees_payments_for_own_properties(
-        self, client, mongomock_db, auth_headers_owner
+        self, client, mongomock_db, test_owner, auth_headers_owner
     ):
         from app.models.property import Property
         from app.models.fee import Fee, FeeSchedule, FeeStatus
@@ -218,7 +218,7 @@ class TestGetDashboardTrends:
         admin = await User.find_one(User.email == "test@example.com")
         prop = Property(
             row_letter="A", number=1, villa="Villa 1",
-            owner_name="Owner", owner=owner,
+            owner_name="Owner", owners=[test_owner.id], primary_owner=test_owner.id,
         )
         await prop.insert()
         fs = FeeSchedule(

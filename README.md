@@ -232,6 +232,18 @@ npm run test:e2e
 
 Set `E2E_MONGODB_URL` if MongoDB is not available at `mongodb://127.0.0.1:27017`.
 
+### Migrating legacy property owners
+
+Properties used to store a single owner inline. The migration also normalizes
+person names (Spanish title case) in owners, users, treasurers and the property
+owner cache. Run it once, after backing up the database:
+
+```bash
+cd backend
+python migrate_property_owners.py            # dry run
+python migrate_property_owners.py --apply    # apply changes
+```
+
 The API will be available at `http://localhost:8000`
 
 ## API Documentation
@@ -241,15 +253,22 @@ Once the server is running, visit `http://localhost:8000/docs` for interactive S
 ## API Endpoints
 
 ### Authentication
-- `POST /auth/register` - Register a new user
 - `POST /auth/login` - Login and get access token
 
 ### Users
 - `GET /users/me` - Get current user information
 - `GET /users/` - List all users (Admin only)
+- `POST /users/` - Create a user (Admin only)
 - `GET /users/{user_id}` - Get user details (Admin only)
 - `PUT /users/{user_id}` - Update user (Admin only)
 - `DELETE /users/{user_id}` - Delete user (Admin only)
+
+### Owners
+- `GET /owners/` - List owners (Admin only)
+- `POST /owners/` - Create an owner (Admin only)
+- `GET /owners/{owner_id}` - Get owner details (Admin only)
+- `PUT /owners/{owner_id}` - Update an owner or link a user account (Admin only)
+- `DELETE /owners/{owner_id}` - Delete an owner (Admin only, blocked if linked to a property)
 
 ### Properties
 - `GET /properties/` - List all properties
@@ -283,18 +302,6 @@ Once the server is running, visit `http://localhost:8000/docs` for interactive S
 
 ## Usage Examples
 
-### Register an Admin User
-```bash
-curl -X POST "http://localhost:8000/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@example.com",
-    "password": "adminpass",
-    "role": "admin",
-    "full_name": "Admin User"
-  }'
-```
-
 ### Login
 ```bash
 curl -X POST "http://localhost:8000/auth/login" \
@@ -302,17 +309,43 @@ curl -X POST "http://localhost:8000/auth/login" \
   -d "username=admin@example.com&password=adminpass"
 ```
 
+### Create an Owner Account (User)
+```bash
+curl -X POST "http://localhost:8000/users/" \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "owner@example.com",
+    "password": "ownerpass",
+    "role": "owner",
+    "full_name": "Owner User"
+  }'
+```
+
+### Create an Owner and Link Their Account (Admin only)
+```bash
+curl -X POST "http://localhost:8000/owners/" \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "full_name": "John Doe",
+    "phone": "+1234567890",
+    "email": "john@example.com",
+    "user_id": "OWNER_USER_ID_HERE"
+  }'
+```
+
 ### Create a Property
 ```bash
 curl -X POST "http://localhost:8000/properties/" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "row_letter": "A",
     "number": 1,
     "villa": "Villa 1",
-    "owner_name": "John Doe",
-    "owner_phone": "+1234567890"
+    "owner_ids": ["OWNER_ID_HERE"],
+    "primary_owner_id": "OWNER_ID_HERE"
   }'
 ```
 

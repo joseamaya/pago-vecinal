@@ -10,6 +10,11 @@ from ..models.property import Property
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
+from ..services.ownership_service import (
+    owned_property_ids,
+    primary_user_for_property,
+    user_owns_property,
+)
 from ..utils.links import link_id, link_ref_id
 from ..utils.query import sort_document, sort_spec, text_search_clauses
 from bson import DBRef
@@ -39,7 +44,7 @@ async def _can_access_fee(fee: Fee, current_user: User) -> bool:
         return True
     property_id = link_ref_id(fee.property)
     prop = await Property.get(property_id) if property_id else None
-    return bool(prop and link_id(prop.owner) == str(current_user.id))
+    return await user_owns_property(current_user, prop)
 
 @router.get("/", response_model=PaginatedResponse[FeeResponse])
 async def get_fees(
@@ -59,13 +64,11 @@ async def get_fees(
 
     if current_user.role != UserRole.ADMIN:
         # Owners can see fees linked to them or to their properties (legacy records)
-        owned_properties = await Property.find(
-            {"owner": DBRef("users", current_user.id)}
-        ).to_list()
+        property_ids = await owned_property_ids(current_user)
         owner_clauses = [{"user.$id": PydanticObjectId(current_user.id)}]
-        if owned_properties:
+        if property_ids:
             owner_clauses.append(
-                {"property.$id": {"$in": [prop.id for prop in owned_properties]}}
+                {"property.$id": {"$in": [PydanticObjectId(pid) for pid in property_ids]}}
             )
         query_filters["$or"] = owner_clauses
 
@@ -279,8 +282,7 @@ async def create_fee(
         )
 
     # Check if user owns this property or is admin
-    if (current_user.role != UserRole.ADMIN and
-        (not prop.owner or link_id(prop.owner) != str(current_user.id))):
+    if not await user_owns_property(current_user, prop):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -502,7 +504,7 @@ async def generate_fees(request: GenerateFeesRequest, current_user: User = Depen
                     fee = Fee(
                         property=prop,
                         fee_schedule=fee_schedule,
-                        user=prop.owner,
+                        user=await primary_user_for_property(prop),
                         amount=fee_schedule.amount,
                         generated_date=generated_date,
                         year=current_year,

@@ -67,32 +67,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (userData) => {
-    try {
-      const payload = {
-        email: userData.email,
-        password: userData.password,
-        role: 'owner',
-        full_name: userData.fullName,
-        phone: userData.phone,
-      };
-      const response = await api.post('/auth/register', payload);
-      const { access_token } = response.data;
-
-      localStorage.setItem('token', access_token);
-      const userResponse = await api.get('/users/me');
-      setUser(userResponse.data);
-      localStorage.setItem('user', JSON.stringify(userResponse.data));
-
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: getErrorMessage(error, 'No pudimos crear la cuenta. Inténtalo nuevamente.')
-      };
-    }
-  };
-
   const refreshUser = async () => {
     const response = await api.get('/users/me');
     setUser(response.data);
@@ -109,7 +83,6 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     login,
-    register,
     refreshUser,
     logout,
     loading,

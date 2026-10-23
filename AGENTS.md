@@ -58,6 +58,7 @@ Use **npm** only (`packageManager` is pinned in `frontend/package.json`); do not
 - Use `ToastContext` for user feedback and `ConfirmContext` for destructive actions; never use `alert()`.
 - Use `require_admin` / `require_owner` for authorization; do not duplicate role checks in route bodies.
 - Keep API schemas in `app/schemas/`; do not define response models inside routes.
+- Normalize person names with `app/utils/names.py` (`normalize_person_name`) on writes; do not duplicate the title-case logic.
 - Add tests for new services, hooks and components. Backend tests use pytest + mongomock; frontend uses Jest + React Testing Library.
 - Never commit `.env`, `.env.local`, secrets, build artifacts or local tooling files.
 - Do not hardcode credentials in docs or code; the initial admin is created from environment variables.
@@ -66,7 +67,7 @@ Use **npm** only (`packageManager` is pinned in `frontend/package.json`); do not
 - Required backend env vars: `MONGODB_URL`, `SECRET_KEY`, `INITIAL_ADMIN_PASSWORD`, `CLOUDINARY_*`; see `.env.example`.
 - Local backend reads `backend/.env`; Docker Compose uses the root `.env`.
 - CORS is controlled by `CORS_ORIGINS` (JSON array); use `["*"]` only for local development.
-- `/auth/login` and `/auth/register` are rate-limited per IP.
+- `/auth/login` is rate-limited per IP. User accounts are created by an admin via `/users/`; there is no public registration.
 - Every mutating request is recorded in the `audit_logs` collection by middleware.
 - Uploads are validated by extension, content type, magic bytes and size: Excel ≤10 MB, signatures ≤2 MB, receipts ≤10 MB.
 - Receipts, agreements and signatures are not publicly mounted; access them through authenticated endpoints.
@@ -75,11 +76,12 @@ Use **npm** only (`packageManager` is pinned in `frontend/package.json`); do not
 ## Key Quirks
 - **Login uses form data, not JSON**: `username` is the email and `password` is the password. The frontend sends `multipart/form-data`; curl should use `-d "username=...&password=..."` with `Content-Type: application/x-www-form-urlencoded`.
 - **Two fee routers**: `/fees/` stores generated fees per property/period; `/fee-schedules/` stores rate templates. They are separate models.
+- **Owners are not users**: `Owner` holds the person's data and may link one `User` account via `Owner.user`. `Property.owners` stores owner ids (many-to-many); `Property.primary_owner` is used for receipts/reports and `owner_name`/`owner_phone` are a derived cache.
 - **Frontend proxy** in `package.json` (`http://localhost:8000`) only applies in CRA development mode.
 - **Deployment**: Render is configured through the dashboard (no IaC file). Backend is a Web Service from `backend/Dockerfile`; frontend is a Static Site with `npm ci && npm run build` and a `/*` → `/index.html` rewrite. Both respect `PORT`.
 
 ## Database
-- 11 Beanie documents: `User`, `Property`, `FeeSchedule`, `Fee`, `Payment`, `Receipt`, `Agreement`, `AgreementInstallment`, `MiscellaneousPayment`, `Expense`, `Treasurer`.
+- 12 Beanie documents: `User`, `Owner`, `Property`, `FeeSchedule`, `Fee`, `Payment`, `Receipt`, `Agreement`, `AgreementInstallment`, `MiscellaneousPayment`, `Expense`, `Treasurer`.
 - Connection: `MONGODB_URL` (default `mongodb://localhost:27017`), 5s timeout, pool size 10.
 - Migration helper: `backend/migrate_fee_schedule_field.py` (`generation_day` → `due_day`).
 

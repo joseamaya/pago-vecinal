@@ -1,15 +1,16 @@
-from beanie import Document, Link
+from beanie import Document, PydanticObjectId
 from pymongo import IndexModel, ASCENDING
-from typing import Optional
-from .user import User
+from typing import List, Optional
+
 
 class Property(Document):
     row_letter: str
     number: int
     villa: str
+    owners: List[PydanticObjectId] = []
+    primary_owner: Optional[PydanticObjectId] = None
     owner_name: str
     owner_phone: Optional[str] = None
-    owner: Optional[Link[User]] = None
 
     class Settings:
         name = "properties"

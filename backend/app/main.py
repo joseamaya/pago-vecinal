@@ -13,7 +13,7 @@ from .config.logging import setup_logging
 from .config.settings import settings
 from .services.audit_service import record_request_audit
 from .utils.init_admin import create_initial_admin
-from .routes import users, properties, fees, payments, auth, receipts, fee_schedules, reports, miscellaneous_payments, expenses, dashboard, treasurers, agreements
+from .routes import users, owners, properties, fees, payments, auth, receipts, fee_schedules, reports, miscellaneous_payments, expenses, dashboard, treasurers, agreements
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -69,6 +69,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
+app.include_router(owners.router, prefix="/owners", tags=["Owners"])
 app.include_router(properties.router, prefix="/properties", tags=["Properties"])
 app.include_router(fees.router, prefix="/fees", tags=["Fees"])
 app.include_router(fee_schedules.router, prefix="/fee-schedules", tags=["Fee Schedules"])

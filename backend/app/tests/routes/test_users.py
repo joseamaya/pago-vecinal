@@ -23,6 +23,69 @@ def override_auth_as_admin(mock_user):
     app.dependency_overrides.clear()
 
 
+class TestCreateUser:
+    @pytest.mark.asyncio
+    async def test_admin_can_create_owner(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        from app.auth.utils import verify_password
+        from app.models.user import User, UserRole
+
+        response = await client.post(
+            "/users/",
+            json={
+                "email": "new-owner@example.com",
+                "password": "SecretPass123",
+                "role": "owner",
+                "full_name": "New Owner",
+                "phone": "555-0000",
+            },
+            headers=auth_headers_admin,
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["email"] == "new-owner@example.com"
+        assert data["role"] == "owner"
+        assert data["full_name"] == "New Owner"
+
+        created = await User.find_one(User.email == "new-owner@example.com")
+        assert created is not None
+        assert created.role == UserRole.OWNER
+        assert verify_password("SecretPass123", created.password_hash)
+
+    @pytest.mark.asyncio
+    async def test_owner_gets_403(self, client, mongomock_db, auth_headers_owner):
+        response = await client.post(
+            "/users/",
+            json={
+                "email": "new-owner@example.com",
+                "password": "SecretPass123",
+                "role": "owner",
+                "full_name": "New Owner",
+            },
+            headers=auth_headers_owner,
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_duplicate_email(
+        self, client, mongomock_db, test_owner_user, auth_headers_admin
+    ):
+        response = await client.post(
+            "/users/",
+            json={
+                "email": test_owner_user.email,
+                "password": "SecretPass123",
+                "role": "owner",
+                "full_name": "Duplicate Owner",
+            },
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
+        assert "already registered" in response.json()["detail"].lower()
+
+
 class TestListUsers:
     @pytest.mark.asyncio
     async def test_admin_can_list(self, client, override_auth_as_admin):

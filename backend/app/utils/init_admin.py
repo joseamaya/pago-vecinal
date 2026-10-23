@@ -2,6 +2,7 @@ import logging
 from ..models.user import User, UserRole
 from ..auth.utils import get_password_hash
 from ..config.settings import settings
+from ..utils.names import normalize_person_name
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ async def create_initial_admin():
 
         admin_email = settings.INITIAL_ADMIN_EMAIL
         admin_password = settings.INITIAL_ADMIN_PASSWORD
-        admin_name = settings.INITIAL_ADMIN_NAME
+        admin_name = normalize_person_name(settings.INITIAL_ADMIN_NAME)
 
         if not all([admin_email, admin_password, admin_name]):
             logger.warning("Initial admin environment variables not configured, skipping")

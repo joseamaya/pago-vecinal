@@ -1,5 +1,6 @@
 import DashboardIcon from '@mui/icons-material/DashboardOutlined';
 import PeopleIcon from '@mui/icons-material/PeopleAltOutlined';
+import BadgeIcon from '@mui/icons-material/BadgeOutlined';
 import HomeIcon from '@mui/icons-material/HomeOutlined';
 import PaymentIcon from '@mui/icons-material/PaymentsOutlined';
 import MiscPaymentIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
@@ -37,6 +38,7 @@ export const navigationGroups = [
     label: 'Administración',
     items: [
       { text: 'Propiedades', icon: HomeIcon, path: '/properties', roles: ['admin'] },
+      { text: 'Propietarios', icon: BadgeIcon, path: '/owners', roles: ['admin'] },
       { text: 'Usuarios', icon: PeopleIcon, path: '/users', roles: ['admin'] },
       { text: 'Planes de cuotas', icon: ScheduleIcon, path: '/fee-schedules', roles: ['admin'] },
       { text: 'Configuración', icon: SettingsIcon, path: '/configuration', roles: ['admin'] },

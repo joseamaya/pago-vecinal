@@ -40,26 +40,26 @@ class TestListProperties:
 
     @pytest.mark.asyncio
     async def test_owner_only_sees_own_properties(
-        self, client, mongomock_db, test_property, test_owner_user, auth_headers_owner
+        self, client, mongomock_db, test_property, test_owner, test_other_owner, auth_headers_owner
     ):
         from app.models.property import Property
-        from app.models.user import User
 
-        admin = await User.find_one(User.email == "test@example.com")
         own_property = Property(
             row_letter="B",
             number=2,
             villa="Villa 2",
             owner_name="Owner User",
-            owner=test_owner_user,
+            owners=[test_owner.id],
+            primary_owner=test_owner.id,
         )
         await own_property.insert()
         other_property = Property(
             row_letter="C",
             number=3,
             villa="Villa 3",
-            owner_name="Admin User",
-            owner=admin,
+            owner_name="Other Owner",
+            owners=[test_other_owner.id],
+            primary_owner=test_other_owner.id,
         )
         await other_property.insert()
 
@@ -68,7 +68,32 @@ class TestListProperties:
         data = response.json()["data"]
         assert len(data) == 1
         assert data[0]["row_letter"] == "B"
-        assert data[0]["owner_id"] == str(test_owner_user.id)
+        assert data[0]["primary_owner_id"] == str(test_owner.id)
+        assert data[0]["owners"][0]["id"] == str(test_owner.id)
+
+    @pytest.mark.asyncio
+    async def test_multiple_owners_can_see_the_property(
+        self, client, mongomock_db, test_owner, test_other_owner,
+        auth_headers_owner, auth_headers_other_owner,
+    ):
+        from app.models.property import Property
+
+        prop = Property(
+            row_letter="B",
+            number=2,
+            villa="Villa Compartida",
+            owner_name=test_owner.full_name,
+            owners=[test_owner.id, test_other_owner.id],
+            primary_owner=test_owner.id,
+        )
+        await prop.insert()
+
+        for headers in (auth_headers_owner, auth_headers_other_owner):
+            response = await client.get(
+                "/properties/?page=1&limit=20", headers=headers
+            )
+            assert response.status_code == 200
+            assert [item["id"] for item in response.json()["data"]] == [str(prop.id)]
 
     @pytest.mark.asyncio
     async def test_search_matches_owner_and_villa(
@@ -117,8 +142,8 @@ class TestListProperties:
         client,
         mongomock_db,
         test_property,
-        test_owner_user,
-        test_other_owner_user,
+        test_owner,
+        test_other_owner,
         auth_headers_owner,
     ):
         from app.models.property import Property
@@ -128,7 +153,8 @@ class TestListProperties:
             number=2,
             villa="Villa Shared",
             owner_name="Owner User",
-            owner=test_owner_user,
+            owners=[test_owner.id],
+            primary_owner=test_owner.id,
         )
         await own_property.insert()
         await Property(
@@ -136,7 +162,8 @@ class TestListProperties:
             number=3,
             villa="Villa Shared",
             owner_name="Other Owner",
-            owner=test_other_owner_user,
+            owners=[test_other_owner.id],
+            primary_owner=test_other_owner.id,
         ).insert()
 
         response = await client.get(
@@ -179,6 +206,95 @@ class TestCreateProperty:
         assert len(props) == 1
 
     @pytest.mark.asyncio
+    async def test_creates_property_with_owner(
+        self, client, mongomock_db, test_owner, auth_headers_admin
+    ):
+        from app.models.property import Property
+
+        response = await client.post(
+            "/properties/",
+            json={
+                "row_letter": "D",
+                "number": 4,
+                "villa": "Villa 4",
+                "owner_ids": [str(test_owner.id)],
+                "primary_owner_id": str(test_owner.id),
+            },
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["primary_owner_id"] == str(test_owner.id)
+        assert data["owner_name"] == test_owner.full_name
+
+        prop = await Property.find_one(Property.row_letter == "D")
+        assert prop.owners == [test_owner.id]
+        assert prop.primary_owner == test_owner.id
+
+    @pytest.mark.asyncio
+    async def test_creates_property_with_multiple_owners(
+        self, client, mongomock_db, test_owner, test_other_owner, auth_headers_admin
+    ):
+        from app.models.property import Property
+
+        response = await client.post(
+            "/properties/",
+            json={
+                "row_letter": "H",
+                "number": 8,
+                "villa": "Villa 8",
+                "owner_ids": [str(test_owner.id), str(test_other_owner.id)],
+                "primary_owner_id": str(test_other_owner.id),
+            },
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["primary_owner_id"] == str(test_other_owner.id)
+        assert data["owner_name"] == test_other_owner.full_name
+        assert {owner["id"] for owner in data["owners"]} == {
+            str(test_owner.id),
+            str(test_other_owner.id),
+        }
+
+        prop = await Property.find_one(Property.row_letter == "H")
+        assert prop.owners == [test_owner.id, test_other_owner.id]
+
+    @pytest.mark.asyncio
+    async def test_primary_owner_must_be_selected(
+        self, client, mongomock_db, test_owner, test_other_owner, auth_headers_admin
+    ):
+        response = await client.post(
+            "/properties/",
+            json={
+                "row_letter": "I",
+                "number": 9,
+                "villa": "Villa 9",
+                "owner_ids": [str(test_owner.id)],
+                "primary_owner_id": str(test_other_owner.id),
+            },
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_create_with_unknown_owner_fails(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        response = await client.post(
+            "/properties/",
+            json={
+                "row_letter": "E",
+                "number": 5,
+                "villa": "Villa 5",
+                "owner_ids": ["507f1f77bcf86cd799439999"],
+            },
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
+        assert "propietario" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
     async def test_create_duplicate_fails(
         self, client, mongomock_db, test_property, auth_headers_admin
     ):
@@ -188,7 +304,6 @@ class TestCreateProperty:
                 "row_letter": "A",
                 "number": 1,
                 "villa": "Villa 1",
-                "owner_name": "Duplicate",
             },
             headers=auth_headers_admin,
         )
@@ -202,7 +317,6 @@ class TestCreateProperty:
                 "row_letter": "B",
                 "number": 2,
                 "villa": "Villa 2",
-                "owner_name": "New",
             },
             headers=auth_headers_owner,
         )
@@ -237,18 +351,73 @@ class TestUpdateProperty:
         prop_id = str(test_property.id)
         response = await client.put(
             f"/properties/{prop_id}",
-            json={"owner_name": "Updated Owner"},
+            json={"villa": "Villa Updated"},
             headers=auth_headers_admin,
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["owner_name"] == "Updated Owner"
+        assert data["villa"] == "Villa Updated"
+
+    @pytest.mark.asyncio
+    async def test_assigns_owner(
+        self, client, mongomock_db, test_property, test_owner, auth_headers_admin
+    ):
+        from app.models.property import Property
+
+        response = await client.put(
+            f"/properties/{test_property.id}",
+            json={"owner_ids": [str(test_owner.id)], "primary_owner_id": str(test_owner.id)},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+        assert response.json()["primary_owner_id"] == str(test_owner.id)
+
+        prop = await Property.get(test_property.id)
+        assert prop.owners == [test_owner.id]
+        assert prop.primary_owner == test_owner.id
+
+    @pytest.mark.asyncio
+    async def test_clears_owner(
+        self, client, mongomock_db, test_owner, auth_headers_admin
+    ):
+        from app.models.property import Property
+
+        prop = Property(
+            row_letter="G",
+            number=7,
+            villa="Villa 7",
+            owner_name=test_owner.full_name,
+            owners=[test_owner.id],
+            primary_owner=test_owner.id,
+        )
+        await prop.insert()
+
+        response = await client.put(
+            f"/properties/{prop.id}",
+            json={"owner_ids": []},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["primary_owner_id"] is None
+        assert data["owner_name"] == "Sin propietario"
+
+    @pytest.mark.asyncio
+    async def test_update_with_unknown_owner_fails(
+        self, client, mongomock_db, test_property, auth_headers_admin
+    ):
+        response = await client.put(
+            f"/properties/{test_property.id}",
+            json={"owner_ids": ["507f1f77bcf86cd799439999"]},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 400
 
     @pytest.mark.asyncio
     async def test_update_property_not_found(self, client, mongomock_db, auth_headers_admin):
         response = await client.put(
             "/properties/507f1f77bcf86cd799439999",
-            json={"owner_name": "Updated"},
+            json={"villa": "Updated"},
             headers=auth_headers_admin,
         )
         assert response.status_code == 404

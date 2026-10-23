@@ -13,6 +13,7 @@ import Layout from './components/Layout';
 
 const Dashboard = React.lazy(() => import('./components/Dashboard'));
 const UserManagement = React.lazy(() => import('./components/UserManagement'));
+const OwnerManagement = React.lazy(() => import('./components/OwnerManagement'));
 const PropertyManagement = React.lazy(() => import('./components/PropertyManagement'));
 const PaymentManagement = React.lazy(() => import('./components/PaymentManagement'));
 const MiscellaneousPaymentManagement = React.lazy(() => import('./components/MiscellaneousPaymentManagement'));
@@ -53,6 +54,7 @@ const AppRouter = () => {
                   <Routes>
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/users" element={<UserManagement />} />
+                    <Route path="/owners" element={<OwnerManagement />} />
                     <Route path="/properties" element={<PropertyManagement />} />
                     <Route path="/payments" element={<PaymentManagement />} />
                     <Route path="/miscellaneous-payments" element={<MiscellaneousPaymentManagement />} />

@@ -120,6 +120,58 @@ class TestBulkImportProperties:
         assert await Property.find_all().count() == 2
 
     @pytest.mark.asyncio
+    async def test_import_creates_and_links_owners(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        from app.models.owner import Owner
+        from app.models.property import Property
+
+        content = make_excel(
+            ["Villa", "Fila", "Numero", "Propietario", "Telefono"],
+            [["Villa 1", "A", 1, "Juan", "555-111"]],
+        )
+        response = await client.post(
+            "/properties/bulk-import",
+            files={"file": ("props.xlsx", content, XLSX_CT)},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == 200
+
+        owner = await Owner.find_one(Owner.full_name == "Juan")
+        prop = await Property.find_one(Property.row_letter == "A")
+        assert owner is not None
+        assert prop.owners == [owner.id]
+        assert prop.primary_owner == owner.id
+        assert prop.owner_name == "Juan"
+
+    @pytest.mark.asyncio
+    async def test_import_reuses_owner_ignoring_case_and_accents(
+        self, client, mongomock_db, auth_headers_admin
+    ):
+        from app.models.owner import Owner
+
+        first = make_excel(
+            ["Villa", "Fila", "Numero", "Propietario", "Telefono"],
+            [["Villa 1", "A", 1, "José Pérez", "555-111"]],
+        )
+        second = make_excel(
+            ["Villa", "Fila", "Numero", "Propietario", "Telefono"],
+            [["Villa 2", "B", 2, "JOSE PEREZ", "555-111"]],
+        )
+
+        for content in (first, second):
+            response = await client.post(
+                "/properties/bulk-import",
+                files={"file": ("props.xlsx", content, XLSX_CT)},
+                headers=auth_headers_admin,
+            )
+            assert response.status_code == 200
+
+        owners = await Owner.find_all().to_list()
+        assert len(owners) == 1
+        assert owners[0].full_name == "José Pérez"
+
+    @pytest.mark.asyncio
     async def test_updates_existing_property(
         self, client, mongomock_db, test_property, auth_headers_admin
     ):
