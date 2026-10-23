@@ -32,6 +32,7 @@ from ..utils.uploads import (
     RECEIPT_CONTENT_TYPES,
     MAX_RECEIPT_MB,
 )
+from ..utils.links import link_id
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ async def create_agreement(
 
     # Check permissions
     if (current_user.role != UserRole.ADMIN and
-        (not prop.owner or str(prop.owner.id) != str(current_user.id))):
+        (not prop.owner or link_id(prop.owner) != str(current_user.id))):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

@@ -153,6 +153,65 @@ class TestCreateFee:
         assert len(fees) >= 1
 
     @pytest.mark.asyncio
+    async def test_owner_can_create_for_own_property(
+        self,
+        client,
+        mongomock_db,
+        test_property,
+        test_owner_user,
+        test_fee_schedule,
+        auth_headers_owner,
+    ):
+        from datetime import datetime, timedelta
+
+        test_property.owner = test_owner_user
+        await test_property.save()
+
+        due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        response = await client.post(
+            "/fees/",
+            json={
+                "property_id": str(test_property.id),
+                "fee_schedule_id": str(test_fee_schedule.id),
+                "due_date": due_date,
+            },
+            headers=auth_headers_owner,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["property_id"] == str(test_property.id)
+        assert data["user_id"] == str(test_owner_user.id)
+
+    @pytest.mark.asyncio
+    async def test_owner_cannot_create_for_other_property(
+        self,
+        client,
+        mongomock_db,
+        test_property,
+        test_owner_user,
+        test_fee_schedule,
+        auth_headers_other_owner,
+    ):
+        from datetime import datetime, timedelta
+
+        test_property.owner = test_owner_user
+        await test_property.save()
+
+        due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        response = await client.post(
+            "/fees/",
+            json={
+                "property_id": str(test_property.id),
+                "fee_schedule_id": str(test_fee_schedule.id),
+                "due_date": due_date,
+            },
+            headers=auth_headers_other_owner,
+        )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
     async def test_create_fee_property_not_found(
         self, client, mongomock_db, test_fee_schedule, auth_headers_admin
     ):

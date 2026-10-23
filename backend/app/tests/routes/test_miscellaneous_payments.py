@@ -124,6 +124,51 @@ class TestCreateMiscellaneousPayment:
         )
         assert response.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_owner_can_create_for_own_property(
+        self, client, mongomock_db, test_property, test_owner_user, auth_headers_owner
+    ):
+        test_property.owner = test_owner_user
+        await test_property.save()
+
+        response = await client.post(
+            "/miscellaneous-payments/",
+            data={
+                "property_id": str(test_property.id),
+                "payment_type": "other",
+                "amount": "100.0",
+                "payment_date": datetime.utcnow().isoformat(),
+                "description": "Owner payment",
+            },
+            headers=auth_headers_owner,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["property_id"] == str(test_property.id)
+        assert data["user_id"] == str(test_owner_user.id)
+
+    @pytest.mark.asyncio
+    async def test_owner_cannot_create_for_other_property(
+        self, client, mongomock_db, test_property, test_owner_user, auth_headers_other_owner
+    ):
+        test_property.owner = test_owner_user
+        await test_property.save()
+
+        response = await client.post(
+            "/miscellaneous-payments/",
+            data={
+                "property_id": str(test_property.id),
+                "payment_type": "other",
+                "amount": "100.0",
+                "payment_date": datetime.utcnow().isoformat(),
+                "description": "Not allowed",
+            },
+            headers=auth_headers_other_owner,
+        )
+
+        assert response.status_code == 403
+
 
 class TestDeleteMiscellaneousPayment:
     @pytest.mark.asyncio

@@ -215,6 +215,50 @@ class TestCreateAgreement:
         assert str(agreement.user.ref.id) == str(test_owner_user.id)
 
     @pytest.mark.asyncio
+    async def test_owner_can_create_for_own_property(
+        self, client, mongomock_db, test_property, test_owner_user, test_fee,
+        auth_headers_owner, resolve_agreement_links,
+    ):
+        test_property.owner = test_owner_user
+        await test_property.save()
+
+        payload = {
+            "property_id": str(test_property.id),
+            "fee_ids": [str(test_fee.id)],
+            "monthly_amount": 50.0,
+            "installments_count": 3,
+            "start_date": datetime.utcnow().isoformat(),
+        }
+        with patch(
+            "app.services.agreement_service.generate_agreement_pdf",
+            return_value=io.BytesIO(b"%PDF-1.4 mock"),
+        ):
+            with patch("builtins.open", return_value=MagicMock()):
+                response = await client.post("/agreements/", json=payload, headers=auth_headers_owner)
+
+        assert response.status_code == 200
+        assert response.json()["installments_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_owner_cannot_create_for_other_property(
+        self, client, mongomock_db, test_property, test_owner_user, test_fee,
+        auth_headers_other_owner,
+    ):
+        test_property.owner = test_owner_user
+        await test_property.save()
+
+        payload = {
+            "property_id": str(test_property.id),
+            "fee_ids": [str(test_fee.id)],
+            "monthly_amount": 50.0,
+            "installments_count": 3,
+            "start_date": datetime.utcnow().isoformat(),
+        }
+        response = await client.post("/agreements/", json=payload, headers=auth_headers_other_owner)
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
     async def test_property_not_found(
         self, client, mongomock_db, test_fee, auth_headers_admin
     ):
