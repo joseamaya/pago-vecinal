@@ -103,7 +103,7 @@ pago-vecinal/
 
    # Initial Admin Configuration
    INITIAL_ADMIN_EMAIL=admin@pago-vecinal.com
-   INITIAL_ADMIN_PASSWORD=AdminPass123!
+   INITIAL_ADMIN_PASSWORD=replace-with-a-strong-password
    INITIAL_ADMIN_NAME=Administrador
    ```
 
@@ -167,7 +167,7 @@ pago-vecinal/
 
    # Initial Admin Configuration
    INITIAL_ADMIN_EMAIL=admin@pago-vecinal.com
-   INITIAL_ADMIN_PASSWORD=AdminPass123!
+   INITIAL_ADMIN_PASSWORD=replace-with-a-strong-password
    INITIAL_ADMIN_NAME=Administrador
 
    # Frontend Configuration
@@ -192,18 +192,18 @@ The application automatically creates an initial administrator user on first sta
 
 ```bash
 INITIAL_ADMIN_EMAIL=admin@pago-vecinal.com
-INITIAL_ADMIN_PASSWORD=AdminPass123!
+INITIAL_ADMIN_PASSWORD=replace-with-a-strong-password
 INITIAL_ADMIN_NAME=Administrador
 ```
 
-### Default Admin Credentials:
-- **Email**: admin@pago-vecinal.com
-- **Password**: AdminPass123!
-- **Name**: Administrador
+### Initial Admin Credentials:
+- **Email**: value of `INITIAL_ADMIN_EMAIL`
+- **Password**: value of `INITIAL_ADMIN_PASSWORD`
+- **Name**: value of `INITIAL_ADMIN_NAME`
 
 ### Important Notes:
 - The admin is created only if no admin users exist in the database
-- Change the default password after first login for security
+- Use a strong password and change it after first login
 - You can disable auto-creation by removing/commenting the environment variables
 - The system will show confirmation messages during startup
 
