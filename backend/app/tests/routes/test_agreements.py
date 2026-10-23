@@ -239,6 +239,13 @@ class TestCreateAgreement:
         assert response.status_code == 200
         assert response.json()["installments_count"] == 3
 
+        from app.models.agreement import Agreement
+
+        agreement = await Agreement.find_one(
+            Agreement.agreement_number == response.json()["agreement_number"]
+        )
+        assert str(agreement.user.ref.id) == str(test_owner_user.id)
+
     @pytest.mark.asyncio
     async def test_owner_cannot_create_for_other_property(
         self, client, mongomock_db, test_property, test_owner_user, test_fee,
