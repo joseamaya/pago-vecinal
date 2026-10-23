@@ -156,3 +156,14 @@ class TestDeleteMiscellaneousPayment:
             headers=auth_headers_owner,
         )
         assert response.status_code == 403
+
+
+class TestBulkApproveMiscellaneousPayments:
+    @pytest.mark.asyncio
+    async def test_owner_forbidden(self, client, mongomock_db, auth_headers_owner):
+        response = await client.post(
+            "/miscellaneous-payments/bulk-approve",
+            json={"payment_ids": []},
+            headers=auth_headers_owner,
+        )
+        assert response.status_code == 403

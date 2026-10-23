@@ -277,13 +277,7 @@ async def update_miscellaneous_payment(
     return response_data
 
 @router.delete("/{payment_id}")
-async def delete_miscellaneous_payment(payment_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
+async def delete_miscellaneous_payment(payment_id: str, current_user: User = Depends(require_admin)):
     payment = await MiscellaneousPayment.get(payment_id)
     if not payment:
         raise HTTPException(
@@ -365,16 +359,10 @@ async def download_miscellaneous_receipt(payment_id: str, current_user: User = D
 @router.post("/bulk-approve")
 async def bulk_approve_miscellaneous_payments(
     request: BulkApproveRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     payment_ids = request.payment_ids
     """Bulk approve multiple miscellaneous payments"""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-
     if not payment_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
