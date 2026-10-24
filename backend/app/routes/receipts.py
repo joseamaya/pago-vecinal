@@ -17,6 +17,11 @@ from ..utils.pdf_generator import generate_receipt_pdf
 from ..config.database import database
 from ..services.receipt_service import generate_correlative_number, create_receipt_for_payment
 from ..services.cloudinary_service import upload_receipt_pdf
+from ..services.ownership_service import (
+    has_active_owner,
+    owned_property_ids,
+    user_owns_property,
+)
 from bson import DBRef
 from ..utils.links import link_id, link_ref_id
 from ..utils.query import combine_filters, sort_spec, text_search_clauses
@@ -45,11 +50,25 @@ async def _assert_receipt_access(payment_doc, misc_doc, current_user):
         fee = await Fee.get(payment_doc.fee_id)
         if fee:
             prop = await Property.get(link_ref_id(fee.property)) if link_ref_id(fee.property) else None
-            if prop and link_id(prop.owner) == str(current_user.id):
+            if prop and await user_owns_property(current_user, prop):
                 return
+        if not await has_active_owner(current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         await payment_doc.fetch_link(Payment.user)
         owner = payment_doc.user
     elif misc_doc is not None:
+        if misc_doc.property:
+            await misc_doc.fetch_link(MiscellaneousPayment.property)
+            if await user_owns_property(current_user, misc_doc.property):
+                return
+        if not await has_active_owner(current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
         await misc_doc.fetch_link(MiscellaneousPayment.user)
         owner = misc_doc.user
     else:
@@ -64,9 +83,11 @@ async def _assert_receipt_access(payment_doc, misc_doc, current_user):
 
 async def _owner_receipts_filter(current_user):
     # Owners see receipts for their own payments and payments on their properties
+    if not await has_active_owner(current_user):
+        return {"_id": None}
+
     user_id = str(current_user.id)
-    properties = await Property.find_all().to_list()
-    property_ids = {str(prop.id) for prop in properties if link_id(prop.owner) == user_id}
+    property_ids = await owned_property_ids(current_user)
     fees = await Fee.find_all().to_list()
     fee_ids = {str(fee.id) for fee in fees if link_id(fee.property) in property_ids}
 
@@ -79,6 +100,7 @@ async def _owner_receipts_filter(current_user):
         payment.id
         for payment in await MiscellaneousPayment.find_all().to_list()
         if link_id(payment.user) == user_id
+        or str(link_ref_id(getattr(payment, "property", None))) in property_ids
     ]
     clauses = []
     if payment_ids:

@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 import os
 import shutil
 from beanie import PydanticObjectId
+from bson import DBRef
 from bson.errors import InvalidId
 from ..models.agreement import (
     Agreement, AgreementInstallment, AgreementStatus, AgreementInstallmentStatus
@@ -25,6 +26,13 @@ from ..services.agreement_service import (
     build_installment_response,
     create_agreement_with_installments,
 )
+from ..services.ownership_service import (
+    has_active_owner,
+    owned_property_object_ids,
+    primary_user_for_property,
+    user_owns_property,
+)
+from ..utils.links import link_id
 from ..utils.uploads import (
     validate_upload,
     safe_extension,
@@ -32,23 +40,36 @@ from ..utils.uploads import (
     RECEIPT_CONTENT_TYPES,
     MAX_RECEIPT_MB,
 )
-from ..utils.links import link_id
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def _build_agreement_filters(current_user, property_id=None, status_filter=None):
-    filters = []
+async def _build_agreement_filters(current_user, property_id=None, status_filter=None):
+    query = {}
 
     if current_user.role != UserRole.ADMIN:
-        # Regular users can only see agreements for their properties
-        filters.append(Agreement.user.id == current_user.id)
+        property_ids = await owned_property_object_ids(current_user)
+        clauses = []
+        if await has_active_owner(current_user):
+            clauses.append({"user": DBRef("users", current_user.id)})
+        if property_ids:
+            clauses.append(
+                {
+                    "property": {
+                        "$in": [
+                            DBRef("properties", property_id)
+                            for property_id in property_ids
+                        ]
+                    }
+                }
+            )
+        query["$or"] = clauses or [{"_id": None}]
 
     if property_id:
         try:
-            filters.append(Agreement.property.id == PydanticObjectId(property_id))
+            query["property"] = DBRef("properties", PydanticObjectId(property_id))
         except (InvalidId, TypeError):
             raise HTTPException(
                 status_code=400,
@@ -56,9 +77,22 @@ def _build_agreement_filters(current_user, property_id=None, status_filter=None)
             )
 
     if status_filter:
-        filters.append(Agreement.status == status_filter)
+        query["status"] = status_filter
 
-    return filters
+    return query
+
+
+async def _can_access_agreement(agreement, current_user):
+    if current_user.role == UserRole.ADMIN:
+        return True
+    if (
+        link_id(agreement.user) == str(current_user.id)
+        and await has_active_owner(current_user)
+    ):
+        return True
+
+    await agreement.fetch_link(Agreement.property)
+    return await user_owns_property(current_user, agreement.property)
 
 
 @router.get("/", response_model=List[AgreementResponse])
@@ -67,14 +101,8 @@ async def get_agreements(
     property_id: Optional[str] = None,
     status: Optional[str] = None
 ):
-    # Build query filters
-    filters = _build_agreement_filters(current_user, property_id, status)
-
-    # Get agreements
-    if filters:
-        agreements = await Agreement.find(*filters).to_list()
-    else:
-        agreements = await Agreement.find_all().to_list()
+    query = await _build_agreement_filters(current_user, property_id, status)
+    agreements = await Agreement.find(query).to_list()
 
     # Sort by creation date descending
     agreements.sort(key=lambda a: a.created_at, reverse=True)
@@ -104,8 +132,7 @@ async def get_agreement(agreement_id: str, current_user: User = Depends(get_curr
     await agreement.fetch_link(Agreement.fees)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(agreement.user.id) != str(current_user.id)):
+    if not await _can_access_agreement(agreement, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -127,8 +154,7 @@ async def create_agreement(
         )
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        (not prop.owner or link_id(prop.owner) != str(current_user.id))):
+    if not await user_owns_property(current_user, prop):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -197,7 +223,10 @@ async def create_agreement(
         )
 
     # Admins can create agreements on behalf of the property owner
-    agreement_owner = prop.owner if (current_user.role == UserRole.ADMIN and prop.owner) else current_user
+    if current_user.role == UserRole.ADMIN:
+        agreement_owner = await primary_user_for_property(prop) or current_user
+    else:
+        agreement_owner = current_user
 
     agreement, installments = await create_agreement_with_installments(
         prop, fees, agreement_data, agreement_owner
@@ -293,8 +322,7 @@ async def download_agreement_pdf(agreement_id: str, current_user: User = Depends
     await agreement.fetch_link(Agreement.user)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(agreement.user.id) != str(current_user.id)):
+    if not await _can_access_agreement(agreement, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -341,8 +369,7 @@ async def create_installment_payment(
     await agreement.fetch_link(Agreement.user)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(agreement.user.id) != str(current_user.id)):
+    if not await _can_access_agreement(agreement, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -373,7 +400,24 @@ async def get_next_pending_installment(current_user: User = Depends(get_current_
     if current_user.role == UserRole.ADMIN:
         agreements = await Agreement.find_all().to_list()
     else:
-        agreements = await Agreement.find(Agreement.user.id == current_user.id).to_list()
+        property_ids = await owned_property_object_ids(current_user)
+        clauses = []
+        if await has_active_owner(current_user):
+            clauses.append({"user": DBRef("users", current_user.id)})
+        if property_ids:
+            clauses.append(
+                {
+                    "property": {
+                        "$in": [
+                            DBRef("properties", property_id)
+                            for property_id in property_ids
+                        ]
+                    }
+                }
+            )
+        agreements = await Agreement.find(
+            {"$or": clauses or [{"_id": None}]}
+        ).to_list()
 
     if not agreements:
         return None
@@ -385,8 +429,10 @@ async def get_next_pending_installment(current_user: User = Depends(get_current_
     for agreement in agreements:
         # Fetch installments for this agreement
         installments = await AgreementInstallment.find(
-            AgreementInstallment.agreement.id == agreement.id,
-            AgreementInstallment.status == "pending"
+            {
+                "agreement": DBRef("agreements", agreement.id),
+                "status": AgreementInstallmentStatus.PENDING.value,
+            }
         ).sort([("due_date", 1)]).to_list()  # Sort by due_date ascending (oldest first)
 
         if installments:
@@ -621,8 +667,7 @@ async def update_installment_payment(
         )
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(agreement.user.id) != str(current_user.id)):
+    if not await _can_access_agreement(agreement, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

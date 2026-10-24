@@ -7,6 +7,7 @@ from ..models.expense import Expense
 from ..models.miscellaneous_payment import MiscellaneousPayment
 from ..models.treasurer import Treasurer
 from ..models.user import User
+from ..models.owner import Owner
 from ..models.property import Property
 from ..models.fee import FeeSchedule, Fee
 from ..models.payment import Payment
@@ -50,7 +51,7 @@ async def init_db():
     try:
         await init_beanie(
             database=database,
-            document_models=[User, Property, FeeSchedule, Fee, Payment, Receipt, Agreement, AgreementInstallment, MiscellaneousPayment, Expense, Treasurer, AuditLog]
+            document_models=[User, Owner, Property, FeeSchedule, Fee, Payment, Receipt, Agreement, AgreementInstallment, MiscellaneousPayment, Expense, Treasurer, AuditLog]
         )
         logger.info("Database initialized successfully")
     except Exception as e:

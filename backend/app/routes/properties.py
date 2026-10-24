@@ -1,14 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List, Literal, Optional
+from beanie import PydanticObjectId
+
+from ..models.owner import Owner
 from ..models.property import Property
+from ..models.user import User, UserRole
+from ..schemas.owner import OwnerSummary
 from ..schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
 from ..schemas.common import PaginatedResponse, PropertyBulkImportResponse
-from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
+from ..services.ownership_service import (
+    assign_owners,
+    owned_properties,
+    owned_property_ids,
+    resolve_owners,
+    user_owns_property,
+)
 from ..services.property_service import bulk_import_property_rows
-from ..utils.links import link_id
 from ..utils.query import combine_filters, sort_spec, text_search_clauses
-from bson import DBRef
 from ..utils.uploads import (
     validate_upload,
     EXCEL_EXTENSIONS,
@@ -30,6 +39,43 @@ PROPERTY_SORTS = {
 }
 
 
+def _build_property_response(prop: Property, owners_by_id: dict) -> PropertyResponse:
+    summaries = []
+    for owner_id in prop.owners:
+        owner = owners_by_id.get(str(owner_id))
+        if owner:
+            summaries.append(
+                OwnerSummary(id=str(owner.id), full_name=owner.full_name, phone=owner.phone)
+            )
+
+    return PropertyResponse(
+        id=str(prop.id),
+        row_letter=prop.row_letter,
+        number=prop.number,
+        villa=prop.villa,
+        owner_name=prop.owner_name,
+        owner_phone=prop.owner_phone,
+        primary_owner_id=str(prop.primary_owner) if prop.primary_owner else None,
+        owners=summaries,
+    )
+
+
+async def _property_responses(properties: List[Property]) -> List[PropertyResponse]:
+    owner_ids = {owner_id for prop in properties for owner_id in prop.owners}
+    owners = (
+        await Owner.find({"_id": {"$in": list(owner_ids)}}).to_list()
+        if owner_ids
+        else []
+    )
+    owners_by_id = {str(owner.id): owner for owner in owners}
+    return [_build_property_response(prop, owners_by_id) for prop in properties]
+
+
+async def _property_response(prop: Property) -> PropertyResponse:
+    responses = await _property_responses([prop])
+    return responses[0]
+
+
 @router.get("/", response_model=PaginatedResponse[PropertyResponse])
 async def get_properties(
     page: int = 1,
@@ -41,8 +87,11 @@ async def get_properties(
 ):
     filters = []
     if current_user.role != UserRole.ADMIN:
-        # Owners can only see their own properties
-        filters.append({"owner": DBRef("users", current_user.id)})
+        owned_ids = await owned_property_ids(current_user)
+        if not owned_ids:
+            filters.append({"_id": None})
+        else:
+            filters.append({"_id": {"$in": [PydanticObjectId(oid) for oid in owned_ids]}})
 
     search_clauses = text_search_clauses(
         search,
@@ -58,30 +107,12 @@ async def get_properties(
     if spec:
         property_query = property_query.sort(spec)
 
-    # Get total count
     total_count = await property_query.count()
-
-    # Calculate skip
     skip = (page - 1) * limit
-
-    # Get paginated results
     properties = await property_query.skip(skip).limit(limit).to_list()
-
-    # Calculate total pages
     total_pages = (total_count + limit - 1) // limit
 
-    property_responses = [
-        PropertyResponse(
-            id=str(prop.id),
-            row_letter=prop.row_letter,
-            number=prop.number,
-            villa=prop.villa,
-            owner_name=prop.owner_name,
-            owner_phone=prop.owner_phone,
-            owner_id=link_id(prop.owner)
-        )
-        for prop in properties
-    ]
+    property_responses = await _property_responses(properties)
 
     return PaginatedResponse[PropertyResponse](
         data=property_responses,
@@ -93,30 +124,12 @@ async def get_properties(
         }
     )
 
-@router.get("/{property_id}", response_model=PropertyResponse)
-async def get_property(property_id: str, current_user: User = Depends(get_current_user)):
-    prop = await Property.get(property_id)
-    if not prop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
-    return PropertyResponse(
-        id=str(prop.id),
-        row_letter=prop.row_letter,
-        number=prop.number,
-        villa=prop.villa,
-        owner_name=prop.owner_name,
-        owner_phone=prop.owner_phone,
-        owner_id=link_id(prop.owner)
-    )
 
 @router.post("/", response_model=PropertyResponse)
 async def create_property(
     property_data: PropertyCreate,
     current_user: User = Depends(require_admin)
 ):
-    # Check if property already exists
     existing = await Property.find_one(
         Property.row_letter == property_data.row_letter,
         Property.number == property_data.number,
@@ -128,120 +141,25 @@ async def create_property(
             detail="Property already exists"
         )
 
+    try:
+        owners = await resolve_owners(property_data.owner_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     prop = Property(
         row_letter=property_data.row_letter,
         number=property_data.number,
         villa=property_data.villa,
-        owner_name=property_data.owner_name,
-        owner_phone=property_data.owner_phone
+        owner_name="Sin propietario",
     )
+    try:
+        assign_owners(prop, owners, property_data.primary_owner_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     await prop.insert()
-    return PropertyResponse(
-        id=str(prop.id),
-        row_letter=prop.row_letter,
-        number=prop.number,
-        villa=prop.villa,
-        owner_name=prop.owner_name,
-        owner_phone=prop.owner_phone
-    )
+    return await _property_response(prop)
 
-@router.put("/{property_id}", response_model=PropertyResponse)
-async def update_property(
-    property_id: str,
-    property_update: PropertyUpdate,
-    current_user: User = Depends(require_admin)
-):
-    prop = await Property.get(property_id)
-    if not prop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
-
-    # Update fields
-    update_data = property_update.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(prop, field, value)
-
-    await prop.save()
-    return PropertyResponse(
-        id=str(prop.id),
-        row_letter=prop.row_letter,
-        number=prop.number,
-        villa=prop.villa,
-        owner_name=prop.owner_name,
-        owner_phone=prop.owner_phone,
-        owner_id=link_id(prop.owner)
-    )
-
-@router.delete("/{property_id}")
-async def delete_property(property_id: str, current_user: User = Depends(require_admin)):
-    prop = await Property.get(property_id)
-    if not prop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
-    await prop.delete()
-    return {"message": "Property deleted successfully"}
-
-@router.get("/distinct/letters", response_model=List[str])
-async def get_distinct_letters(current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        # Owners can only see their own properties
-        properties = await Property.find({"owner": DBRef("users", current_user.id)}).to_list()
-    else:
-        properties = await Property.find_all().to_list()
-
-    letters = list(set(prop.row_letter for prop in properties))
-    return sorted(letters)
-
-@router.get("/distinct/numbers", response_model=List[int])
-async def get_distinct_numbers(current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.ADMIN:
-        # Owners can only see their own properties
-        properties = await Property.find({"owner": DBRef("users", current_user.id)}).to_list()
-    else:
-        properties = await Property.find_all().to_list()
-
-    numbers = list(set(prop.number for prop in properties))
-    return sorted(numbers)
-
-@router.get("/by-letter-number/", response_model=PropertyResponse)
-async def get_property_by_letter_number(
-    row_letter: str,
-    number: int,
-    current_user: User = Depends(get_current_user)
-):
-    if current_user.role != UserRole.ADMIN:
-        prop = await Property.find_one(
-            {
-                "row_letter": row_letter,
-                "number": number,
-                "owner": DBRef("users", current_user.id),
-            }
-        )
-    else:
-        prop = await Property.find_one(
-            Property.row_letter == row_letter,
-            Property.number == number
-        )
-
-    if not prop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
-
-    return PropertyResponse(
-        id=str(prop.id),
-        row_letter=prop.row_letter,
-        number=prop.number,
-        villa=prop.villa,
-        owner_name=prop.owner_name,
-        owner_phone=prop.owner_phone,
-        owner_id=link_id(prop.owner)
-    )
 
 @router.post("/bulk-import", response_model=PropertyBulkImportResponse)
 async def bulk_import_properties(
@@ -263,3 +181,102 @@ async def bulk_import_properties(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Error processing file"
         )
+
+
+@router.get("/distinct/letters", response_model=List[str])
+async def get_distinct_letters(current_user: User = Depends(get_current_user)):
+    properties = await owned_properties(current_user)
+    letters = list(set(prop.row_letter for prop in properties))
+    return sorted(letters)
+
+
+@router.get("/distinct/numbers", response_model=List[int])
+async def get_distinct_numbers(current_user: User = Depends(get_current_user)):
+    properties = await owned_properties(current_user)
+    numbers = list(set(prop.number for prop in properties))
+    return sorted(numbers)
+
+
+@router.get("/by-letter-number/", response_model=PropertyResponse)
+async def get_property_by_letter_number(
+    row_letter: str,
+    number: int,
+    current_user: User = Depends(get_current_user)
+):
+    properties = await owned_properties(current_user)
+    prop = next(
+        (item for item in properties if item.row_letter == row_letter and item.number == number),
+        None,
+    )
+
+    if not prop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+
+    return await _property_response(prop)
+
+
+@router.get("/{property_id}", response_model=PropertyResponse)
+async def get_property(property_id: str, current_user: User = Depends(get_current_user)):
+    prop = await Property.get(property_id)
+    if not prop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+
+    if not await user_owns_property(current_user, prop):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    return await _property_response(prop)
+
+
+@router.put("/{property_id}", response_model=PropertyResponse)
+async def update_property(
+    property_id: str,
+    property_update: PropertyUpdate,
+    current_user: User = Depends(require_admin)
+):
+    prop = await Property.get(property_id)
+    if not prop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+
+    update_data = property_update.model_dump(exclude_unset=True)
+    owner_ids = update_data.pop("owner_ids", None)
+    primary_owner_id = update_data.pop("primary_owner_id", None)
+    owners_changed = owner_ids is not None or primary_owner_id is not None
+
+    if owners_changed:
+        try:
+            if owner_ids is None:
+                owner_ids = [str(owner_id) for owner_id in prop.owners]
+            owners = await resolve_owners(owner_ids)
+            assign_owners(prop, owners, primary_owner_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    for field, value in update_data.items():
+        setattr(prop, field, value)
+
+    await prop.save()
+    return await _property_response(prop)
+
+
+@router.delete("/{property_id}")
+async def delete_property(property_id: str, current_user: User = Depends(require_admin)):
+    prop = await Property.get(property_id)
+    if not prop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found"
+        )
+    await prop.delete()
+    return {"message": "Property deleted successfully"}

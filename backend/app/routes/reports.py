@@ -5,6 +5,7 @@ from datetime import datetime
 from ..models.property import Property
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
+from ..services.ownership_service import user_owns_property
 from ..utils.pdf_generator import (
     generate_property_payment_history_pdf,
     generate_outstanding_fees_pdf,
@@ -284,10 +285,7 @@ async def download_annual_property_statement(
     if not property_obj:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    await property_obj.fetch_link(Property.owner)
-
-    if (current_user.role != UserRole.ADMIN and
-        (not property_obj.owner or str(property_obj.owner.id) != str(current_user.id))):
+    if not await user_owns_property(current_user, property_obj):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     property_data, fees_data, payments_data = await get_single_property_annual_statement_data(

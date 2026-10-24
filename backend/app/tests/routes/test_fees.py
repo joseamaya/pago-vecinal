@@ -99,7 +99,7 @@ class TestListFees:
 
     @pytest.mark.asyncio
     async def test_owner_search_keeps_owner_scoping(
-        self, client, mongomock_db, auth_headers_owner, test_owner_user
+        self, client, mongomock_db, auth_headers_owner, test_owner_user, test_owner
     ):
         with patch("app.routes.fees.database") as mock_db:
             fake_collection = MagicMock()
@@ -237,12 +237,14 @@ class TestCreateFee:
         mongomock_db,
         test_property,
         test_owner_user,
+        test_owner,
         test_fee_schedule,
         auth_headers_owner,
     ):
         from datetime import datetime, timedelta
 
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()
@@ -267,13 +269,14 @@ class TestCreateFee:
         client,
         mongomock_db,
         test_property,
-        test_owner_user,
+        test_owner,
         test_fee_schedule,
         auth_headers_other_owner,
     ):
         from datetime import datetime, timedelta
 
-        test_property.owner = test_owner_user
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
         await test_property.save()
 
         due_date = (datetime.utcnow() + timedelta(days=30)).isoformat()

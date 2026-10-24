@@ -23,6 +23,12 @@ from ..services.miscellaneous_payment_service import (
     create_receipt_for_miscellaneous_payment,
     resolve_treasurer_details,
 )
+from ..services.ownership_service import (
+    has_active_owner,
+    owned_property_object_ids,
+    user_owns_property,
+)
+from ..utils.links import link_id
 from ..utils.uploads import (
     validate_upload,
     safe_extension,
@@ -31,20 +37,50 @@ from ..utils.uploads import (
     MAX_RECEIPT_MB,
 )
 from ..schemas.common import BulkApproveRequest
-from ..utils.links import link_id
 from bson import DBRef
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+async def _can_access_miscellaneous_payment(payment, current_user):
+    if current_user.role == UserRole.ADMIN:
+        return True
+    if link_id(payment.user) == str(current_user.id) and await has_active_owner(
+        current_user
+    ):
+        return True
+
+    if payment.property:
+        await payment.fetch_link(MiscellaneousPayment.property)
+        return await user_owns_property(current_user, payment.property)
+
+    return False
+
 @router.get("/", response_model=List[MiscellaneousPaymentResponse])
 async def get_miscellaneous_payments(current_user: User = Depends(get_current_user)):
     if current_user.role == UserRole.ADMIN:
         payments = await MiscellaneousPayment.find_all().to_list()
     else:
-        # Owners can only see their own payments
-        payments = await MiscellaneousPayment.find({"user": DBRef("users", current_user.id)}).to_list()
+        property_ids = await owned_property_object_ids(current_user)
+        clauses = []
+        if await has_active_owner(current_user):
+            clauses.append({"user": DBRef("users", current_user.id)})
+        if property_ids:
+            clauses.append(
+                {
+                    "property": {
+                        "$in": [
+                            DBRef("properties", property_id)
+                            for property_id in property_ids
+                        ]
+                    }
+                }
+            )
+        payments = await MiscellaneousPayment.find(
+            {"$or": clauses or [{"_id": None}]}
+        ).to_list()
 
     # Fetch links for each payment
     for payment in payments:
@@ -69,8 +105,7 @@ async def get_miscellaneous_payment(payment_id: str, current_user: User = Depend
     await payment.fetch_link(MiscellaneousPayment.user)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(payment.user.id) != str(current_user.id)):
+    if not await _can_access_miscellaneous_payment(payment, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -100,8 +135,7 @@ async def create_miscellaneous_payment(
             )
 
         # Check if user owns this property or is admin
-        if (current_user.role != UserRole.ADMIN and
-            (not prop.owner or link_id(prop.owner) != str(current_user.id))):
+        if not await user_owns_property(current_user, prop):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions"
@@ -219,8 +253,7 @@ async def update_miscellaneous_payment(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Property not found"
                 )
-            if (current_user.role != UserRole.ADMIN and
-                (not prop.owner or link_id(prop.owner) != str(current_user.id))):
+            if not await user_owns_property(current_user, prop):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not enough permissions"
@@ -303,8 +336,7 @@ async def download_miscellaneous_receipt(payment_id: str, current_user: User = D
     await payment.fetch_link(MiscellaneousPayment.user)
 
     # Check permissions
-    if (current_user.role != UserRole.ADMIN and
-        str(payment.user.id) != str(current_user.id)):
+    if not await _can_access_miscellaneous_payment(payment, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

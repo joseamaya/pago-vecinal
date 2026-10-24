@@ -110,6 +110,10 @@ class TestListReceipts:
 
         with patch.object(Payment, "find_all", return_value=pay_query), patch.object(
             MiscellaneousPayment, "find_all", return_value=misc_query
+        ), patch(
+            "app.routes.receipts.has_active_owner",
+            new_callable=AsyncMock,
+            return_value=True,
         ):
             query = await _owner_receipts_query(user)
 
@@ -267,7 +271,7 @@ class TestMiscellaneousReceipt:
 
     @pytest.mark.asyncio
     async def test_owner_can_get_own_misc_receipt(
-        self, client, mongomock_db, test_misc_receipt, auth_headers_owner
+        self, client, mongomock_db, test_misc_receipt, test_owner, auth_headers_owner
     ):
         response = await client.get(
             f"/receipts/{test_misc_receipt.id}", headers=auth_headers_owner
@@ -282,6 +286,23 @@ class TestMiscellaneousReceipt:
             f"/receipts/{test_misc_receipt.id}", headers=auth_headers_other_owner
         )
         assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_co_owner_can_get_property_misc_receipt(
+        self, client, mongomock_db, test_misc_receipt, test_misc_payment,
+        test_property, test_owner, test_other_owner, auth_headers_other_owner,
+    ):
+        test_property.owners = [test_owner.id, test_other_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        test_misc_payment.property = test_property
+        await test_misc_payment.save()
+
+        response = await client.get(
+            f"/receipts/{test_misc_receipt.id}", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_update_without_payment_link(

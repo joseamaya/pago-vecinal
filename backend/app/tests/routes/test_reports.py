@@ -241,7 +241,7 @@ class TestAnnualPropertyStatement:
 
     @pytest.mark.asyncio
     async def test_owner_can_download_own_statement(
-        self, client, mongomock_db, test_owner_user, test_fee_schedule, auth_headers_owner
+        self, client, mongomock_db, test_owner, test_fee_schedule, auth_headers_owner
     ):
         from app.models.property import Property
 
@@ -249,8 +249,9 @@ class TestAnnualPropertyStatement:
             row_letter="Z",
             number=9,
             villa="Villa Z",
-            owner_name="Owner",
-            owner=test_owner_user,
+            owner_name=test_owner.full_name,
+            owners=[test_owner.id],
+            primary_owner=test_owner.id,
         )
         await prop.insert()
 

@@ -42,7 +42,6 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: (credentials) => api.post('/auth/login', credentials),
-  register: (userData) => api.post('/auth/register', userData),
 };
 
 // Users API
@@ -54,6 +53,15 @@ export const usersAPI = {
   createUser: (userData) => api.post('/users/', userData),
   updateUser: (id, userData) => api.put(`/users/${id}`, userData),
   deleteUser: (id) => api.delete(`/users/${id}`),
+};
+
+// Owners API
+export const ownersAPI = {
+  getOwners: (params = {}) => api.get('/owners/', { params }),
+  getOwner: (id) => api.get(`/owners/${id}`),
+  createOwner: (ownerData) => api.post('/owners/', ownerData),
+  updateOwner: (id, ownerData) => api.put(`/owners/${id}`, ownerData),
+  deleteOwner: (id) => api.delete(`/owners/${id}`),
 };
 
 // Properties API

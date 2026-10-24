@@ -1,10 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from ..auth.utils import authenticate_user, create_access_token, get_password_hash
-from ..models.user import User, UserRole
-from ..schemas.user import UserCreate
-from ..dependencies.auth import oauth2_scheme, get_current_user
+from ..auth.utils import authenticate_user, create_access_token
 from ..dependencies.rate_limit import rate_limit
 from datetime import timedelta
 
@@ -16,35 +13,6 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: str | None = None
-
-@router.post("/register", response_model=Token)
-async def register(
-    user_data: UserCreate,
-    _: None = Depends(rate_limit(10, 60, "register")),
-):
-    existing_user = await User.find_one(User.email == user_data.email)
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-
-    hashed_password = get_password_hash(user_data.password)
-
-    user = User(
-        email=user_data.email,
-        password_hash=hashed_password,
-        role=UserRole.OWNER,
-        full_name=user_data.full_name,
-        phone=user_data.phone
-    )
-    await user.insert()
-
-    access_token_expires = timedelta(days=1)
-    access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
 async def login(

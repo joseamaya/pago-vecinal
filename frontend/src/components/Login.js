@@ -5,14 +5,10 @@ import {
   Button,
   IconButton,
   InputAdornment,
-  Link,
-  Tab,
-  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
 import {
-  AccountCircleOutlined as AccountIcon,
   CheckCircleOutlined as CheckIcon,
   EmailOutlined as EmailIcon,
   LockOutlined as LockIcon,
@@ -30,27 +26,16 @@ const FEATURES = [
 const initialState = {
   email: '',
   password: '',
-  fullName: '',
-  phone: '',
-  role: 'owner',
 };
 
 const Login = () => {
-  const [tabValue, setTabValue] = useState(0);
   const [formData, setFormData] = useState(initialState);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { login, register } = useAuth();
-  const isRegister = tabValue === 1;
-
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-    setError('');
-    setErrors({});
-  };
+  const { login } = useAuth();
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -63,12 +48,6 @@ const Login = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
       nextErrors.email = 'Ingresa un correo electrónico válido.';
     }
-    if (isRegister && formData.password.length < 6) {
-      nextErrors.password = 'La contraseña debe tener al menos 6 caracteres.';
-    }
-    if (isRegister && formData.fullName.trim().length < 3) {
-      nextErrors.fullName = 'Ingresa tu nombre completo.';
-    }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -80,9 +59,7 @@ const Login = () => {
 
     setLoading(true);
     try {
-      const result = isRegister
-        ? await register(formData)
-        : await login(formData.email.trim(), formData.password);
+      const result = await login(formData.email.trim(), formData.password);
 
       if (!result.success) {
         setError(result.error || 'No pudimos iniciar sesión. Inténtalo nuevamente.');
@@ -227,23 +204,11 @@ const Login = () => {
           </Box>
 
           <Typography variant="h3" sx={{ mb: 1 }}>
-            {isRegister ? 'Crea tu cuenta' : 'Bienvenido de vuelta'}
+            Bienvenido de vuelta
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-            {isRegister
-              ? 'Regístrate para consultar tus cuotas y pagos.'
-              : 'Ingresa con tu correo para gestionar tu comunidad.'}
+            Ingresa con tu correo para gestionar tu comunidad.
           </Typography>
-
-          <Tabs
-            value={tabValue}
-            onChange={handleTabChange}
-            variant="fullWidth"
-            sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
-          >
-            <Tab label="Iniciar sesión" />
-            <Tab label="Registrarme" />
-          </Tabs>
 
           {error && (
             <Alert severity="error" sx={{ mb: 2.5 }}>
@@ -280,7 +245,7 @@ const Login = () => {
               name="password"
               label="Contraseña"
               type={showPassword ? 'text' : 'password'}
-              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              autoComplete="current-password"
               margin="normal"
               value={formData.password}
               onChange={handleInputChange}
@@ -307,38 +272,6 @@ const Login = () => {
               }}
             />
 
-            {isRegister && (
-              <>
-                <TextField
-                  fullWidth
-                  name="fullName"
-                  label="Nombre completo"
-                  margin="normal"
-                  autoComplete="name"
-                  value={formData.fullName}
-                  onChange={handleInputChange}
-                  error={Boolean(errors.fullName)}
-                  helperText={errors.fullName}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <AccountIcon fontSize="small" sx={{ color: 'text.disabled' }} />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-                <TextField
-                  fullWidth
-                  name="phone"
-                  label="Teléfono (opcional)"
-                  margin="normal"
-                  autoComplete="tel"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                />
-              </>
-            )}
-
             <Button
               type="submit"
               fullWidth
@@ -347,25 +280,13 @@ const Login = () => {
               disabled={loading}
               sx={{ mt: 3, mb: 2, height: 48 }}
             >
-              {loading ? 'Procesando…' : isRegister ? 'Crear cuenta' : 'Entrar'}
+              {loading ? 'Procesando…' : 'Entrar'}
             </Button>
           </Box>
 
           <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', color: 'text.secondary', mt: 1 }}>
             ¿Problemas para ingresar? Contacta al administrador de tu villa.
           </Typography>
-          <Box sx={{ textAlign: 'center', mt: 3 }}>
-            <Link
-              component="button"
-              type="button"
-              variant="caption"
-              underline="hover"
-              onClick={() => handleTabChange(null, isRegister ? 0 : 1)}
-              sx={{ color: 'text.secondary' }}
-            >
-              {isRegister ? 'Ya tengo una cuenta' : '¿Aún no tienes cuenta? Regístrate'}
-            </Link>
-          </Box>
         </Box>
       </Box>
     </Box>

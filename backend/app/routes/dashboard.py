@@ -9,6 +9,7 @@ from ..models.payment import Payment, PaymentStatus
 from ..models.expense import Expense
 from ..models.receipt import Receipt
 from ..dependencies.auth import get_current_user
+from ..services.ownership_service import owned_properties
 from ..utils.links import link_id as _link_id, link_ref_id as _link_ref_id
 
 router = APIRouter()
@@ -32,9 +33,7 @@ def _fee_remaining(fee: Fee) -> float:
 
 
 async def _owner_properties(user: User):
-    properties = await Property.find_all().to_list()
-    user_id = str(user.id)
-    return [prop for prop in properties if _link_id(prop.owner) == user_id]
+    return await owned_properties(user)
 
 
 async def _owner_fees(user: User):

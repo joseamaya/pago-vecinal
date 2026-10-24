@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   FormControl,
@@ -17,7 +18,7 @@ import {
   EditOutlined as EditIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { propertiesAPI } from '../services/api';
+import { propertiesAPI, ownersAPI } from '../services/api';
 import { isNetworkError } from '../services/notifications';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -33,17 +34,21 @@ import ErrorState from './common/ErrorState';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { useTableState } from '../hooks/useTableState';
 import { useFormValidation } from '../hooks/useFormValidation';
-import { integer, phone, required } from '../utils/validators';
+import { integer, required } from '../utils/validators';
 import { formatPropertyLabel } from '../utils/formatters';
 
-const EMPTY_PROPERTY = { row_letter: '', number: '', villa: '', owner_name: '', owner_phone: '' };
+const EMPTY_PROPERTY = {
+  row_letter: '',
+  number: '',
+  villa: '',
+  owner_ids: [],
+  primary_owner_id: '',
+};
 
 const PROPERTY_SCHEMA = {
   villa: required('Ingresa la villa.'),
   row_letter: required('Ingresa la fila.'),
   number: [required('Ingresa el número.'), integer('Ingresa un número entero.')],
-  owner_name: required('Ingresa el nombre del propietario.'),
-  owner_phone: phone('Ingresa un teléfono válido.'),
 };
 
 const PropertyManagement = () => {
@@ -58,6 +63,7 @@ const PropertyManagement = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [editingProperty, setEditingProperty] = useState(null);
   const [formData, setFormData] = useState(EMPTY_PROPERTY);
+  const [owners, setOwners] = useState([]);
   const { errors, validateField, validateAll, clearError, setErrors } = useFormValidation(
     formData,
     PROPERTY_SCHEMA
@@ -108,17 +114,34 @@ const PropertyManagement = () => {
     await reload();
   }, [tablePage, setPage, reload]);
 
+  const loadOwners = async () => {
+    try {
+      const response = await ownersAPI.getOwners();
+      setOwners(response.data || []);
+    } catch (err) {
+      console.error('Error fetching owners:', err);
+    }
+  };
+
+  const availableOwners = owners.filter(
+    (owner) => owner.is_active !== false || formData.owner_ids.includes(owner.id)
+  );
+  const selectedOwners = owners.filter((owner) =>
+    formData.owner_ids.includes(owner.id)
+  );
+
   const handleOpenDialog = (property = null) => {
     setFormError('');
     setErrors({});
+    loadOwners();
     if (property) {
       setEditingProperty(property);
       setFormData({
         row_letter: property.row_letter,
         number: property.number.toString(),
         villa: property.villa,
-        owner_name: property.owner_name,
-        owner_phone: property.owner_phone || '',
+        owner_ids: (property.owners || []).map((owner) => owner.id),
+        primary_owner_id: property.primary_owner_id || '',
       });
     } else {
       setEditingProperty(null);
@@ -141,7 +164,17 @@ const PropertyManagement = () => {
     if (!validateAll()) return;
     setSaving(true);
     try {
-      const submitData = { ...formData, number: parseInt(formData.number, 10) };
+      const submitData = {
+        row_letter: formData.row_letter,
+        number: parseInt(formData.number, 10),
+        villa: formData.villa,
+      };
+
+      const hadNoOwners = editingProperty && (editingProperty.owners || []).length === 0;
+      if (!hadNoOwners || formData.owner_ids.length > 0) {
+        submitData.owner_ids = formData.owner_ids;
+        submitData.primary_owner_id = formData.primary_owner_id || null;
+      }
       if (editingProperty) {
         await propertiesAPI.updateProperty(editingProperty.id, submitData);
         toast.success('Propiedad actualizada correctamente');
@@ -380,29 +413,59 @@ const PropertyManagement = () => {
             />
           </Grid>
           <Grid size={12}>
-            <TextField
-              name="owner_name"
-              label="Nombre del propietario"
-              fullWidth
-              required
-              value={formData.owner_name}
-              onChange={handleFieldChange('owner_name')}
-              onBlur={handleFieldBlur('owner_name')}
-              error={Boolean(errors.owner_name)}
-              helperText={errors.owner_name}
+            <Autocomplete
+              multiple
+              options={availableOwners}
+              value={selectedOwners}
+              getOptionLabel={(owner) =>
+                owner.phone ? `${owner.full_name} · ${owner.phone}` : owner.full_name
+              }
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              onChange={(event, newOwners) => {
+                const ownerIds = newOwners.map((owner) => owner.id);
+                setFormData((previous) => ({
+                  ...previous,
+                  owner_ids: ownerIds,
+                  primary_owner_id: ownerIds.includes(previous.primary_owner_id)
+                    ? previous.primary_owner_id
+                    : ownerIds[0] || '',
+                }));
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Propietarios"
+                  placeholder="Buscar propietario…"
+                />
+              )}
             />
           </Grid>
           <Grid size={12}>
-            <TextField
-              name="owner_phone"
-              label="Teléfono del propietario"
-              fullWidth
-              value={formData.owner_phone}
-              onChange={handleFieldChange('owner_phone')}
-              onBlur={handleFieldBlur('owner_phone')}
-              error={Boolean(errors.owner_phone)}
-              helperText={errors.owner_phone}
-            />
+            <FormControl fullWidth disabled={selectedOwners.length === 0}>
+              <InputLabel id="property-primary-owner-label">Propietario principal</InputLabel>
+              <Select
+                labelId="property-primary-owner-label"
+                value={formData.primary_owner_id || ''}
+                label="Propietario principal"
+                onChange={(event) =>
+                  setFormData((previous) => ({
+                    ...previous,
+                    primary_owner_id: event.target.value,
+                  }))
+                }
+              >
+                {selectedOwners.length === 0 && (
+                  <MenuItem value="">
+                    <em>Sin propietario</em>
+                  </MenuItem>
+                )}
+                {selectedOwners.map((owner) => (
+                  <MenuItem key={owner.id} value={owner.id}>
+                    {owner.full_name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
         </Grid>
       </FormDialog>
