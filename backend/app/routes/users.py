@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
+from bson import DBRef
+from ..models.owner import Owner
 from ..models.user import User
 from ..schemas.user import UserCreate, UserUpdate, UserResponse, PasswordChange
 from ..dependencies.auth import get_current_user, require_admin, require_owner
@@ -143,5 +145,11 @@ async def delete_user(user_id: str, current_user: User = Depends(require_admin))
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+
+    linked_owners = await Owner.find({"user": DBRef("users", user.id)}).to_list()
+    for owner in linked_owners:
+        owner.user = None
+        await owner.save()
+
     await user.delete()
     return {"message": "User deleted successfully"}

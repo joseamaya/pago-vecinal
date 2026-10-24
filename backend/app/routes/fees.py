@@ -6,13 +6,14 @@ from pydantic import BaseModel
 from ..models.fee import Fee, FeeStatus, FeeSchedule
 from ..schemas.fee import FeeCreate, FeeUpdate, FeeResponse
 from ..schemas.common import PaginatedResponse
+from ..models.owner import Owner
 from ..models.property import Property
 from ..models.user import User, UserRole
 from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
 from ..services.ownership_service import (
+    has_active_owner,
     owned_property_ids,
-    primary_user_for_property,
     user_owns_property,
 )
 from ..utils.links import link_id, link_ref_id
@@ -40,7 +41,11 @@ FEE_SORTS = {
 async def _can_access_fee(fee: Fee, current_user: User) -> bool:
     if current_user.role == UserRole.ADMIN:
         return True
-    if fee.user and link_id(fee.user) == str(current_user.id):
+    if (
+        fee.user
+        and link_id(fee.user) == str(current_user.id)
+        and await has_active_owner(current_user)
+    ):
         return True
     property_id = link_ref_id(fee.property)
     prop = await Property.get(property_id) if property_id else None
@@ -65,12 +70,14 @@ async def get_fees(
     if current_user.role != UserRole.ADMIN:
         # Owners can see fees linked to them or to their properties (legacy records)
         property_ids = await owned_property_ids(current_user)
-        owner_clauses = [{"user.$id": PydanticObjectId(current_user.id)}]
+        owner_clauses = []
+        if await has_active_owner(current_user):
+            owner_clauses.append({"user.$id": PydanticObjectId(current_user.id)})
         if property_ids:
             owner_clauses.append(
                 {"property.$id": {"$in": [PydanticObjectId(pid) for pid in property_ids]}}
             )
-        query_filters["$or"] = owner_clauses
+        query_filters["$or"] = owner_clauses or [{"_id": None}]
 
     if year is not None:
         query_filters["year"] = year
@@ -464,11 +471,25 @@ async def generate_fees(request: GenerateFeesRequest, current_user: User = Depen
 
     generated_count = 0
 
+    properties = await Property.find_all().to_list()
+    owners_by_id = {
+        str(owner.id): owner for owner in await Owner.find_all().to_list()
+    }
+    users_by_id = {
+        str(user.id): user for user in await User.find_all().to_list()
+    }
+
+    def primary_user(prop: Property):
+        primary_id = prop.primary_owner
+        if primary_id is None and prop.owners:
+            primary_id = prop.owners[0]
+        owner = owners_by_id.get(str(primary_id)) if primary_id else None
+        if not owner or not owner.user or owner.is_active is False:
+            return None
+        return users_by_id.get(link_id(owner.user))
+
     for current_month in months_to_generate:
         for fee_schedule in fee_schedules:
-            # Get all properties
-            properties = await Property.find_all().to_list()
-
             for prop in properties:
                 # Check if fee already exists for this property, fee_schedule, month, year
                 existing_fee = await Fee.find_one(
@@ -504,7 +525,7 @@ async def generate_fees(request: GenerateFeesRequest, current_user: User = Depen
                     fee = Fee(
                         property=prop,
                         fee_schedule=fee_schedule,
-                        user=await primary_user_for_property(prop),
+                        user=primary_user(prop),
                         amount=fee_schedule.amount,
                         generated_date=generated_date,
                         year=current_year,

@@ -99,6 +99,19 @@ class TestGetAgreements:
         assert response.json() == []
 
     @pytest.mark.asyncio
+    async def test_co_owner_sees_property_agreements(
+        self, client, mongomock_db, test_agreement, test_property, test_owner,
+        test_other_owner, auth_headers_other_owner,
+    ):
+        test_property.owners = [test_owner.id, test_other_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        response = await client.get("/agreements/", headers=auth_headers_other_owner)
+        assert response.status_code == 200
+        assert [item["id"] for item in response.json()] == [str(test_agreement.id)]
+
+    @pytest.mark.asyncio
     async def test_invalid_property_id_returns_400(
         self, client, mongomock_db, auth_headers_admin
     ):
@@ -114,30 +127,35 @@ class TestAgreementFilters:
     @pytest.mark.asyncio
     async def test_owner_filter_targets_link_id(self, mongomock_db):
         from types import SimpleNamespace
+        from bson import DBRef
         from beanie import PydanticObjectId
         from app.models.user import UserRole
-        from app.models.agreement import Agreement
         from app.routes.agreements import _build_agreement_filters
 
         oid = PydanticObjectId()
         user = SimpleNamespace(role=UserRole.OWNER, id=oid)
 
-        filters = _build_agreement_filters(user)
-        assert Agreement.find(*filters).get_filter_query() == {"user.$id": oid}
+        with patch(
+            "app.routes.agreements.has_active_owner",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            query = await _build_agreement_filters(user)
+        assert query == {"$or": [{"user": DBRef("users", oid)}]}
 
     @pytest.mark.asyncio
     async def test_property_filter_targets_link_id(self, mongomock_db):
         from types import SimpleNamespace
+        from bson import DBRef
         from beanie import PydanticObjectId
         from app.models.user import UserRole
-        from app.models.agreement import Agreement
         from app.routes.agreements import _build_agreement_filters
 
         oid = PydanticObjectId()
         user = SimpleNamespace(role=UserRole.ADMIN, id=PydanticObjectId())
 
-        filters = _build_agreement_filters(user, property_id=str(oid))
-        assert Agreement.find(*filters).get_filter_query() == {"property.$id": oid}
+        query = await _build_agreement_filters(user, property_id=str(oid))
+        assert query == {"property": DBRef("properties", oid)}
 
 
 class TestGetAgreement:
@@ -150,6 +168,35 @@ class TestGetAgreement:
         data = response.json()
         assert data["id"] == str(test_agreement.id)
         assert data["total_debt"] == 150.0
+
+    @pytest.mark.asyncio
+    async def test_co_owner_can_get_agreement(
+        self, client, mongomock_db, test_agreement, test_property, test_owner,
+        test_other_owner, auth_headers_other_owner, resolve_agreement_links,
+    ):
+        test_property.owners = [test_owner.id, test_other_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        response = await client.get(
+            f"/agreements/{test_agreement.id}", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 200
+        assert response.json()["id"] == str(test_agreement.id)
+
+    @pytest.mark.asyncio
+    async def test_unrelated_owner_cannot_get_agreement(
+        self, client, mongomock_db, test_agreement, test_property, test_owner,
+        auth_headers_other_owner, resolve_agreement_links,
+    ):
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        response = await client.get(
+            f"/agreements/{test_agreement.id}", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 403
 
     @pytest.mark.asyncio
     async def test_not_found(self, client, mongomock_db, auth_headers_admin):
@@ -435,6 +482,24 @@ class TestGetNextPendingInstallment:
         response = await client.get("/agreements/installments/next-pending", headers=auth_headers_admin)
         assert response.status_code == 200
         assert response.json() is None
+
+    @pytest.mark.asyncio
+    async def test_co_owner_sees_pending_installment(
+        self, client, mongomock_db, test_agreement, test_agreement_installment,
+        test_property, test_owner, test_other_owner, auth_headers_other_owner,
+        resolve_agreement_links,
+    ):
+        test_property.owners = [test_owner.id, test_other_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        response = await client.get(
+            "/agreements/installments/next-pending", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data is not None
+        assert data["installment"]["agreement_id"] == str(test_agreement.id)
 
 
 class TestPayNextInstallment:

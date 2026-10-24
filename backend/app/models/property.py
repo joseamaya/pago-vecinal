@@ -16,4 +16,6 @@ class Property(Document):
         name = "properties"
         indexes = [
             IndexModel([("villa", ASCENDING), ("row_letter", ASCENDING), ("number", ASCENDING)]),
+            IndexModel([("owners", ASCENDING)]),
+            IndexModel([("primary_owner", ASCENDING)]),
         ]

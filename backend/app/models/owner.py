@@ -1,5 +1,6 @@
 from beanie import Document, Link
 from pydantic import EmailStr
+from pymongo import IndexModel, ASCENDING
 from typing import Optional
 
 from .user import User
@@ -14,3 +15,6 @@ class Owner(Document):
 
     class Settings:
         name = "owners"
+        indexes = [
+            IndexModel([("user", ASCENDING)]),
+        ]

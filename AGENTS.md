@@ -76,7 +76,7 @@ Use **npm** only (`packageManager` is pinned in `frontend/package.json`); do not
 ## Key Quirks
 - **Login uses form data, not JSON**: `username` is the email and `password` is the password. The frontend sends `multipart/form-data`; curl should use `-d "username=...&password=..."` with `Content-Type: application/x-www-form-urlencoded`.
 - **Two fee routers**: `/fees/` stores generated fees per property/period; `/fee-schedules/` stores rate templates. They are separate models.
-- **Owners are not users**: `Owner` holds the person's data and may link one `User` account via `Owner.user`. `Property.owners` stores owner ids (many-to-many); `Property.primary_owner` is used for receipts/reports and `owner_name`/`owner_phone` are a derived cache.
+- **Owners are not users**: `Owner` holds the person's data and may link one `User` account via `Owner.user`. `Property.owners` stores owner ids (many-to-many); `Property.primary_owner` is used for receipts/reports and `owner_name`/`owner_phone` are a derived cache. Inactive owners lose property access.
 - **Frontend proxy** in `package.json` (`http://localhost:8000`) only applies in CRA development mode.
 - **Deployment**: Render is configured through the dashboard (no IaC file). Backend is a Web Service from `backend/Dockerfile`; frontend is a Static Site with `npm ci && npm run build` and a `/*` → `/index.html` rewrite. Both respect `PORT`.
 

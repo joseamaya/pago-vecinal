@@ -99,7 +99,7 @@ class TestListFees:
 
     @pytest.mark.asyncio
     async def test_owner_search_keeps_owner_scoping(
-        self, client, mongomock_db, auth_headers_owner, test_owner_user
+        self, client, mongomock_db, auth_headers_owner, test_owner_user, test_owner
     ):
         with patch("app.routes.fees.database") as mock_db:
             fake_collection = MagicMock()

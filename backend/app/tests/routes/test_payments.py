@@ -44,7 +44,7 @@ class TestListPayments:
 
     @pytest.mark.asyncio
     async def test_owner_listing_filters_by_user_dbref(
-        self, client, mongomock_db, auth_headers_owner, test_owner_user
+        self, client, mongomock_db, auth_headers_owner, test_owner_user, test_owner
     ):
         with patch("app.routes.payments.database") as mock_db:
             fake_collection = MagicMock()
@@ -100,7 +100,7 @@ class TestListPayments:
 
     @pytest.mark.asyncio
     async def test_owner_search_keeps_owner_scoping(
-        self, client, mongomock_db, auth_headers_owner, test_owner_user
+        self, client, mongomock_db, auth_headers_owner, test_owner_user, test_owner
     ):
         with patch("app.routes.payments.database") as mock_db:
             fake_collection = MagicMock()

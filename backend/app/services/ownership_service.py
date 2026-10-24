@@ -16,7 +16,18 @@ def _user_ref(user_id) -> DBRef:
 
 
 async def owners_for_user(user: User) -> List[Owner]:
-    return await Owner.find({"user": _user_ref(user.id)}).to_list()
+    return await Owner.find(
+        {"user": _user_ref(user.id), "is_active": {"$ne": False}}
+    ).to_list()
+
+
+async def has_active_owner(user: User) -> bool:
+    if user.role == UserRole.ADMIN:
+        return True
+    owner = await Owner.find_one(
+        {"user": _user_ref(user.id), "is_active": {"$ne": False}}
+    )
+    return owner is not None
 
 
 async def owned_properties(user: User) -> List[Property]:
@@ -36,6 +47,11 @@ async def owned_property_ids(user: User) -> set[str]:
     return {str(prop.id) for prop in properties}
 
 
+async def owned_property_object_ids(user: User) -> List[PydanticObjectId]:
+    properties = await owned_properties(user)
+    return [prop.id for prop in properties]
+
+
 async def user_owns_property(user: User, prop: Optional[Property]) -> bool:
     if user.role == UserRole.ADMIN:
         return True
@@ -44,7 +60,20 @@ async def user_owns_property(user: User, prop: Optional[Property]) -> bool:
 
     owners = await Owner.find({"_id": {"$in": prop.owners}}).to_list()
     user_id = str(user.id)
-    return any(link_id(owner.user) == user_id for owner in owners)
+    return any(
+        link_id(owner.user) == user_id and owner.is_active is not False
+        for owner in owners
+    )
+
+
+async def user_owns_property_id(user: User, property_id) -> bool:
+    if user.role == UserRole.ADMIN:
+        return True
+    if not property_id:
+        return False
+
+    prop = await Property.get(property_id)
+    return await user_owns_property(user, prop)
 
 
 async def resolve_owners(owner_ids: Optional[Iterable[str]]) -> List[Owner]:
@@ -87,7 +116,7 @@ async def primary_user_for_property(prop: Property) -> Optional[User]:
         primary_id = prop.owners[0]
 
     owner = await Owner.get(primary_id) if primary_id else None
-    if not owner or not owner.user:
+    if not owner or not owner.user or owner.is_active is False:
         return None
 
     return await User.get(link_id(owner.user))

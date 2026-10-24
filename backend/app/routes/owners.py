@@ -8,6 +8,7 @@ from ..schemas.owner import OwnerCreate, OwnerUpdate, OwnerResponse
 from ..dependencies.auth import require_admin
 from ..services.ownership_service import sync_owner_cache, validate_user_link
 from ..utils.links import link_id
+from ..utils.names import person_name_key
 
 router = APIRouter()
 
@@ -57,10 +58,11 @@ async def get_owners(
 
     if search:
         term = search.strip().lower()
+        name_term = person_name_key(search)
         owners = [
             owner
             for owner in owners
-            if term in (owner.full_name or "").lower()
+            if name_term in person_name_key(owner.full_name)
             or term in (owner.phone or "").lower()
             or term in (str(owner.email) if owner.email else "").lower()
         ]

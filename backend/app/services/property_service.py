@@ -8,10 +8,9 @@ from ..utils.names import normalize_person_name, person_name_key
 logger = logging.getLogger(__name__)
 
 
-async def _find_or_create_owner(full_name: str, phone: str | None) -> Owner:
+async def _find_or_create_owner(full_name: str, phone: str | None, candidates) -> Owner:
     name = normalize_person_name(str(full_name))
     key = person_name_key(name)
-    candidates = await Owner.find_all().to_list()
 
     for owner in candidates:
         if (
@@ -22,6 +21,7 @@ async def _find_or_create_owner(full_name: str, phone: str | None) -> Owner:
 
     owner = Owner(full_name=name, phone=phone)
     await owner.insert()
+    candidates.append(owner)
     return owner
 
 
@@ -29,6 +29,7 @@ async def bulk_import_property_rows(sheet):
     imported = 0
     updated = 0
     errors = []
+    owner_candidates = await Owner.find_all().to_list()
 
     for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
         villa, row_letter, number, owner_name, owner_phone = row[:5]
@@ -43,7 +44,7 @@ async def bulk_import_property_rows(sheet):
             errors.append(f"Row {row_idx}: Invalid number")
             continue
 
-        owner = await _find_or_create_owner(str(owner_name), owner_phone)
+        owner = await _find_or_create_owner(str(owner_name), owner_phone, owner_candidates)
 
         existing = await Property.find_one(
             Property.row_letter == row_letter.upper(),

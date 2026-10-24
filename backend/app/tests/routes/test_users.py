@@ -238,6 +238,21 @@ class TestDeleteUser:
         assert len(remaining) == 0
 
     @pytest.mark.asyncio
+    async def test_delete_unlinks_owner(
+        self, client, mongomock_db, test_owner, test_owner_user, auth_headers_admin
+    ):
+        from app.models.owner import Owner
+
+        response = await client.delete(
+            f"/users/{test_owner_user.id}", headers=auth_headers_admin
+        )
+        assert response.status_code == 200
+
+        refreshed = await Owner.get(test_owner.id)
+        assert refreshed is not None
+        assert refreshed.user is None
+
+    @pytest.mark.asyncio
     async def test_not_found(self, client, mongomock_db, auth_headers_admin):
         response = await client.delete(
             "/users/507f1f77bcf86cd799439999", headers=auth_headers_admin

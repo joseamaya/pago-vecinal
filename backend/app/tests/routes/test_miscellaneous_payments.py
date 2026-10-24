@@ -57,6 +57,36 @@ class TestListMiscellaneousPayments:
         assert len(data) >= 1
         assert data[0]["amount"] == 200.0
 
+    @pytest.mark.asyncio
+    async def test_co_owner_sees_property_payments(
+        self, client, mongomock_db, test_property, test_owner_user, test_owner,
+        test_other_owner, auth_headers_other_owner,
+    ):
+        from app.models.miscellaneous_payment import (
+            MiscellaneousPayment,
+            MiscellaneousPaymentType,
+        )
+
+        test_property.owners = [test_owner.id, test_other_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        payment = MiscellaneousPayment(
+            property=test_property,
+            user=test_owner_user,
+            payment_type=MiscellaneousPaymentType.OTHER,
+            amount=75.0,
+            payment_date=datetime.utcnow(),
+            description="Gasto compartido",
+        )
+        await payment.insert()
+
+        response = await client.get(
+            "/miscellaneous-payments/", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 200
+        assert [item["id"] for item in response.json()] == [str(payment.id)]
+
 
 class TestGetMiscellaneousPayment:
     @pytest.mark.asyncio
@@ -78,12 +108,104 @@ class TestGetMiscellaneousPayment:
         assert data["amount"] == 200.0
 
     @pytest.mark.asyncio
+    async def test_co_owner_can_get_property_payment(
+        self, client, mongomock_db, test_property, test_owner_user, test_owner,
+        test_other_owner, auth_headers_other_owner,
+    ):
+        from app.models.miscellaneous_payment import (
+            MiscellaneousPayment,
+            MiscellaneousPaymentType,
+        )
+
+        test_property.owners = [test_owner.id, test_other_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        payment = MiscellaneousPayment(
+            property=test_property,
+            user=test_owner_user,
+            payment_type=MiscellaneousPaymentType.OTHER,
+            amount=75.0,
+            payment_date=datetime.utcnow(),
+            description="Gasto compartido",
+        )
+        await payment.insert()
+
+        response = await client.get(
+            f"/miscellaneous-payments/{payment.id}", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 200
+        assert response.json()["id"] == str(payment.id)
+
+    @pytest.mark.asyncio
+    async def test_unrelated_owner_cannot_get_property_payment(
+        self, client, mongomock_db, test_property, test_owner_user, test_owner,
+        auth_headers_other_owner,
+    ):
+        from app.models.miscellaneous_payment import (
+            MiscellaneousPayment,
+            MiscellaneousPaymentType,
+        )
+
+        test_property.owners = [test_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        payment = MiscellaneousPayment(
+            property=test_property,
+            user=test_owner_user,
+            payment_type=MiscellaneousPaymentType.OTHER,
+            amount=75.0,
+            payment_date=datetime.utcnow(),
+            description="Gasto privado",
+        )
+        await payment.insert()
+
+        response = await client.get(
+            f"/miscellaneous-payments/{payment.id}", headers=auth_headers_other_owner
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
     async def test_not_found(self, client, mongomock_db, auth_headers_admin):
         response = await client.get(
             "/miscellaneous-payments/507f1f77bcf86cd799439999",
             headers=auth_headers_admin,
         )
         assert response.status_code == 404
+
+
+class TestUpdateMiscellaneousPayment:
+    @pytest.mark.asyncio
+    async def test_co_owner_cannot_update_payment(
+        self, client, mongomock_db, test_property, test_owner_user, test_owner,
+        test_other_owner, auth_headers_other_owner,
+    ):
+        from app.models.miscellaneous_payment import (
+            MiscellaneousPayment,
+            MiscellaneousPaymentType,
+        )
+
+        test_property.owners = [test_owner.id, test_other_owner.id]
+        test_property.primary_owner = test_owner.id
+        await test_property.save()
+
+        payment = MiscellaneousPayment(
+            property=test_property,
+            user=test_owner_user,
+            payment_type=MiscellaneousPaymentType.OTHER,
+            amount=75.0,
+            payment_date=datetime.utcnow(),
+            description="Gasto compartido",
+        )
+        await payment.insert()
+
+        response = await client.put(
+            f"/miscellaneous-payments/{payment.id}",
+            data={"amount": "80.0"},
+            headers=auth_headers_other_owner,
+        )
+        assert response.status_code == 403
 
 
 class TestCreateMiscellaneousPayment:

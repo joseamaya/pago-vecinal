@@ -21,7 +21,11 @@ from ..schemas.receipt import ReceiptResponse
 from ..models.property import Property
 from ..dependencies.auth import get_current_user, require_admin
 from ..config.database import database
-from ..services.ownership_service import owned_property_ids, user_owns_property
+from ..services.ownership_service import (
+    has_active_owner,
+    owned_property_ids,
+    user_owns_property,
+)
 from ..utils.pdf_generator import generate_receipt_pdf
 from ..utils.uploads import (
     validate_upload,
@@ -52,7 +56,11 @@ async def _owner_fee_ids(current_user: User) -> list:
 async def _can_access_fee(fee: Fee, current_user: User) -> bool:
     if current_user.role == UserRole.ADMIN:
         return True
-    if fee.user and link_id(fee.user) == str(current_user.id):
+    if (
+        fee.user
+        and link_id(fee.user) == str(current_user.id)
+        and await has_active_owner(current_user)
+    ):
         return True
     property_id = link_ref_id(fee.property)
     prop = await Property.get(property_id) if property_id else None
@@ -62,7 +70,11 @@ async def _can_access_fee(fee: Fee, current_user: User) -> bool:
 async def _can_access_payment(payment: Payment, current_user: User) -> bool:
     if current_user.role == UserRole.ADMIN:
         return True
-    if payment.user and link_id(payment.user) == str(current_user.id):
+    if (
+        payment.user
+        and link_id(payment.user) == str(current_user.id)
+        and await has_active_owner(current_user)
+    ):
         return True
     fee = await Fee.get(payment.fee_id)
     return bool(fee and await _can_access_fee(fee, current_user))
@@ -95,10 +107,12 @@ async def get_payments(
     if current_user.role != UserRole.ADMIN:
         # Owners see payments they registered and payments made on their fees
         owned_fee_ids = await _owner_fee_ids(current_user)
-        owner_clauses = [{"user.$id": current_user.id}]
+        owner_clauses = []
+        if await has_active_owner(current_user):
+            owner_clauses.append({"user.$id": current_user.id})
         if owned_fee_ids:
             owner_clauses.append({"fee_id": {"$in": owned_fee_ids}})
-        query_filters["$or"] = owner_clauses
+        query_filters["$or"] = owner_clauses or [{"_id": None}]
 
     # Add filter parameters
     if year is not None and month is not None:

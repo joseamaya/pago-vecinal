@@ -117,14 +117,15 @@ const PropertyManagement = () => {
   const loadOwners = async () => {
     try {
       const response = await ownersAPI.getOwners();
-      setOwners(
-        (response.data || []).filter((owner) => owner.is_active !== false)
-      );
+      setOwners(response.data || []);
     } catch (err) {
       console.error('Error fetching owners:', err);
     }
   };
 
+  const availableOwners = owners.filter(
+    (owner) => owner.is_active !== false || formData.owner_ids.includes(owner.id)
+  );
   const selectedOwners = owners.filter((owner) =>
     formData.owner_ids.includes(owner.id)
   );
@@ -167,9 +168,13 @@ const PropertyManagement = () => {
         row_letter: formData.row_letter,
         number: parseInt(formData.number, 10),
         villa: formData.villa,
-        owner_ids: formData.owner_ids,
-        primary_owner_id: formData.primary_owner_id || null,
       };
+
+      const hadNoOwners = editingProperty && (editingProperty.owners || []).length === 0;
+      if (!hadNoOwners || formData.owner_ids.length > 0) {
+        submitData.owner_ids = formData.owner_ids;
+        submitData.primary_owner_id = formData.primary_owner_id || null;
+      }
       if (editingProperty) {
         await propertiesAPI.updateProperty(editingProperty.id, submitData);
         toast.success('Propiedad actualizada correctamente');
@@ -410,7 +415,7 @@ const PropertyManagement = () => {
           <Grid size={12}>
             <Autocomplete
               multiple
-              options={owners}
+              options={availableOwners}
               value={selectedOwners}
               getOptionLabel={(owner) =>
                 owner.phone ? `${owner.full_name} · ${owner.phone}` : owner.full_name

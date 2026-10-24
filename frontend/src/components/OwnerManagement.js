@@ -4,9 +4,11 @@ import {
   Box,
   Button,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
+  Switch,
   TextField,
 } from '@mui/material';
 import {
@@ -33,7 +35,13 @@ import { useTableState } from '../hooks/useTableState';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { email, minLength, phone, required } from '../utils/validators';
 
-const EMPTY_OWNER = { full_name: '', phone: '', email: '', user_id: '' };
+const EMPTY_OWNER = { full_name: '', phone: '', email: '', user_id: '', is_active: true };
+
+const normalizeSearchText = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 
 const OwnerManagement = () => {
   const { isAdmin } = useAuth();
@@ -72,12 +80,12 @@ const OwnerManagement = () => {
   const { page: tablePage, setPage } = table;
 
   const filteredOwners = useMemo(() => {
-    const term = table.search.trim().toLowerCase();
+    const term = normalizeSearchText(table.search.trim());
     if (!term) return owners;
     return owners.filter((owner) =>
       [owner.full_name, owner.phone, owner.email]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term))
+        .some((value) => normalizeSearchText(value).includes(term))
     );
   }, [owners, table.search]);
 
@@ -153,6 +161,7 @@ const OwnerManagement = () => {
         phone: owner.phone || '',
         email: owner.email || '',
         user_id: owner.user_id || '',
+        is_active: owner.is_active !== false,
       });
     } else {
       setEditingOwner(null);
@@ -180,6 +189,7 @@ const OwnerManagement = () => {
         phone: formData.phone || null,
         email: formData.email || null,
         user_id: formData.user_id || null,
+        is_active: formData.is_active,
       };
       if (editingOwner) {
         await ownersAPI.updateOwner(editingOwner.id, payload);
@@ -403,6 +413,20 @@ const OwnerManagement = () => {
               ))}
             </Select>
           </FormControl>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={formData.is_active !== false}
+                onChange={(event) =>
+                  setFormData((previous) => ({
+                    ...previous,
+                    is_active: event.target.checked,
+                  }))
+                }
+              />
+            }
+            label="Propietario activo"
+          />
         </Box>
       </FormDialog>
     </PageContainer>

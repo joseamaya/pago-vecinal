@@ -23,12 +23,23 @@ def normalize_name(value):
     return normalize_person_name(value or "")
 
 
-async def find_or_create_owner(db, name, phone, user_ref):
+def is_placeholder_name(value):
+    return not value or normalize_name(value).lower() == "sin propietario"
+
+
+async def find_or_create_owner(db, name, phone, user_ref, user_name=None):
     name = normalize_name(name)
+    if is_placeholder_name(name) and user_name:
+        name = normalize_name(user_name)
 
     if user_ref is not None:
         owner = await db.owners.find_one({"user": user_ref})
         if owner:
+            if user_name and is_placeholder_name(owner.get("full_name")):
+                await db.owners.update_one(
+                    {"_id": owner["_id"]},
+                    {"$set": {"full_name": normalize_name(user_name)}},
+                )
             return owner["_id"], False
 
     key = person_name_key(name)
@@ -37,6 +48,15 @@ async def find_or_create_owner(db, name, phone, user_ref):
             person_name_key(owner.get("full_name")) == key
             and (owner.get("phone") or "") == (phone or "")
         ):
+            updates = {}
+            if user_ref is not None and owner.get("user") is None:
+                updates["user"] = user_ref
+            if user_name and is_placeholder_name(owner.get("full_name")):
+                updates["full_name"] = normalize_name(user_name)
+            if updates:
+                await db.owners.update_one(
+                    {"_id": owner["_id"]}, {"$set": updates}
+                )
             return owner["_id"], False
 
     result = await db.owners.insert_one(
@@ -53,7 +73,8 @@ async def find_or_create_owner(db, name, phone, user_ref):
 
 async def normalize_collection(db, collection_name, field, apply):
     updated = 0
-    async for document in db[collection_name].find({}):
+    documents = await db[collection_name].find({}).to_list(length=None)
+    for document in documents:
         current = document.get(field)
         normalized = normalize_name(current)
         if current is not None and normalized != current:
@@ -77,9 +98,12 @@ async def normalize_names(db, apply):
 
     properties_updated = 0
     async for prop in db.properties.find({}):
+        updates = {}
+        owners = prop.get("owners") or []
         primary_owner = prop.get("primary_owner")
-        if primary_owner is None and prop.get("owners"):
-            primary_owner = prop["owners"][0]
+        if primary_owner is None and owners:
+            primary_owner = owners[0]
+            updates["primary_owner"] = primary_owner
 
         current = prop.get("owner_name")
         if primary_owner is not None:
@@ -88,11 +112,14 @@ async def normalize_names(db, apply):
             normalized = normalize_name(current)
 
         if current is not None and normalized is not None and normalized != current:
+            updates["owner_name"] = normalized
+
+        if updates:
             properties_updated += 1
             if apply:
                 await db.properties.update_one(
                     {"_id": prop["_id"]},
-                    {"$set": {"owner_name": normalized}},
+                    {"$set": updates},
                 )
 
     duplicate_groups = {}
@@ -146,13 +173,24 @@ async def migrate(apply: bool):
         phone = prop.get("owner_phone")
         legacy_owner = prop.get("owner")
         user_ref = legacy_owner if isinstance(legacy_owner, DBRef) else None
+        user_doc = (
+            await db.users.find_one({"_id": user_ref.id})
+            if user_ref is not None
+            else None
+        )
+        if user_doc is None:
+            user_ref = None
+        user_name = user_doc.get("full_name") if user_doc else None
+        display_name = normalize_name(name)
+        if is_placeholder_name(display_name) and user_name:
+            display_name = normalize_name(user_name)
 
         if not apply:
             owner_id = None
             if user_ref is not None:
                 owner_id = await db.owners.find_one({"user": user_ref})
             if owner_id is None:
-                key = person_name_key(name)
+                key = person_name_key(display_name)
                 async for owner in db.owners.find({}):
                     if (
                         person_name_key(owner.get("full_name")) == key
@@ -161,11 +199,13 @@ async def migrate(apply: bool):
                         owner_id = owner
                         break
             action = "reuse" if owner_id else "create"
-            print(f"  property {prop['_id']}: {action} owner '{normalize_name(name)}'")
+            print(f"  property {prop['_id']}: {action} owner '{display_name}'")
             migrated += 1
             continue
 
-        owner_id, created = await find_or_create_owner(db, name, phone, user_ref)
+        owner_id, created = await find_or_create_owner(
+            db, name, phone, user_ref, user_name
+        )
         created_owners += int(created)
 
         await db.properties.update_one(
@@ -174,7 +214,7 @@ async def migrate(apply: bool):
                 "$set": {
                     "owners": [owner_id],
                     "primary_owner": owner_id,
-                    "owner_name": normalize_name(name),
+                    "owner_name": display_name,
                     "owner_phone": phone,
                 },
                 "$unset": {"owner": ""},

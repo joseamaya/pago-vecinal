@@ -39,12 +39,9 @@ PROPERTY_SORTS = {
 }
 
 
-async def _property_response(prop: Property) -> PropertyResponse:
-    owner_ids = prop.owners
-    owners = await Owner.find({"_id": {"$in": owner_ids}}).to_list() if owner_ids else []
-    owners_by_id = {str(owner.id): owner for owner in owners}
+def _build_property_response(prop: Property, owners_by_id: dict) -> PropertyResponse:
     summaries = []
-    for owner_id in owner_ids:
+    for owner_id in prop.owners:
         owner = owners_by_id.get(str(owner_id))
         if owner:
             summaries.append(
@@ -61,6 +58,22 @@ async def _property_response(prop: Property) -> PropertyResponse:
         primary_owner_id=str(prop.primary_owner) if prop.primary_owner else None,
         owners=summaries,
     )
+
+
+async def _property_responses(properties: List[Property]) -> List[PropertyResponse]:
+    owner_ids = {owner_id for prop in properties for owner_id in prop.owners}
+    owners = (
+        await Owner.find({"_id": {"$in": list(owner_ids)}}).to_list()
+        if owner_ids
+        else []
+    )
+    owners_by_id = {str(owner.id): owner for owner in owners}
+    return [_build_property_response(prop, owners_by_id) for prop in properties]
+
+
+async def _property_response(prop: Property) -> PropertyResponse:
+    responses = await _property_responses([prop])
+    return responses[0]
 
 
 @router.get("/", response_model=PaginatedResponse[PropertyResponse])
@@ -99,7 +112,7 @@ async def get_properties(
     properties = await property_query.skip(skip).limit(limit).to_list()
     total_pages = (total_count + limit - 1) // limit
 
-    property_responses = [await _property_response(prop) for prop in properties]
+    property_responses = await _property_responses(properties)
 
     return PaginatedResponse[PropertyResponse](
         data=property_responses,

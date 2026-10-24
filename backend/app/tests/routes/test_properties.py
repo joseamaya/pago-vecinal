@@ -96,6 +96,36 @@ class TestListProperties:
             assert [item["id"] for item in response.json()["data"]] == [str(prop.id)]
 
     @pytest.mark.asyncio
+    async def test_inactive_owner_loses_access(
+        self, client, mongomock_db, test_owner, auth_headers_owner
+    ):
+        from app.models.property import Property
+
+        prop = Property(
+            row_letter="B",
+            number=2,
+            villa="Villa 2",
+            owner_name=test_owner.full_name,
+            owners=[test_owner.id],
+            primary_owner=test_owner.id,
+        )
+        await prop.insert()
+
+        test_owner.is_active = False
+        await test_owner.save()
+
+        response = await client.get(
+            "/properties/?page=1&limit=20", headers=auth_headers_owner
+        )
+        assert response.status_code == 200
+        assert response.json()["data"] == []
+
+        response = await client.get(
+            f"/properties/{prop.id}", headers=auth_headers_owner
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
     async def test_search_matches_owner_and_villa(
         self, client, mongomock_db, test_property, auth_headers_admin
     ):
